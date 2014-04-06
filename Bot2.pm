@@ -5,10 +5,8 @@ use warnings;
 
 our $VERSION = '0.1';
 
-#use Data::Printer alias => 'Dumper',colored => 1;
-use Data::Dumper;
-
-# use List::MoreUtils ':all';
+use Data::Printer alias => 'Dumper',colored => 1;
+#use Data::Dumper;
 
 use List::MoreUtils ();
 use List::Util ();
@@ -22,19 +20,20 @@ use LWP::UserAgent;
 use Encode;
 use JSON::XS qw( decode_json );
 
-#my $c = AnyEvent->condvar;
-#my $con = new AnyEvent::IRC::Client;
+my $command_prefix = '^(!|\.)';
 
-my $command_prefix = '!';
-
-my @commands = ( {name => 'dq', regex => '(dq|delquote)\s.+?', cb => undef, delegate => undef, acl => undef },
-                  {name => 'fq', regex => '(fq|findquote)\s.+?', cb => undef, delegate => undef, acl => undef },
-                  {name => 'rq', regex => '(rq|randquote)$', cb => undef, delegate => undef, acl => undef },
-                  {name => 'q',  regex => '(q|quote)\s.+?', cb => undef, delegate => undef, acl => undef },
-                  {name => 'btc', regex => 'btc$', cb => undef, delegate => undef, acl => undef },
-                  {name => 'ltc', regex => 'ltc$', cb => undef, delegate => undef, acl => undef },
-                  {name => 'mitch', regex => 'mitch$', cb => undef, delegate => undef, acl => undef },
-               );
+my @commands = (  
+      {name => 'aq',       regex => '(aq|addquote)\s.+?',   cb => undef, delegate => undef, acl => undef },
+      {name => 'dq',       regex => '(dq|delquote)\s.+?',   cb => undef, delegate => undef, acl => undef },
+      {name => 'fq',       regex => '(fq|findquote)\s.+?',  cb => undef, delegate => undef, acl => undef },
+      {name => 'rq',       regex => '(rq|randquote)$',      cb => undef, delegate => undef, acl => undef },
+      {name => 'q',        regex => '(q|quote)\s.+?',       cb => undef, delegate => undef, acl => undef },
+      {name => 'btc',      regex => 'btc$',                 cb => undef, delegate => undef, acl => undef },
+      {name => 'ltc',      regex => 'ltc$',                 cb => undef, delegate => undef, acl => undef },
+      {name => 'eur2usd',  regex => '(e2u|eur2usd)$',       cb => undef, delegate => undef, acl => undef },
+      {name => 'mitch',    regex => 'mitch$',               cb => undef, delegate => undef, acl => undef },
+      {name => 'commands', regex => '(commands|cmds)$',     cb => undef, delegate => undef, acl => undef },
+);
 
 sub new {
    my $class = shift;
@@ -127,6 +126,60 @@ sub bind {
    return sub {
       $function->($object, @args, @_);
    };
+}
+
+sub map {
+   my $self = shift;
+   my ($array, $cb, $context) = $self->_prepare(@_);
+
+   $context = $array unless defined $context;
+
+   my $index = 0;
+   my $result = [map { $cb->($_, ++$index, $context) } @$array];
+
+   return $self->_finalize($result);
+}
+
+sub toArray {&to_array}
+
+sub to_array {
+   my $self = shift;
+   my ($list) = $self->_prepare(@_);
+
+   return [values %$list] if ref $list eq 'HASH';
+
+   return [$list] unless ref $list eq 'ARRAY';
+
+   return [@$list];
+}
+
+sub each {
+   my $self = shift;
+   my ($array, $cb, $context) = $self->_prepare(@_);
+
+   return unless defined $array;
+
+   $context = $array unless defined $context;
+
+   my $i = 0;
+
+   foreach (@$array) {
+      $cb->($_, $i, $context);
+      $i++;
+   }
+}
+
+sub pluck {
+   my $self = shift;
+   my ($list, $key) = $self->_prepare(@_);
+
+   my $result = [];
+
+   foreach (@$list) {
+      push @$result, $_->{$key};
+   }
+
+   return $self->_finalize($result);
 }
 
 sub global_acl {
@@ -223,19 +276,53 @@ sub fetch_json {
    return $json;
 }
 
+sub get_commands {
+   my $self = shift;
+
+   return _->map(\@commands, sub { my ($h) = @_; $h->{name}; });
+}
+
 sub _buildup {
    my $self = shift;
 
-
-$self->add_func(name => 'btc', 
+   $self->add_func(name => 'commands',
       delegate => sub {
          my ($who, $message, $channel, $channel_list) = @_;
 
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my $cmd_names = _->pluck(\@commands, 'name');
+
+         $self->{con}->send_srv (PRIVMSG => $channel, 'Commands:');
+
+         while( my @list = splice( $cmd_names, 0, 3 ) ) {
+             my $msg = join(' ',@list);
+             $self->{con}->send_srv (PRIVMSG => $channel, $msg);
+         }
+         return 1;
+    },
+      acl => sub {
+      
+         return 1;
+   });
+
+   $self->add_func(name => 'btc', 
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
          my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/btc_usd');
 
-         my $ret = "[btc_usd] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
+         my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/btc_usd');
+
+         my $ret =  "[btc_usd\@btce] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
+
+         my $ret2 = "[btc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
 
          $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+
+         $self->{con}->send_srv (PRIVMSG => $channel, $ret2);
 
          return 1;
    },
@@ -255,11 +342,17 @@ $self->add_func(name => 'btc',
 
          my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/ltc_usd');
 
+         my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/ltc_usd');
+
          print Dumper($json),"\n";
 
-         my $ret = "[ltc_usd] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
+         my $ret =  "[ltc_usd\@btce] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
+         
+         my $ret2 = "[ltc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
 
          $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+
+         $self->{con}->send_srv (PRIVMSG => $channel, $ret2);
 
          return 1;
    },
@@ -278,6 +371,28 @@ $self->add_func(name => 'btc',
          return 1;
    });
 
+
+   $self->add_func(name => 'eur2usd', 
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/eur_usd');
+
+         my $ret = "[eur_usd] Last: $json->{eur_usd}->{last} Low: $json->{eur_usd}->{low} High: $json->{eur_usd}->{high} Avg: $json->{eur_usd}->{avg} Vol: $json->{eur_usd}->{vol}";
+
+         $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+
+         return 1;
+   },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my $ret = _->global_acl($who, $message, $channel, $channel_list);
+
+         # add in some other behavior here if needed.
+
+         return $ret;
+   });
    $self->{con}->reg_cb (
       connect => sub {
          my ($con, $err) = @_;
@@ -375,7 +490,7 @@ sub _start {
 
    $self->{con}->send_srv (PRIVMSG => '#hadouken',"i is retarded");
 
-   $self->{con}->connect ("irc.efnet.org", 6667, { nick => 'fartinatorz' }); #reconnect => 1, timeout => 5
+   $self->{con}->connect ("irc.efnet.org", 6667, { nick => 'fartinatorz' });
 
    $self->{c}->wait;
 }
