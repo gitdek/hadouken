@@ -16,6 +16,12 @@ use List::Util ();
 use AnyEvent;
 use AnyEvent::IRC::Client;
 
+use HTML::TokeParser::Simple;
+
+use LWP::UserAgent;
+use Encode;
+use JSON::XS qw( decode_json );
+
 #my $c = AnyEvent->condvar;
 #my $con = new AnyEvent::IRC::Client;
 
@@ -102,12 +108,26 @@ sub _finalize {
          : $_[0];
 }
 
-#my ($command_len_min, $command_len_max) = (sort {length($a) <=> length($b)} @commands)[0,-1];
+sub wrap {
+   my $self = shift;
 
-# if +o or +v, you are permitted, unless you are on the blacklist.
-# if not +o or +v, check if person is on whitelist.
+   my ($function, $wrapper) = $self->_prepare(@_);
 
-# 'acl'
+   return sub {
+      $wrapper->($function, @_);
+   };
+}
+
+
+sub bind {
+   my $self = shift;
+
+   my ($function, $object, @args) = $self->_prepare(@_);
+
+   return sub {
+      $function->($object, @args, @_);
+   };
+}
 
 sub global_acl {
    my $self = shift;
@@ -169,15 +189,77 @@ sub add_func {
    }
 }
 
+sub jsonify {
+   my $self = shift;
+
+   my $hashref = decode_json( encode("utf8", shift) );
+
+   return $hashref;
+}
+
+sub fetch_json {
+   my $self = shift;
+   my $url = shift;
+
+   my $json;
+
+   eval {
+
+      my $ua = LWP::UserAgent->new(
+         agent => 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)',
+         timeout => 60,
+         ssl_opts => { verify_hostname => 0 }
+      );
+      
+      my $request = HTTP::Request->new('GET', $url);
+      my $response = $ua->request($request);
+      $json = $self->jsonify($response->content);
+   };
+
+   if($@) {
+      warn "Error: $@\n";
+   }
+
+   return $json;
+}
+
 sub _buildup {
    my $self = shift;
 
-   $self->add_func(name => 'mitch', 
-      delegate => sub {
-         # http://en.wikiquote.org/wiki/Mitch_Hedberg
-         print "Delegate for mitch called!\n";
 
+$self->add_func(name => 'btc', 
+      delegate => sub {
          my ($who, $message, $channel, $channel_list) = @_;
+
+         my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/btc_usd');
+
+         my $ret = "[btc_usd] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
+
+         $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+
+         return 1;
+   },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my $ret = _->global_acl($who, $message, $channel, $channel_list);
+
+         # add in some other behavior here if needed.
+
+         return $ret;
+   });
+
+   $self->add_func(name => 'ltc', 
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/ltc_usd');
+
+         print Dumper($json),"\n";
+
+         my $ret = "[ltc_usd] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
+
+         $self->{con}->send_srv (PRIVMSG => $channel, $ret);
 
          return 1;
    },
@@ -194,8 +276,7 @@ sub _buildup {
          print "* callback after mitch.\n";
 
          return 1;
-   }
-   );
+   });
 
    $self->{con}->reg_cb (
       connect => sub {
@@ -300,9 +381,12 @@ sub _start {
 }
 
 
+1;
 
 package main;
 
 my $cb = CashBot->new();
 
+#test();
 $cb->_start();
+
