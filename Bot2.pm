@@ -268,13 +268,17 @@ sub _buildup {
       print "$who said $message in $channel\n\n";
    });
 
-   #$self->{con}->reg_cb ('sent'  => sub {
-   #   shift; warn "DEBUG SENT: " . join ('|', @_) . "\n";
-   #});
+   $self->{con}->reg_cb ('debug_recv'  => sub {
+      my ($con, $msg) = @_;
+      print
+         "< "
+         . $con->mk_msg ($msg->{prefix}, $msg->{command}, @{$msg->{params}})
+         . "\n";  
+   });
 
-   $self->{con}->reg_cb ('irc_*' => sub {
-      my @p = @{delete $_[1]->{params} || []};
-      print "DEBUG: " . join ('|', %{$_[1]}, @p) . "\n";
+   $self->{con}->reg_cb ('debug_send' => sub {
+      my ($con, @msg) = @_;
+      print "> " . $con->mk_msg (undef, @msg) . "\n"
    });
 
 }
