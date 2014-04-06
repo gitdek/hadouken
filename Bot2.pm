@@ -20,9 +20,15 @@ use LWP::UserAgent;
 use Encode;
 use JSON::XS qw( decode_json );
 
+use Tie::Array::CSV;
+use diagnostics;
+
+use POSIX qw(strftime);
+
 my $command_prefix = '^(!|\.)';
 
-my @commands = (  
+my @commands = (
+      {name => 'lq',       regex => '(lq|lastquote)$',      cb => undef, delegate => undef, acl => undef },
       {name => 'aq',       regex => '(aq|addquote)\s.+?',   cb => undef, delegate => undef, acl => undef },
       {name => 'dq',       regex => '(dq|delquote)\s.+?',   cb => undef, delegate => undef, acl => undef },
       {name => 'fq',       regex => '(fq|findquote)\s.+?',  cb => undef, delegate => undef, acl => undef },
@@ -46,6 +52,8 @@ sub new {
 
    $self->{c} = AnyEvent->condvar;
    $self->{con} = AnyEvent::IRC::Client->new();
+
+   #$self->{quotedb} = undef;
 
    return $self;
 }
@@ -282,8 +290,95 @@ sub get_commands {
    return _->map(\@commands, sub { my ($h) = @_; $h->{name}; });
 }
 
+sub blah {
+   my $self = shift;
+
+   return ${$self->{quotesdb}};
+}
 sub _buildup {
    my $self = shift;
+
+   $self->{quotesdb} = ();
+
+   my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', 'quotes.txt', memory => 20_000_000 or die $!;
+
+
+   $self->add_func(name => 'rq',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my $quote_count = scalar @{$self->{quotesdb}};
+
+         if ($quote_count > 0) {
+
+            my $rand_idx = int rand($quote_count);
+
+            my @rand_quote = $self->{quotesdb}[$rand_idx];
+
+            my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($rand_quote[0][0]);
+
+            my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($rand_quote[0][3]);
+
+            $self->{con}->send_srv (PRIVMSG => $channel, '['.$rand_idx.'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+         }
+
+         return 1;
+    },
+      acl => sub {
+      
+         return 1;
+   });
+
+   $self->add_func(name => 'lq',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my $quote_count = scalar @{$self->{quotesdb}};
+
+         if ($quote_count > 0) {
+
+            my @last_quote = $self->{quotesdb}[int($quote_count - 1)];
+
+            my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($last_quote[0][0]);
+
+            my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($last_quote[0][3]);
+
+            $self->{con}->send_srv (PRIVMSG => $channel, '['.$quote_count.'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+         }
+
+         return 1;
+    },
+      acl => sub {
+      
+         return 1;
+   });
+
+   $self->add_func(name => 'aq',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /,$message, 2);
+
+         my @test = [$ident, $arg, $channel, time()];
+
+         push($self->{quotesdb}, @test);
+
+         my $quote_count = scalar @{$self->{quotesdb}};
+
+         $self->{con}->send_srv (PRIVMSG => $channel, 'Quote #'.$quote_count.' added by '.$nickname.'.');
+
+         return 1;
+    },
+      acl => sub {
+      
+         return 1;
+   });
 
    $self->add_func(name => 'commands',
       delegate => sub {
@@ -404,12 +499,14 @@ sub _buildup {
 
          print "registered!\n";
          
+         $self->{connected} = 1;
          $self->{con}->enable_ping (60);
       },
       disconnect => sub {
 
          print "disconnected: $_[1]!\n";
 
+         $self->{connected} = 0;
          $self->{c}->broadcast;
       }
    );
@@ -500,8 +597,13 @@ sub _start {
 
 package main;
 
-my $cb = CashBot->new();
+my $cb = CashBot->new(
+   servers => ['irc.underworld.no:6667','irc.efnet.org:6667'], 
+   channels => [ '#hadouken' ], 
+   admin => 'dek@2607:fb98:1a::666',
 
-#test();
+);
+
 $cb->_start();
 
+print "test\n";
