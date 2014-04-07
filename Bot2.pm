@@ -2,6 +2,7 @@ package CashBot;
 
 use strict;
 use warnings;
+use diagnostics;
 
 our $VERSION = '0.1';
 
@@ -13,6 +14,7 @@ use List::Util ();
 
 use AnyEvent;
 use AnyEvent::IRC::Client;
+use AnyEvent::DNS;
 
 use HTML::TokeParser::Simple;
 
@@ -21,39 +23,52 @@ use Encode;
 use JSON::XS qw( decode_json );
 
 use Tie::Array::CSV;
-use diagnostics;
 
 use POSIX qw(strftime);
+
+use Moose;
+
+use Time::HiRes qw( time );
+use Geo::IP;
+
+with qw(MooseX::Daemonize);
+
+# ... define your class ....
+
+after start => sub {
+   my $self = shift;
+   return unless $self->is_daemon;
+   # your daemon code here ...
+
+   $self->{connected} = 0;
+   $self->{c} = AnyEvent->condvar;
+   $self->{con} = AnyEvent::IRC::Client->new();
+
+   $self->_start;
+};
 
 my $command_prefix = '^(!|\.)';
 
 my @commands = (
-      {name => 'lq',       regex => '(lq|lastquote)$',      cb => undef, delegate => undef, acl => undef },
-      {name => 'aq',       regex => '(aq|addquote)\s.+?',   cb => undef, delegate => undef, acl => undef },
-      {name => 'dq',       regex => '(dq|delquote)\s.+?',   cb => undef, delegate => undef, acl => undef },
-      {name => 'fq',       regex => '(fq|findquote)\s.+?',  cb => undef, delegate => undef, acl => undef },
-      {name => 'rq',       regex => '(rq|randquote)$',      cb => undef, delegate => undef, acl => undef },
-      {name => 'q',        regex => '(q|quote)\s.+?',       cb => undef, delegate => undef, acl => undef },
-      {name => 'btc',      regex => 'btc$',                 cb => undef, delegate => undef, acl => undef },
-      {name => 'ltc',      regex => 'ltc$',                 cb => undef, delegate => undef, acl => undef },
-      {name => 'eur2usd',  regex => '(e2u|eur2usd)$',       cb => undef, delegate => undef, acl => undef },
-      {name => 'mitch',    regex => 'mitch$',               cb => undef, delegate => undef, acl => undef },
-      {name => 'commands', regex => '(commands|cmds)$',     cb => undef, delegate => undef, acl => undef },
+      {name => 'geoip',    regex => 'geoip\s.+?',           cb => undef, delegate => undef, acl => undef, comment => 'geo ip lookup' },
+      {name => 'lq',       regex => '(lq|lastquote)$',      cb => undef, delegate => undef, acl => undef, comment => 'get most recently added quote' },
+      {name => 'aq',       regex => '(aq|addquote)\s.+?',   cb => undef, delegate => undef, acl => undef, comment => 'add a quote' },
+      {name => 'dq',       regex => '(dq|delquote)\s.+?',   cb => undef, delegate => undef, acl => undef, comment => 'delete quote' },
+      {name => 'fq',       regex => '(fq|findquote)\s.+?',  cb => undef, delegate => undef, acl => undef, comment => 'find a quote' },
+      {name => 'rq',       regex => '(rq|randquote)$',      cb => undef, delegate => undef, acl => undef, comment => 'get a random quote' },
+      {name => 'q',        regex => '(q|quote)\s.+?',       cb => undef, delegate => undef, acl => undef, comment => 'get a quote by index' },
+      {name => 'btc',      regex => 'btc$',                 cb => undef, delegate => undef, acl => undef, comment => 'display btc ticker' },
+      {name => 'ltc',      regex => 'ltc$',                 cb => undef, delegate => undef, acl => undef, comment => 'display ltc ticker' },
+      {name => 'eur2usd',  regex => '(e2u|eur2usd)$',       cb => undef, delegate => undef, acl => undef, comment => 'display euro to usd ticker' },
+      {name => 'mitch',    regex => 'mitch$',               cb => undef, delegate => undef, acl => undef, comment => '' },
+      {name => 'commands', regex => '(commands|cmds)$',     cb => undef, delegate => undef, acl => undef, comment => 'display list of commands' },
 );
 
 sub new {
    my $class = shift;
-
    my $self = {@_};
+
    bless $self, $class;
-
-   #state crap.
-   $self->{connected} = 0;
-
-   $self->{c} = AnyEvent->condvar;
-   $self->{con} = AnyEvent::IRC::Client->new();
-
-   #$self->{quotedb} = undef;
 
    return $self;
 }
@@ -287,7 +302,7 @@ sub fetch_json {
 sub get_commands {
    my $self = shift;
 
-   return _->map(\@commands, sub { my ($h) = @_; $h->{name}; });
+   return _->map(\@commands, sub { my ($h) = @_; $h; });
 }
 
 sub blah {
@@ -300,7 +315,69 @@ sub _buildup {
 
    $self->{quotesdb} = ();
 
+   #my $redis = Redis->new;
+
+
+   $self->{geoip} = Geo::IP->open('/home/dek/projects/perl/ircbot/geoip/GeoLiteCity.dat');
+
+   #my $record = $self->{geoip}->record_by_addr( $ipaddr );
+   #my $record = $self->{geoip}->record_by_addr( $ipaddr );
+
    my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', 'quotes.txt', memory => 20_000_000 or die $!;
+   #my $tieobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.db', memory => 20_000_000 or die $!;
+
+
+   $self->add_func(name => 'geoip',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /,$message, 2);
+
+         #print "cmd is $cmd, arg is $arg.\n";
+
+         # my $dns_cb = _->map(\@commands, sub { my ($h) = @_; return $h if($h->{name} eq 'geoip'); } );
+
+         if( $arg =~ /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/ ) {
+
+            my $record = $self->{geoip}->record_by_addr( $arg );   
+
+            my $result = "$arg -> ".$record->city.", ".$record->region.", ".$record->country_code; # ".$isp;
+
+            $self->{con}->send_srv (PRIVMSG => $channel, $result);           
+
+         } else {
+
+            AnyEvent::DNS::resolver->resolve ($arg, "a", 
+               sub {
+                  shift;
+                  my @records = (@_);
+
+                  my $top_result = $records[0][0]; # [0][4] is the IP.
+
+                  my $record = $self->{geoip}->record_by_name( $top_result );   
+
+                  my $result = "$arg -> ".$record->city.", ".$record->region.", ".$record->country_code; # ".$isp;
+
+                  $self->{con}->send_srv (PRIVMSG => $channel, $result);           
+               } 
+            );
+         }  
+
+         return 1;
+    },
+      acl => sub {
+      
+         return 1;
+   },
+      cb => sub {
+         my $self = shift;
+
+         warn Dumper(@_);
+
+         return 1;
+   });
 
 
    $self->add_func(name => 'rq',
@@ -386,20 +463,40 @@ sub _buildup {
 
          my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
-         my $cmd_names = _->pluck(\@commands, 'name');
+         #my $cmd_names = _->pluck(\@commands, 'name');
 
          $self->{con}->send_srv (PRIVMSG => $channel, 'Commands:');
 
-         while( my @list = splice( $cmd_names, 0, 3 ) ) {
-             my $msg = join(' ',@list);
-             $self->{con}->send_srv (PRIVMSG => $channel, $msg);
+         my @copy = @commands;
+
+         while( my $list = splice( @copy, 0, 1 ) ) {
+            my $msg = '';
+            
+            print Dumper($list);
+
+            foreach($list) {
+               $msg .= $_->{name}." - ".$_->{comment};
+            }
+            $self->{con}->send_srv (PRIVMSG => $channel, $msg);
+            $msg = '';
          }
+
+         #while( my @list = splice( $cmd_names, 0, 3 ) ) {
+         #    my $msg = join(' ',@list);
+         #    $self->{con}->send_srv (PRIVMSG => $channel, $msg);
+         #}
+
          return 1;
     },
       acl => sub {
       
          return 1;
    });
+
+   # list coins
+   
+   # http://www.cryptocoincharts.info/v2/api/listCoins
+
 
    $self->add_func(name => 'btc', 
       delegate => sub {
@@ -408,11 +505,9 @@ sub _buildup {
          my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
          my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/btc_usd');
-
          my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/btc_usd');
 
          my $ret =  "[btc_usd\@btce] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
-
          my $ret2 = "[btc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
 
          $self->{con}->send_srv (PRIVMSG => $channel, $ret);
@@ -424,11 +519,11 @@ sub _buildup {
       acl => sub {
          my ($who, $message, $channel, $channel_list) = @_;
 
-         my $ret = _->global_acl($who, $message, $channel, $channel_list);
+         #my $ret = _->global_acl($who, $message, $channel, $channel_list);
 
          # add in some other behavior here if needed.
-
-         return $ret;
+         return 1;
+         #return $ret;
    });
 
    $self->add_func(name => 'ltc', 
@@ -454,11 +549,12 @@ sub _buildup {
       acl => sub {
          my ($who, $message, $channel, $channel_list) = @_;
 
-         my $ret = _->global_acl($who, $message, $channel, $channel_list);
+         #my $ret = _->global_acl($who, $message, $channel, $channel_list);
 
          # add in some other behavior here if needed.
 
-         return $ret;
+         return 1;
+         #return $ret;
    }, 
       cb => sub {
          print "* callback after mitch.\n";
@@ -482,12 +578,14 @@ sub _buildup {
       acl => sub {
          my ($who, $message, $channel, $channel_list) = @_;
 
-         my $ret = _->global_acl($who, $message, $channel, $channel_list);
+         #my $ret = _->global_acl($who, $message, $channel, $channel_list);
 
          # add in some other behavior here if needed.
 
-         return $ret;
+         return 1;
+         # return $ret;
    });
+
    $self->{con}->reg_cb (
       connect => sub {
          my ($con, $err) = @_;
@@ -563,7 +661,7 @@ sub _buildup {
 
    $self->{con}->reg_cb ('debug_recv'  => sub {
       my ($con, $msg) = @_;
-      print
+      warn
          "< "
          . $con->mk_msg ($msg->{prefix}, $msg->{command}, @{$msg->{params}})
          . "\n";  
@@ -571,7 +669,7 @@ sub _buildup {
 
    $self->{con}->reg_cb ('debug_send' => sub {
       my ($con, @msg) = @_;
-      print "> " . $con->mk_msg (undef, @msg) . "\n"
+      warn "> " . $con->mk_msg (undef, @msg) . "\n"
    });
 
 }
@@ -579,7 +677,7 @@ sub _buildup {
 sub _start {
    my $self = shift;
 
-   $self->_buildup;
+   $self->_buildup();
 
    # $self->{con}->send_srv (PRIVMSG => 'dek',"Hello there!");
 
@@ -587,23 +685,51 @@ sub _start {
 
    $self->{con}->send_srv (PRIVMSG => '#hadouken',"i is retarded");
 
-   $self->{con}->connect ("irc.efnet.org", 6667, { nick => 'fartinatorz' });
+   $self->{con}->connect ("irc.prison.net", 6667, { nick => 'fartinatorz' });
 
    $self->{c}->wait;
+
+   #return 1;
 }
 
+sub _test {
+   my $self = shift;
 
+
+   my @elements = $self->get_commands();
+
+   foreach(@commands) {
+      print $_->{name},"\t",$_->{comment},"\n";
+   }
+
+   #print Dumper($elements);
+
+}
 1;
 
 package main;
 
-my $cb = CashBot->new(
-   servers => ['irc.underworld.no:6667','irc.efnet.org:6667'], 
-   channels => [ '#hadouken' ], 
-   admin => 'dek@2607:fb98:1a::666',
+   #my $cb = CashBot->new(
+   #   servers => ['irc.underworld.no:6667','irc.efnet.org:6667'], 
+   #   channels => [ '#hadouken' ], 
+   #   admin => 'dek@2607:fb98:1a::666',
+   #);
 
-);
+   my $daemon = CashBot->new_with_options(
+      servers => ['irc.underworld.no:6667','irc.efnet.org:6667'], 
+      channels => [ '#hadouken' ],
+      admin => 'dek@2607:fb98:1a::666',
+   );
 
-$cb->_start();
+   my ($command) = @{$daemon->extra_argv};
+   defined $command || die "No command specified";
 
-print "test\n";
+   $daemon->start   if $command eq 'start';
+   $daemon->status  if $command eq 'status';
+   $daemon->restart if $command eq 'restart';
+   $daemon->stop    if $command eq 'stop';
+
+   $daemon->_test   if $command eq 'test';
+
+   warn($daemon->status_message) if defined $daemon->status_message;
+   exit($daemon->exit_code);
