@@ -77,7 +77,7 @@ sub new {
 }
 
 sub chain {
-   my $self = shift;
+  my $self = shift;
 
    $self->{chain} = 1;
 
@@ -85,7 +85,7 @@ sub chain {
 }
 
 sub _ {
-   return new(__PACKAGE__, args => [@_]);
+    return new(__PACKAGE__, args => [@_]);
 }
 
 sub _prepare {
@@ -184,6 +184,7 @@ sub to_array {
    return [@$list];
 }
 
+
 sub each {
    my $self = shift;
    my ($array, $cb, $context) = $self->_prepare(@_);
@@ -215,7 +216,7 @@ sub pluck {
 
 # Global rules are:
 # 
-# 
+# is_admin overrides everything.
 # If you are +o or +v, and not on the blacklist you return OK.
 # if you are neither +o or +v, we check the whitelist.
 #
@@ -223,7 +224,12 @@ sub pluck {
 sub global_acl {
    my $self = shift;
    my ($who, $message, $channel, $channel_list) = @_;
+
    my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+   if($self->is_admin($who)) {
+      return 1;
+   }
 
    if(exists $channel_list->{$nickname}) {
 
@@ -254,13 +260,44 @@ sub blacklisted {
 
 sub whitelisted {
    my $self = shift;
-
    my $who = shift;
 
    my $ret = 0;
 
-
    return $ret;
+}
+
+sub get_nick_and_host {
+   my ($self, $who) = @_;
+   my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+   my ($n_pre, $n_host);
+
+   if (defined $ident && $ident ne '') {
+      ($n_pre, $n_host) = split(/@/, $ident);
+   } else {
+      ($n_pre, $n_host) = split(/@/, $nickname);
+      $nickname = $n_pre;
+   }
+
+   return ($nickname, $n_host);
+}
+
+sub is_admin {
+   my ($self, $who) = @_;
+   my ($nick,$host) = $self->get_nick_and_host($who);
+
+   print "is admin: $nick \t $host\n\n";
+
+   if(grep { $_->[0] eq $nick && $_->[1] eq $host } @{$self->{adminsdb}}) {
+      return 1;
+   }
+
+   return 0;
+}
+
+sub add_admin {
+   my ($self, $who) = @_;
+
 }
 
 sub add_func {
@@ -312,9 +349,10 @@ sub get_commands {
 }
 
 sub _buildup {
-   my $self = shift;
+    my $self = shift;
 
    $self->{quotesdb} = ();
+   $self->{adminsdb} = ();
 
    #my $redis = Redis->new;
 
@@ -322,6 +360,17 @@ sub _buildup {
 
    my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', 'quotes.txt', memory => 20_000_000 or die $!;
 
+   # Admin db will just be dek@2607:fb98:1a::666
+   my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.txt', memory => 20_000_000 or die $!;
+
+   # Add ourselves into the db if we arent in already!
+   unless ($self->is_admin($self->{admin})) {
+      my ($nick,$host) = split(/@/,$self->{admin});
+      my @admin_row = [$nick, $host, '*', time()];
+      push($self->{adminsdb}, @admin_row);
+   }
+
+   #exit;
    #my $tieobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.db', memory => 20_000_000 or die $!;
 
 
@@ -383,7 +432,7 @@ sub _buildup {
       acl => sub {
       
          return 1;
-   });
+              });
 
    $self->add_func(name => 'ticker',
       delegate => sub {
@@ -525,7 +574,7 @@ sub _buildup {
          #if($arg =~ 'creator:')
          #(?:^creator+$)
 
-         my @found = grep { lc($_->[1]) =~ lc($arg) } @{$self->{quotesdb}};
+         my @found = List::MoreUtils::indexes { lc($_->[1]) =~ lc($arg) } @{$self->{quotesdb}};
 
          my $found_count = scalar @found;
 
@@ -537,6 +586,19 @@ sub _buildup {
          my $si = String::IRC->new($found_count)->bold;
 
          $self->{con}->send_srv (PRIVMSG => $channel, 'found '.$si.' quotes!');
+
+         my $limit = 0;
+         foreach my $z (@found) {
+
+            $limit++;
+            last if($limit > 9);
+
+            my @the_quote = $self->{quotesdb}[$z];
+            my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($the_quote[0][0]);
+            my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($the_quote[0][3]);
+            $self->{con}->send_srv (PRIVMSG => $channel, '['.int($z + 1).'/'.$quote_count.'] '.$the_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+            sleep(1);
+         }
 
 
          # my @test = [$ident, $arg, $channel, time()];
@@ -557,20 +619,20 @@ sub _buildup {
 
          my $quote_count = scalar @{$self->{quotesdb}};
 
-         if ($quote_count > 0) {
+         return unless($quote_count > 0);
 
-            my $rand_idx = int rand($quote_count);
+         my $rand_idx = int(rand($quote_count));
 
-            my @rand_quote = $self->{quotesdb}[$rand_idx];
+         my @rand_quote = $self->{quotesdb}[$rand_idx];
 
-            my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($rand_quote[0][0]);
+         my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($rand_quote[0][0]);
 
-            my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($rand_quote[0][3]);
+         my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($rand_quote[0][3]);
 
-            my $si = String::IRC->new($rand_idx)->bold;
+         #my $si = String::IRC->new("$rand_idx")->bold;
 
-            $self->{con}->send_srv (PRIVMSG => $channel, '['.$si.'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
-         }
+         $self->{con}->send_srv (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+      
 
          return 1;
     },
@@ -578,6 +640,80 @@ sub _buildup {
       
          return 1;
    });
+
+   $self->add_func(name => 'dq',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /,$message, 2);
+
+         return unless (defined $arg) && (length $arg);
+
+         my $quote_count = scalar @{$self->{quotesdb}};
+
+         return unless $arg =~ m/^\d+$/;
+
+         unless( (int($arg) <= $quote_count) && (int($arg) > 0 ) ) {
+            return;
+         }
+
+         splice(@{$self->{quotesdb}}, (int($arg) - 1), 1);
+
+         #my $si = String::IRC->new($arg)->bold;
+
+         $self->{con}->send_srv (PRIVMSG => $channel, 'Quote #'.$arg.' has been deleted.');
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
+
+         return $ret;
+   });
+
+
+
+   $self->add_func(name => 'q',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /,$message, 2);
+
+         return unless (defined $arg) && (length $arg);
+
+         my $quote_count = scalar @{$self->{quotesdb}};
+
+         return unless $arg =~ m/^\d+$/;
+
+         unless( (int($arg) <= $quote_count) && (int($arg) > 0 ) ) {
+            return;
+         }
+
+         my @quote_ele = $self->{quotesdb}[int($arg - 1)];
+         #print Dumper(@quote_ele),"\n";
+
+         my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($quote_ele[0][0]);
+
+         my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($quote_ele[0][3]);
+
+         $self->{con}->send_srv (PRIVMSG => $channel, '['.$arg.'/'.$quote_count.'] '.$quote_ele[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
+
+         return $ret;
+   });
+
 
    $self->add_func(name => 'lq',
       delegate => sub {
@@ -890,17 +1026,17 @@ sub _start {
 
    # $self->{con}->send_srv (PRIVMSG => 'dek',"Hello there!");
 
-   $self->{con}->send_srv (JOIN => '#tr3b0r');
+   $self->{con}->send_srv (JOIN => '#hadouken');
 
    # $self->{con}->send_srv (PRIVMSG => '#tr3b0r',"hello");
 
-   my $server_count = scalar @{$self->{servers}};
+   #my $server_count = scalar @{$self->{servers}};
 
-   my ($host,$port) = split(/:/, $self->{servers}[int rand $server_count]);
+   #my ($host,$port) = split(/:/, $self->{servers}[int rand $server_count]);
 
-   warn "* Using random server: $host\n";
+   #warn "* Using random server: $host\n";
 
-   $self->{con}->connect ($host, $port, { nick => 'fartinato' });
+   $self->{con}->connect ('198.52.200.8', '61066', { nick => 'fartinato', password => 'temp123', send_initial_whois => 1});
 
    $self->{c}->wait;
 
@@ -973,6 +1109,7 @@ sub calc {
 }
 
 sub _webclient {
+
    my $self = shift;
 
    unless(defined $self->{wc} ) {
