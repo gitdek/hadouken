@@ -6,8 +6,10 @@ use diagnostics;
 
 our $VERSION = '0.1';
 
-use Data::Printer alias => 'Dumper',colored => 1;
-#use Data::Dumper;
+use Data::Dumper;
+#use Data::Printer alias => 'Dumper',colored => 1;
+
+use Cwd ();
 
 use List::MoreUtils ();
 use List::Util ();
@@ -15,30 +17,29 @@ use List::Util ();
 use AnyEvent;
 use AnyEvent::IRC::Client;
 use AnyEvent::DNS;
+use AnyEvent::IRC::Util ();
 
-use HTML::TokeParser::Simple;
-
-use LWP::UserAgent;
-use Encode;
+use HTML::TokeParser;
+use URI ();
+use LWP::UserAgent ();
+use Encode qw( encode ); 
 use JSON::XS qw( decode_json );
-
-use Tie::Array::CSV;
-
 use POSIX qw(strftime);
+use Time::HiRes qw( time sleep );
+use Geo::IP;
+use Tie::Array::CSV ();
+use Regexp::Common;
+
+use String::IRC;
 
 use Moose;
-
-use Time::HiRes qw( time );
-use Geo::IP;
-
+# use Regexp::Grammars;
 with qw(MooseX::Daemonize);
 
-# ... define your class ....
 
 after start => sub {
    my $self = shift;
    return unless $self->is_daemon;
-   # your daemon code here ...
 
    $self->{connected} = 0;
    $self->{c} = AnyEvent->condvar;
@@ -50,6 +51,9 @@ after start => sub {
 my $command_prefix = '^(!|\.)';
 
 my @commands = (
+      {name => 'ipcalc',   regex => 'ipcalc\s.+?',          cb => undef, delegate => undef, acl => undef, comment => 'calculate ip netmask' },
+      {name => 'calc',     regex => 'calc\s.+?',            cb => undef, delegate => undef, acl => undef, comment => 'google calculator' },
+      {name => 'ticker',   regex => 'ticker\s.+?',          cb => undef, delegate => undef, acl => undef, comment => 'look up coin(ltc,doge,nmc) or coin pair(ltc_usd,doge_ltc,nvc_btc)' },
       {name => 'geoip',    regex => 'geoip\s.+?',           cb => undef, delegate => undef, acl => undef, comment => 'geo ip lookup' },
       {name => 'lq',       regex => '(lq|lastquote)$',      cb => undef, delegate => undef, acl => undef, comment => 'get most recently added quote' },
       {name => 'aq',       regex => '(aq|addquote)\s.+?',   cb => undef, delegate => undef, acl => undef, comment => 'add a quote' },
@@ -60,7 +64,6 @@ my @commands = (
       {name => 'btc',      regex => 'btc$',                 cb => undef, delegate => undef, acl => undef, comment => 'display btc ticker' },
       {name => 'ltc',      regex => 'ltc$',                 cb => undef, delegate => undef, acl => undef, comment => 'display ltc ticker' },
       {name => 'eur2usd',  regex => '(e2u|eur2usd)$',       cb => undef, delegate => undef, acl => undef, comment => 'display euro to usd ticker' },
-      {name => 'mitch',    regex => 'mitch$',               cb => undef, delegate => undef, acl => undef, comment => '' },
       {name => 'commands', regex => '(commands|cmds)$',     cb => undef, delegate => undef, acl => undef, comment => 'display list of commands' },
 );
 
@@ -114,6 +117,12 @@ sub range {
    return $new_array;
 }
 
+sub detect {
+    my $self = shift;
+    my ($list, $iterator, $context) = $self->_prepare(@_);
+
+    return List::Util::first { $iterator->($_) } @$list;
+}
 
 sub value {
    my $self = shift;
@@ -139,7 +148,6 @@ sub wrap {
       $wrapper->($function, @_);
    };
 }
-
 
 sub bind {
    my $self = shift;
@@ -205,6 +213,13 @@ sub pluck {
    return $self->_finalize($result);
 }
 
+# Global rules are:
+# 
+# 
+# If you are +o or +v, and not on the blacklist you return OK.
+# if you are neither +o or +v, we check the whitelist.
+#
+
 sub global_acl {
    my $self = shift;
    my ($who, $message, $channel, $channel_list) = @_;
@@ -232,10 +247,9 @@ sub blacklisted {
 
    my $ret = 0;
 
-   print "* blacklisted called\n";
+   warn "* blacklisted called\n";
 
    return $ret;
-   #return $self->_finalize($ret);
 }
 
 sub whitelisted {
@@ -247,7 +261,6 @@ sub whitelisted {
 
 
    return $ret;
-   #return $self->_finalize($ret);
 }
 
 sub add_func {
@@ -280,15 +293,8 @@ sub fetch_json {
    my $json;
 
    eval {
-
-      my $ua = LWP::UserAgent->new(
-         agent => 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)',
-         timeout => 60,
-         ssl_opts => { verify_hostname => 0 }
-      );
-      
       my $request = HTTP::Request->new('GET', $url);
-      my $response = $ua->request($request);
+      my $response = $self->_webclient->request($request);
       $json = $self->jsonify($response->content);
    };
 
@@ -305,11 +311,6 @@ sub get_commands {
    return _->map(\@commands, sub { my ($h) = @_; $h; });
 }
 
-sub blah {
-   my $self = shift;
-
-   return ${$self->{quotesdb}};
-}
 sub _buildup {
    my $self = shift;
 
@@ -317,15 +318,112 @@ sub _buildup {
 
    #my $redis = Redis->new;
 
-
-   $self->{geoip} = Geo::IP->open('/home/dek/projects/perl/ircbot/geoip/GeoLiteCity.dat');
-
-   #my $record = $self->{geoip}->record_by_addr( $ipaddr );
-   #my $record = $self->{geoip}->record_by_addr( $ipaddr );
+   $self->{geoip} = Geo::IP->open(Cwd::abs_path('geoip/GeoIPCity.dat')) or die $!;
 
    my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', 'quotes.txt', memory => 20_000_000 or die $!;
+
    #my $tieobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.db', memory => 20_000_000 or die $!;
 
+
+   $self->add_func(name => 'ipcalc',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         my ($network, $netbit) = split(/\//, $arg);
+
+         return 
+            unless 
+               (defined($network)) && 
+               (defined($netbit)) && 
+               ($network =~ /$RE{net}{IPv4}/) &&
+               ($netbit =~ /^$RE{num}{int}$/) && 
+               ($netbit <= 32) && 
+               ($netbit >= 0);
+
+
+         my $res_calc = $self->calc_netmask($network."\/".$netbit);
+
+         my $res_usable = $self->cidr2usable_v4($netbit);
+
+         return unless (defined $res_calc) || (defined $res_usable);
+
+         my $out_msg = "[ipcalc] $arg -> netmask: $res_calc - usable addresses: $res_usable";
+
+         $self->{con}->send_srv (PRIVMSG => $channel, $out_msg);
+
+         return 1;
+    },
+      acl => sub {
+      
+         return 1;
+   });
+
+   $self->add_func(name => 'calc',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless (defined($arg) && length($arg));
+
+         my $res_calc = $self->calc($arg);
+
+         return unless defined $res_calc;
+
+         $self->{con}->send_srv (PRIVMSG => $channel, "[calc] $res_calc");
+
+         return 1;
+    },
+      acl => sub {
+      
+         return 1;
+   });
+
+   $self->add_func(name => 'ticker',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless (defined($arg) && length($arg));
+
+         my ($first_symbol, $second_symbol) = split(/_/,$arg,2);
+
+         $second_symbol ||= 'usd';
+
+         my $json = $self->fetch_json('http://www.cryptocoincharts.info/v2/api/tradingPair/'.$first_symbol.'_'.$second_symbol);
+
+         return
+            unless (
+               (defined $json) && 
+               (exists $json->{'id'}) && 
+               (exists $json->{'price'}) && 
+               (exists $json->{'volume_first'}) &&
+               (grep { defined $_ && $_ ne '' } values $json));
+
+         my $si = String::IRC->new($arg)->bold;
+         my $ret =  "[$si] Id: $json->{id} Last: $json->{price} Volume: $json->{volume_first} Most volume: $json->{best_market}";
+
+         $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+
+         return 1;
+   },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
+
+         # add in some other behavior here if needed.
+         return $ret;
+   });
 
    $self->add_func(name => 'geoip',
       delegate => sub {
@@ -335,35 +433,60 @@ sub _buildup {
 
          my ($cmd, $arg) = split(/ /,$message, 2);
 
-         #print "cmd is $cmd, arg is $arg.\n";
-
          # my $dns_cb = _->map(\@commands, sub { my ($h) = @_; return $h if($h->{name} eq 'geoip'); } );
 
-         if( $arg =~ /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/ ) {
+         if( $arg =~ /$RE{net}{IPv4}/ ) {
 
             my $record = $self->{geoip}->record_by_addr( $arg );   
 
-            my $result = "$arg -> ".$record->city.", ".$record->region.", ".$record->country_code; # ".$isp;
+            return unless defined $record;
 
-            $self->{con}->send_srv (PRIVMSG => $channel, $result);           
+            my $ip_result = "$arg -> ";
+            $ip_result .= " City:".$record->city if defined $record->city && $record->city ne '';
+            $ip_result .= " Region:".$record->region if defined $record->region && $record->region ne '';
+            $ip_result .= " Country:".$record->country_code if defined $record->country_code && $record->country_code ne '';
 
-         } else {
+            $self->{con}->send_srv (PRIVMSG => $channel, $ip_result);           
 
-            AnyEvent::DNS::resolver->resolve ($arg, "a", 
+         } elsif ( $arg =~ m{($RE{URI})}gos ) {
+
+            my $uri = URI->new($arg);
+            my $host_only = $uri->host;
+
+            AnyEvent::DNS::resolver->resolve ($host_only, "a",
                sub {
-                  shift;
-                  my @records = (@_);
 
-                  my $top_result = $records[0][0]; # [0][4] is the IP.
+                  # array = "banana.com", "a", "in", 3290, "113.10.144.102"
+                  my $row = List::MoreUtils::last_value { grep { $_ eq "a" } @$_  } @_;
 
-                  my $record = $self->{geoip}->record_by_name( $top_result );   
+                  return unless (defined $row) || (@$row[4] =~ /$RE{net}{IPv4}/);
 
-                  my $result = "$arg -> ".$record->city.", ".$record->region.", ".$record->country_code; # ".$isp;
+                  my $ip_addr = @$row[4];
 
-                  $self->{con}->send_srv (PRIVMSG => $channel, $result);           
+                  return unless ($ip_addr =~ /$RE{net}{IPv4}/);
+
+                  my $record = $self->{geoip}->record_by_addr($ip_addr);   
+
+                  unless(defined $record) {
+                     $self->{con}->send_srv (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
+                     return;
+                  }
+
+                  my $dom_result = "$arg ($ip_addr) ->";
+                  $dom_result .= " City:".$record->city if defined $record->city && $record->city ne '';
+                  $dom_result .= " Region:".$record->region if defined $record->region && $record->region ne '';
+                  $dom_result .= " Country:".$record->country_code if defined $record->country_code && $record->country_code ne '';
+
+                  $self->{con}->send_srv (PRIVMSG => $channel, $dom_result);           
                } 
             );
-         }  
+         } else {
+
+            # maybe implement by nick (in channel)
+            # .geoip dek
+            # if(exists $channel_list->{$nickname}) {
+            # then do the lookup.
+         }
 
          return 1;
     },
@@ -374,11 +497,57 @@ sub _buildup {
       cb => sub {
          my $self = shift;
 
-         warn Dumper(@_);
-
          return 1;
    });
 
+
+
+   $self->add_func(name => 'fq',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my $quote_count = scalar @{$self->{quotesdb}};
+
+         return unless $quote_count > 0;
+
+
+         my ($cmd, $arg) = split(/ /,$message, 2);
+
+         my $blah = $arg;
+
+         $blah =~ s/^\s+//;
+         $blah =~ s/\s+$//;
+
+         return unless length($blah);
+
+         #if($arg =~ 'creator:')
+         #(?:^creator+$)
+
+         my @found = grep { lc($_->[1]) =~ lc($arg) } @{$self->{quotesdb}};
+
+         my $found_count = scalar @found;
+
+         unless($found_count > 0) {
+            $self->{con}->send_srv (PRIVMSG => $channel, 'nothing found in quotes!');
+            return;
+         }
+
+         my $si = String::IRC->new($found_count)->bold;
+
+         $self->{con}->send_srv (PRIVMSG => $channel, 'found '.$si.' quotes!');
+
+
+         # my @test = [$ident, $arg, $channel, time()];
+
+
+         return 1;
+    },
+      acl => sub {
+      
+         return 1;
+   });
 
    $self->add_func(name => 'rq',
       delegate => sub {
@@ -398,7 +567,9 @@ sub _buildup {
 
             my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($rand_quote[0][3]);
 
-            $self->{con}->send_srv (PRIVMSG => $channel, '['.$rand_idx.'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+            my $si = String::IRC->new($rand_idx)->bold;
+
+            $self->{con}->send_srv (PRIVMSG => $channel, '['.$si.'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
          }
 
          return 1;
@@ -442,6 +613,8 @@ sub _buildup {
 
          my ($cmd, $arg) = split(/ /,$message, 2);
 
+         return unless (defined $arg) && (length $arg);
+
          my @test = [$ident, $arg, $channel, time()];
 
          push($self->{quotesdb}, @test);
@@ -469,22 +642,21 @@ sub _buildup {
 
          my @copy = @commands;
 
-         while( my $list = splice( @copy, 0, 1 ) ) {
-            my $msg = '';
-            
-            print Dumper($list);
+         my $iter = List::MoreUtils::natatime 2, @copy;
 
-            foreach($list) {
-               $msg .= $_->{name}." - ".$_->{comment};
+         while( my @tmp = $iter->() ){
+
+            my $command_summary = '';
+
+            foreach my $c (@tmp) {
+               my $si = String::IRC->new($c->{name})->bold;
+               $command_summary .= '['.$si.'] -> '.$c->{comment}."  ";
             }
-            $self->{con}->send_srv (PRIVMSG => $channel, $msg);
-            $msg = '';
-         }
 
-         #while( my @list = splice( $cmd_names, 0, 3 ) ) {
-         #    my $msg = join(' ',@list);
-         #    $self->{con}->send_srv (PRIVMSG => $channel, $msg);
-         #}
+            #warn $command_summary,"\n\n";
+            $self->{con}->send_srv (PRIVMSG => $channel, $command_summary);
+            $command_summary = '';
+         }
 
          return 1;
     },
@@ -519,11 +691,11 @@ sub _buildup {
       acl => sub {
          my ($who, $message, $channel, $channel_list) = @_;
 
-         #my $ret = _->global_acl($who, $message, $channel, $channel_list);
+         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
 
          # add in some other behavior here if needed.
-         return 1;
-         #return $ret;
+
+         return $ret;
    });
 
    $self->add_func(name => 'ltc', 
@@ -534,7 +706,7 @@ sub _buildup {
 
          my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/ltc_usd');
 
-         print Dumper($json),"\n";
+         #print Dumper($json),"\n";
 
          my $ret =  "[ltc_usd\@btce] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
          
@@ -549,15 +721,13 @@ sub _buildup {
       acl => sub {
          my ($who, $message, $channel, $channel_list) = @_;
 
-         #my $ret = _->global_acl($who, $message, $channel, $channel_list);
+         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
 
          # add in some other behavior here if needed.
 
-         return 1;
-         #return $ret;
+         return $ret;
    }, 
       cb => sub {
-         print "* callback after mitch.\n";
 
          return 1;
    });
@@ -578,34 +748,63 @@ sub _buildup {
       acl => sub {
          my ($who, $message, $channel, $channel_list) = @_;
 
-         #my $ret = _->global_acl($who, $message, $channel, $channel_list);
+         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
 
          # add in some other behavior here if needed.
 
-         return 1;
-         # return $ret;
+         return $ret;
    });
 
    $self->{con}->reg_cb (
       connect => sub {
          my ($con, $err) = @_;
          if (defined $err) {
-            print "couldn't connect to server: $err\n";
+            warn "* Couldn't connect to server: $err\n";
          }
       },
       registered => sub {
 
-         print "registered!\n";
+         warn "* Registered!\n";
          
          $self->{connected} = 1;
-         $self->{con}->enable_ping (60);
+
+         # in AnyEvent::IRC::Client, the function enable_ping sends "PING" => "AnyEvent::IRC". Lamers.
+         #$self->{con}->enable_ping (60, sub {
+         #   my ($con) = @_;
+
+         #   warn "No PONG was received from server in 60 seconds\n";
+
+         #   return;
+         #});
       },
       disconnect => sub {
 
-         print "disconnected: $_[1]!\n";
+         warn "* Disconnected\n";
 
          $self->{connected} = 0;
+
          $self->{c}->broadcast;
+      },
+      kick => sub {
+         my($con, $kicked_nick, $channel, $is_myself, $msg, $kicker_nick) = (@_);
+
+         warn "* KICK CALLED -> $kicked_nick by $kicker_nick from $channel with message $msg -> is myself: $is_myself!\n";
+
+         warn "my nick is ". $self->{con}->nick() ."\n";
+
+         if($self->{con}->nick() eq $kicked_nick || $self->{con}->is_my_nick($kicked_nick)) {
+            
+            if($self->{rejoin_on_kick}) {
+               warn "* Rejoin automatically is set!\n";
+            }
+
+            sleep(2);
+            $self->{con}->send_srv (JOIN => $channel);
+
+            my $si = String::IRC->new($kicker_nick)->red->bold;
+
+            $self->{con}->send_srv (PRIVMSG => $channel,"kicked by $si, behavior logged");
+         }
       }
    );
 
@@ -613,9 +812,9 @@ sub _buildup {
       my ($nick, $ircmsg) = @_;
 
       return unless 
-         (defined $ircmsg) || 
-         (exists $ircmsg->{prefix}) || 
-         (exists $ircmsg->{params}) || 
+         (defined $ircmsg) && 
+         (exists $ircmsg->{prefix}) && 
+         (exists $ircmsg->{params}) && 
          (ref($ircmsg->{params}) eq "ARRAY");
 
       my $who = $ircmsg->{prefix};
@@ -625,7 +824,7 @@ sub _buildup {
 
       my $channel = $ircmsg->{params}[0];
 
-      return unless ((defined $channel) || ($self->{con}->is_channel_name($channel)));
+      return unless ((defined $channel) && ($self->{con}->is_channel_name($channel)));
 
       my $message = $ircmsg->{params}[1];
 
@@ -639,37 +838,47 @@ sub _buildup {
          if( defined $cmd->{acl}) {
             my $ret = $cmd->{acl}->($who, $message, $channel, $channel_list);
 
-            print "* ACL returned $ret\n";
+            warn "* ACL returned $ret\n";
 
             if($ret) {
                if(defined $cmd->{delegate}) {
 
-                  print "* Calling delegate\n";
+                  warn "* Calling delegate ".$cmd->{name}."\n";
 
-                  $cmd->{delegate}->($who, $message, $channel, $channel_list);
+                  $cmd->{delegate}->($who, AnyEvent::IRC::Util::filter_colors($message), $channel, $channel_list);
                }
             }
+
          }
          else {
-            print "Delegate not defined for $cmd->{'name'}\n";
+            warn "* Delegate not defined for $cmd->{'name'}\n";
          }
       }
-
-
-      print "$who said $message in $channel\n\n";
    });
 
-   $self->{con}->reg_cb ('debug_recv'  => sub {
+   $self->{con}->reg_cb ('debug_recv' => sub {
       my ($con, $msg) = @_;
-      warn
-         "< "
-         . $con->mk_msg ($msg->{prefix}, $msg->{command}, @{$msg->{params}})
-         . "\n";  
+      my $cmd = $msg->{command};
+      my $params = join("\t", @{$msg->{params}});
+
+      if(defined $msg->{prefix}) {
+         my ($m,$nick,$ident) = $con->split_nick_mode ($msg->{prefix});
+         warn "< " .$cmd."\t\t$nick\t".$params."\n";
+      } else {
+         warn "< " .$cmd."\t\t".$params."\n";
+      }
+
+      #print Dumper($msg),"\n";
    });
 
    $self->{con}->reg_cb ('debug_send' => sub {
-      my ($con, @msg) = @_;
-      warn "> " . $con->mk_msg (undef, @msg) . "\n"
+      my ($con, $command, @params) = @_;
+
+      #warn Dumper(@params),"\n";
+      #warn Dumper($command),"\n";
+      my $sent = "> " .$command."\t\t" . join("\t", @params) . "\n";
+      warn $sent;
+      #warn $sent;
    });
 
 }
@@ -685,43 +894,175 @@ sub _start {
 
    $self->{con}->send_srv (PRIVMSG => '#hadouken',"i is retarded");
 
-   $self->{con}->connect ("irc.prison.net", 6667, { nick => 'fartinatorz' });
+   my $server_count = scalar @{$self->{servers}};
+
+   my ($host,$port) = split(/:/, $self->{servers}[int rand $server_count]);
+
+   warn "* Using random server: $host\n";
+
+   $self->{con}->connect ($host, $port, { nick => 'fartinato' });
 
    $self->{c}->wait;
 
    #return 1;
 }
 
+sub parse_calc_result {
+   my ($self,$html) = @_;
+   
+   $html =~ s!<sup>(.*?)</sup>!^$1!g;
+   $html =~ s!&#215;!*!g;
+
+   my $res;
+   my $p = HTML::TokeParser->new( \$html );
+   while ( my $token = $p->get_token ) {
+      next
+         unless ( $token->[0] || '' ) eq 'S'
+         && ( $token->[1]        || '' ) eq 'img'
+         && ( $token->[2]->{src} || '' ) eq '/images/icons/onebox/calculator-40.gif';
+
+      $p->get_tag('h2');
+      $res = $p->get_trimmed_text('/h2');
+      return $res;
+   }
+
+   return $res;
+}
+
+sub cidr2usable_v4 {
+
+    my ($self, $bit) = @_;
+
+    return (2 ** (32 - $bit));
+    # return 1 << ( 32-$bit ); works but its fucking up my IDE lol
+}
+
+sub calc_netmask {
+
+    my($self, $subnet) = @_;
+
+    my($network, $netbit) = split(/\//, $subnet);
+
+    my $bit = ( 2 ** (32 - $netbit) ) - 1;
+
+    my ($full_mask)  = unpack("N", pack('C4', split(/\./, '255.255.255.255')));
+
+    return join('.', unpack('C4', pack("N", ($full_mask ^ $bit))));
+}
+
+sub calc {
+   my ($self, $expression) = @_;
+
+   my $url = URI->new('http://www.google.com/search');
+   $url->query_form(q => $expression);
+
+   my $ret;
+   my $response = $self->_webclient->get($url);
+
+   if($response->is_success) {
+
+      $ret = $self->parse_calc_result($response->content);
+
+   } else {
+
+      warn "calc failed with server response code ".$response->status_line."\n";
+
+   }
+
+   return $ret;
+}
+
+sub _webclient {
+   my $self = shift;
+
+   unless(defined $self->{wc} ) {
+
+      $self->{wc} = LWP::UserAgent->new(
+         agent => 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)',
+         timeout => 60,
+         ssl_opts => { verify_hostname => 0 }
+      );
+
+      require LWP::ConnCache;
+      $self->{wc}->conn_cache(LWP::ConnCache->new( ));
+      $self->{wc}->conn_cache->total_capacity(10);
+
+      require HTTP::Cookies;
+      $self->{wc}->cookie_jar(HTTP::Cookies->new);
+   }
+
+   return $self->{wc};
+}
+
 sub _test {
    my $self = shift;
 
+   print $self->calc_netmask('172.19.0.0/16'),"\n";
 
-   my @elements = $self->get_commands();
+   my $expr_parser = do{
+   use Regexp::Grammars;
 
-   foreach(@commands) {
-      print $_->{name},"\t",$_->{comment},"\n";
-   }
+   our %cmds = ();
 
-   #print Dumper($elements);
+   $cmds{'menace'}='thekey';
+   $cmds{'dek'}='hello';
 
+    qr{
+      <nocontext:>
+
+      <findquote>
+
+      <getquote>
+
+      <rule: findquote>
+         findquote \s* <uid>? \s* <query>
+
+         <rule: uid>     <_user=ulist>
+         <rule: query>   <_query=comment>
+
+         <token: ulist>  <%cmds { [\w-/.]+ }>
+         <token: comment> [\w\s*.]+
+
+      <rule: getquote>
+         getquote \s* <num>
+
+         <rule: num>     <_index=validint>
+
+         <token: validint> [\d]+
+
+
+    }xms
+};
+
+   my $text = 'mv test.txt something.txt findquote fart haha getquote 55555 test';
+
+    if ($text =~ $expr_parser) {
+         print "MATCHED\n\n";
+        # If successful, the hash %/ will have the hierarchy of results...
+
+        warn Dumper \%/;
+    }
+
+
+   exit;
 }
+
 1;
 
 package main;
 
-   #my $cb = CashBot->new(
-   #   servers => ['irc.underworld.no:6667','irc.efnet.org:6667'], 
-   #   channels => [ '#hadouken' ], 
-   #   admin => 'dek@2607:fb98:1a::666',
-   #);
+   use Cwd ();
 
    my $daemon = CashBot->new_with_options(
-      servers => ['irc.underworld.no:6667','irc.efnet.org:6667'], 
+      basedir => Cwd::abs_path(__FILE__),
+      servers => ['irc.underworld.no:6667','irc.efnet.org:6667'],
       channels => [ '#hadouken' ],
       admin => 'dek@2607:fb98:1a::666',
+      rejoin_on_kick => 1,
    );
 
    my ($command) = @{$daemon->extra_argv};
+
    defined $command || die "No command specified";
 
    $daemon->start   if $command eq 'start';
@@ -732,4 +1073,4 @@ package main;
    $daemon->_test   if $command eq 'test';
 
    warn($daemon->status_message) if defined $daemon->status_message;
-   exit($daemon->exit_code);
+   exit(($daemon->exit_code || 0));
