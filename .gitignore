@@ -28,3 +28,9 @@ nytprof.out
 *.o
 *.bs
 
+
+quotes.txt
+geoip/GeoIP.dat
+geoip/GeoIPCity.dat
+geoip/GeoIPOrg.dat
+geoip/GeoLiteCity.dat
