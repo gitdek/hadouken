@@ -890,9 +890,9 @@ sub _start {
 
    # $self->{con}->send_srv (PRIVMSG => 'dek',"Hello there!");
 
-   $self->{con}->send_srv (JOIN => '#hadouken');
+   $self->{con}->send_srv (JOIN => '#tr3b0r');
 
-   $self->{con}->send_srv (PRIVMSG => '#hadouken',"i is retarded");
+   # $self->{con}->send_srv (PRIVMSG => '#tr3b0r',"hello");
 
    my $server_count = scalar @{$self->{servers}};
 
