@@ -6,8 +6,8 @@ use diagnostics;
 
 our $VERSION = '0.1';
 
-use Data::Dumper;
-#use Data::Printer alias => 'Dumper',colored => 1;
+#use Data::Dumper;
+use Data::Printer alias => 'Dumper',colored => 1;
 
 use Cwd ();
 
@@ -34,46 +34,119 @@ use String::IRC;
 
 use Moose;
 # use Regexp::Grammars;
-with qw(MooseX::Daemonize);
+#with qw(MooseX::Daemonize);
+#with 'MooseX::Getopt';
+with 'MooseX::Getopt::GLD' => { getopt_conf => [ 'pass_through' ] };
 
+use namespace::autoclean;
 
-after start => sub {
-   my $self = shift;
-   return unless $self->is_daemon;
+#sub run {
+#    my $self = shift;
+     
+#    $self->start();
+     
+#    exit(0);
+#}
 
-   $self->{connected} = 0;
-   $self->{c} = AnyEvent->condvar;
-   $self->{con} = AnyEvent::IRC::Client->new();
+# after start => sub {
+#    my $self = shift;
+#    return unless $self->is_daemon;
 
-   $self->_start;
-};
+#    $self->{connected} = 0;
+#    $self->{c} = AnyEvent->condvar;
+#    $self->{con} = AnyEvent::IRC::Client->new();
+
+#    $self->_start;
+# };
+
+# after status => sub {
+#    my $self = shift;
+#    #return unless $self->is_daemon;
+
+#    warn "Status was called: ".$self->status_message."\n";
+# };
+
+# after stop => sub {
+#    my $self = shift;
+#    return unless $self->is_daemon;
+
+#    $self->{c}->recv;
+
+#    #$self->{connected} = 0;
+#    #$self->{c} = AnyEvent->condvar;
+#    #$self->{con} = AnyEvent::IRC::Client->new();
+
+#    #$self->_start;
+# };
+
+has 'start_time' => (is => 'rw', isa => 'Str', required => 0);
+has 'connect_time' => (is => 'rw', isa => 'Str', required => 0);
 
 my $command_prefix = '^(!|\.)';
+my $safe_delay = '0.25';
 
 my @commands = (
-      {name => 'ipcalc',   regex => 'ipcalc\s.+?',          cb => undef, delegate => undef, acl => undef, comment => 'calculate ip netmask' },
-      {name => 'calc',     regex => 'calc\s.+?',            cb => undef, delegate => undef, acl => undef, comment => 'google calculator' },
-      {name => 'ticker',   regex => 'ticker\s.+?',          cb => undef, delegate => undef, acl => undef, comment => 'look up coin(ltc,doge,nmc) or coin pair(ltc_usd,doge_ltc,nvc_btc)' },
-      {name => 'geoip',    regex => 'geoip\s.+?',           cb => undef, delegate => undef, acl => undef, comment => 'geo ip lookup' },
-      {name => 'lq',       regex => '(lq|lastquote)$',      cb => undef, delegate => undef, acl => undef, comment => 'get most recently added quote' },
-      {name => 'aq',       regex => '(aq|addquote)\s.+?',   cb => undef, delegate => undef, acl => undef, comment => 'add a quote' },
-      {name => 'dq',       regex => '(dq|delquote)\s.+?',   cb => undef, delegate => undef, acl => undef, comment => 'delete quote' },
-      {name => 'fq',       regex => '(fq|findquote)\s.+?',  cb => undef, delegate => undef, acl => undef, comment => 'find a quote' },
-      {name => 'rq',       regex => '(rq|randquote)$',      cb => undef, delegate => undef, acl => undef, comment => 'get a random quote' },
-      {name => 'q',        regex => '(q|quote)\s.+?',       cb => undef, delegate => undef, acl => undef, comment => 'get a quote by index' },
-      {name => 'btc',      regex => 'btc$',                 cb => undef, delegate => undef, acl => undef, comment => 'display btc ticker' },
-      {name => 'ltc',      regex => 'ltc$',                 cb => undef, delegate => undef, acl => undef, comment => 'display ltc ticker' },
-      {name => 'eur2usd',  regex => '(e2u|eur2usd)$',       cb => undef, delegate => undef, acl => undef, comment => 'display euro to usd ticker' },
-      {name => 'commands', regex => '(commands|cmds)$',     cb => undef, delegate => undef, acl => undef, comment => 'display list of commands' },
+      {name => 'channeladd', regex => 'channeladd\s.+?',       comment => 'add channel', require_admin => 1 },
+      {name => 'channeldel', regex => 'channeldel\s.+?',       comment => 'delete channel', require_admin => 1 },
+      {name => 'powerup',  regex => 'powerup$',                comment => 'power up +o', require_admin => 1 },
+      {name => 'admindel', regex => 'admindel\s.+?',           comment => 'delete admin <nick@host>', require_admin => 1 },
+      {name => 'adminadd', regex => 'adminadd\s.+?',           comment => 'add admin <nick@host>', require_admin => 1 },
+      {name => 'ipcalc',   regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
+      {name => 'calc',     regex => 'calc\s.+?',               comment => 'google calculator' },
+      {name => 'ticker',   regex => 'ticker\s.+?',             comment => 'look up coin(ltc,doge,nmc) or coin pair(ltc_usd,doge_ltc,nvc_btc)' },
+      {name => 'geoip',    regex => 'geoip\s.+?',              comment => 'geo ip lookup' },
+      {name => 'lq',       regex => '(lq|lastquote)$',         comment => 'get most recently added quote' },
+      {name => 'aq',       regex => '(aq|addquote)\s.+?',      comment => 'add a quote' },
+      {name => 'dq',       regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote' },
+      {name => 'fq',       regex => '(fq|findquote)\s.+?',     comment => 'find a quote' },
+      {name => 'rq',       regex => '(rq|randquote)$',         comment => 'get a random quote' },
+      {name => 'q',        regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)' },
+      {name => 'btc',      regex => 'btc$',                    comment => 'display btc ticker' },
+      {name => 'ltc',      regex => 'ltc$',                    comment => 'display ltc ticker' },
+      {name => 'eur2usd',  regex => '(e2u|eur2usd)$',          comment => 'display euro to usd ticker' },
+      {name => 'commands', regex => '(commands|cmds)$',        comment => 'display list of commands' },
 );
 
 sub new {
    my $class = shift;
    my $self = {@_};
-
    bless $self, $class;
 
    return $self;
+}
+
+sub stop {
+   my ($self) = @_;
+   return unless $self->{connected};
+
+   # In our registered callback for disconnect we handle the state vars and condvar
+   $self->{con}->disconnect();
+}
+
+sub start {
+   my ($self) = @_;
+   
+   if($self->{connected}) {
+      $self->stop();
+   }
+
+   $self->start_time(time());
+   $self->{connected} = 0;
+   $self->{c} = AnyEvent->condvar;
+   $self->{con} = AnyEvent::IRC::Client->new();
+   $self->_start;
+}
+
+before 'send_server_safe' => sub {
+   my $self = shift;
+
+   sleep($safe_delay);
+};
+
+sub send_server_safe {
+   my ($self,$command, @params) = @_;
+   return unless defined $self->{con};
+   $self->{con}->send_srv($command,@params);
 }
 
 sub chain {
@@ -286,18 +359,55 @@ sub is_admin {
    my ($self, $who) = @_;
    my ($nick,$host) = $self->get_nick_and_host($who);
 
-   print "is admin: $nick \t $host\n\n";
+   $nick = lc($nick);
+   $host = lc($host);
 
-   if(grep { $_->[0] eq $nick && $_->[1] eq $host } @{$self->{adminsdb}}) {
+   if(grep {lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{adminsdb}}) {
       return 1;
    }
 
    return 0;
 }
 
-sub add_admin {
-   my ($self, $who) = @_;
+sub admin_delete {
+   my ($self, $who, $statement) = @_;
 
+   return unless $self->is_admin($who) && defined $statement;
+
+   my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
+
+   my ($nick, $host) = $self->get_nick_and_host($statement);
+
+   return unless defined($nick) && defined($host);
+
+   my $index = -1;
+   # Returns -1 if no such item could be found.
+   if ( ($index = List::MoreUtils::first_index { $_->[0] eq $nick && $_->[1] eq $host } @{$self->{adminsdb}}) >= 0 ) {
+
+      splice(@{$self->{adminsdb}}, $index, 1);
+
+      return 1;
+   }
+}
+
+sub admin_add {
+   my ($self, $who, $statement) = @_;
+
+   return unless $self->is_admin($who) && defined $statement;
+
+   my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
+
+   my ($nick, $host) = $self->get_nick_and_host($statement);
+
+   return unless defined($nick) && defined($host);
+
+   return if($self->is_admin($statement));
+
+   my @admin_row = [$nick, $host, '*', time(), $creator_nick];
+
+   push($self->{adminsdb}, @admin_row);
+
+   return 1;
 }
 
 sub add_func {
@@ -360,7 +470,6 @@ sub _buildup {
 
    my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', 'quotes.txt', memory => 20_000_000 or die $!;
 
-   # Admin db will just be dek@2607:fb98:1a::666
    my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.txt', memory => 20_000_000 or die $!;
 
    # Add ourselves into the db if we arent in already!
@@ -370,9 +479,113 @@ sub _buildup {
       push($self->{adminsdb}, @admin_row);
    }
 
-   #exit;
-   #my $tieobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.db', memory => 20_000_000 or die $!;
+   my $simple_acl = sub {
+      my ($who, $message, $channel, $channel_list) = @_;
+      my $ret = $self->global_acl($who, $message, $channel, $channel_list);
+      return $ret;
+   };
 
+   $self->add_func(name => 'powerup',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         $self->send_server_safe( MODE => $channel, '+o', $nickname);
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+
+   $self->add_func(name => 'channeldel',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless ((defined $arg) && ($self->{con}->is_channel_name($arg)));
+         $self->send_server_safe (PART => $arg);
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+   $self->add_func(name => 'channeladd',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+         
+         return unless ((defined $arg) && ($self->{con}->is_channel_name($arg)));
+         $self->send_server_safe (JOIN => $arg);
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+   $self->add_func(name => 'admindel',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless defined $arg;
+
+         my $del_ret = $self->admin_delete($who, $arg);
+
+         if($del_ret) {
+            my $out_msg = "[admindel] deleted admin $arg -> by $nickname";
+            $self->send_server_safe (PRIVMSG => $channel, $out_msg);
+         }
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+   $self->add_func(name => 'adminadd',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless defined $arg;
+
+         my $add_ret = $self->admin_add($who, $arg);
+
+         if($add_ret) {
+            my $out_msg = "[adminadd] added admin $arg -> by $nickname";
+            $self->send_server_safe (PRIVMSG => $channel, $out_msg);
+         }
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
 
    $self->add_func(name => 'ipcalc',
       delegate => sub {
@@ -388,28 +601,34 @@ sub _buildup {
             unless 
                (defined($network)) && 
                (defined($netbit)) && 
-               ($network =~ /$RE{net}{IPv4}/) &&
-               ($netbit =~ /^$RE{num}{int}$/) && 
+               ($network =~ /$RE{net}{IPv4}/);
+
+         if( ($netbit =~ /^$RE{num}{int}$/) && 
                ($netbit <= 32) && 
-               ($netbit >= 0);
+               ($netbit >= 0)) {
 
+            my $res_calc = $self->calc_netmask($network."\/".$netbit);
 
-         my $res_calc = $self->calc_netmask($network."\/".$netbit);
+            my $res_usable = $self->cidr2usable_v4($netbit);
 
-         my $res_usable = $self->cidr2usable_v4($netbit);
+            return unless (defined $res_calc) || (defined $res_usable);
 
-         return unless (defined $res_calc) || (defined $res_usable);
+            my $out_msg = "[ipcalc] $arg -> netmask: $res_calc - usable addresses: $res_usable";
 
-         my $out_msg = "[ipcalc] $arg -> netmask: $res_calc - usable addresses: $res_usable";
+            $self->send_server_safe (PRIVMSG => $channel, $out_msg);
+         } elsif($netbit =~ /$RE{net}{IPv4}/) {
 
-         $self->{con}->send_srv (PRIVMSG => $channel, $out_msg);
+            my $cidr = $self->netmask2cidr($netbit,$network);
+
+            my $poop = "[ipcalc] $arg -> cidr $cidr";
+
+            $self->send_server_safe (PRIVMSG => $channel, $poop);
+         }
 
          return 1;
     },
-      acl => sub {
-      
-         return 1;
-   });
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'calc',
       delegate => sub {
@@ -425,14 +644,12 @@ sub _buildup {
 
          return unless defined $res_calc;
 
-         $self->{con}->send_srv (PRIVMSG => $channel, "[calc] $res_calc");
+         $self->send_server_safe (PRIVMSG => $channel, "[calc] $res_calc");
 
          return 1;
-    },
-      acl => sub {
-      
-         return 1;
-              });
+   },
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'ticker',
       delegate => sub {
@@ -461,18 +678,12 @@ sub _buildup {
          my $si = String::IRC->new($arg)->bold;
          my $ret =  "[$si] Id: $json->{id} Last: $json->{price} Volume: $json->{volume_first} Most volume: $json->{best_market}";
 
-         $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+         $self->send_server_safe (PRIVMSG => $channel, $ret);
 
          return 1;
    },
-      acl => sub {
-         my ($who, $message, $channel, $channel_list) = @_;
-
-         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
-
-         # add in some other behavior here if needed.
-         return $ret;
-   });
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'geoip',
       delegate => sub {
@@ -495,7 +706,7 @@ sub _buildup {
             $ip_result .= " Region:".$record->region if defined $record->region && $record->region ne '';
             $ip_result .= " Country:".$record->country_code if defined $record->country_code && $record->country_code ne '';
 
-            $self->{con}->send_srv (PRIVMSG => $channel, $ip_result);           
+            $self->send_server_safe (PRIVMSG => $channel, $ip_result);           
 
          } elsif ( $arg =~ m{($RE{URI})}gos ) {
 
@@ -517,7 +728,7 @@ sub _buildup {
                   my $record = $self->{geoip}->record_by_addr($ip_addr);   
 
                   unless(defined $record) {
-                     $self->{con}->send_srv (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
+                     $self->send_server_safe (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
                      return;
                   }
 
@@ -526,7 +737,7 @@ sub _buildup {
                   $dom_result .= " Region:".$record->region if defined $record->region && $record->region ne '';
                   $dom_result .= " Country:".$record->country_code if defined $record->country_code && $record->country_code ne '';
 
-                  $self->{con}->send_srv (PRIVMSG => $channel, $dom_result);           
+                  $self->send_server_safe (PRIVMSG => $channel, $dom_result);           
                } 
             );
          } else {
@@ -539,17 +750,8 @@ sub _buildup {
 
          return 1;
     },
-      acl => sub {
-      
-         return 1;
-   },
-      cb => sub {
-         my $self = shift;
-
-         return 1;
-   });
-
-
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'fq',
       delegate => sub {
@@ -560,7 +762,6 @@ sub _buildup {
          my $quote_count = scalar @{$self->{quotesdb}};
 
          return unless $quote_count > 0;
-
 
          my ($cmd, $arg) = split(/ /,$message, 2);
 
@@ -579,13 +780,13 @@ sub _buildup {
          my $found_count = scalar @found;
 
          unless($found_count > 0) {
-            $self->{con}->send_srv (PRIVMSG => $channel, 'nothing found in quotes!');
+            $self->send_server_safe (PRIVMSG => $channel, 'nothing found in quotes!');
             return;
          }
 
          my $si = String::IRC->new($found_count)->bold;
 
-         $self->{con}->send_srv (PRIVMSG => $channel, 'found '.$si.' quotes!');
+         $self->send_server_safe (PRIVMSG => $channel, 'found '.$si.' quotes!');
 
          my $limit = 0;
          foreach my $z (@found) {
@@ -596,20 +797,13 @@ sub _buildup {
             my @the_quote = $self->{quotesdb}[$z];
             my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($the_quote[0][0]);
             my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($the_quote[0][3]);
-            $self->{con}->send_srv (PRIVMSG => $channel, '['.int($z + 1).'/'.$quote_count.'] '.$the_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
-            sleep(1);
+            $self->send_server_safe (PRIVMSG => $channel, '['.int($z + 1).'/'.$quote_count.'] '.$the_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
          }
-
-
-         # my @test = [$ident, $arg, $channel, time()];
-
 
          return 1;
     },
-      acl => sub {
-      
-         return 1;
-   });
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'rq',
       delegate => sub {
@@ -631,15 +825,13 @@ sub _buildup {
 
          #my $si = String::IRC->new("$rand_idx")->bold;
 
-         $self->{con}->send_srv (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+         $self->send_server_safe (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
       
 
          return 1;
     },
-      acl => sub {
-      
-         return 1;
-   });
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'dq',
       delegate => sub {
@@ -663,19 +855,12 @@ sub _buildup {
 
          #my $si = String::IRC->new($arg)->bold;
 
-         $self->{con}->send_srv (PRIVMSG => $channel, 'Quote #'.$arg.' has been deleted.');
+         $self->send_server_safe (PRIVMSG => $channel, 'Quote #'.$arg.' has been deleted.');
 
          return 1;
     },
-      acl => sub {
-         my ($who, $message, $channel, $channel_list) = @_;
-
-         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
-
-         return $ret;
-   });
-
-
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'q',
       delegate => sub {
@@ -689,30 +874,37 @@ sub _buildup {
 
          my $quote_count = scalar @{$self->{quotesdb}};
 
-         return unless $arg =~ m/^\d+$/;
+         return unless $quote_count > 0;
 
-         unless( (int($arg) <= $quote_count) && (int($arg) > 0 ) ) {
-            return;
+         my @real_indexes = ();
+
+         while($arg =~ /$RE{num}{int}{-sep => ','}{-keep}/g) {
+            push(@real_indexes,int($1 - 1));
          }
 
-         my @quote_ele = $self->{quotesdb}[int($arg - 1)];
-         #print Dumper(@quote_ele),"\n";
+         while($arg =~ /$RE{num}{int}{-sep => ' '}{-keep}/g) {
+            push(@real_indexes,int($1 - 1));
+         }
 
-         my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($quote_ele[0][0]);
+         my @x = List::MoreUtils::distinct @real_indexes;
 
-         my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($quote_ele[0][3]);
 
-         $self->{con}->send_srv (PRIVMSG => $channel, '['.$arg.'/'.$quote_count.'] '.$quote_ele[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+         splice @x, 5 if($#x > 5 );
+
+         my $search_count = scalar @x;
+
+         foreach my $j (@x) {
+            next unless $j >=0 && $j < $quote_count;
+
+            my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($self->{quotesdb}[$j][0][0]);
+            my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($self->{quotesdb}[$j][0][3]);
+            $self->send_server_safe (PRIVMSG => $channel, '['.int($j+1).'/'.$quote_count.'] '.$self->{quotesdb}[$j][0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+         }
 
          return 1;
     },
-      acl => sub {
-         my ($who, $message, $channel, $channel_list) = @_;
-
-         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
-
-         return $ret;
-   });
+      acl => $simple_acl,
+   );
 
 
    $self->add_func(name => 'lq',
@@ -731,15 +923,13 @@ sub _buildup {
 
             my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($last_quote[0][3]);
 
-            $self->{con}->send_srv (PRIVMSG => $channel, '['.$quote_count.'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+            $self->send_server_safe (PRIVMSG => $channel, '['.$quote_count.'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
          }
 
          return 1;
     },
-      acl => sub {
-      
-         return 1;
-   });
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'aq',
       delegate => sub {
@@ -761,10 +951,8 @@ sub _buildup {
 
          return 1;
     },
-      acl => sub {
-      
-         return 1;
-   });
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'commands',
       delegate => sub {
@@ -774,7 +962,7 @@ sub _buildup {
 
          #my $cmd_names = _->pluck(\@commands, 'name');
 
-         $self->{con}->send_srv (PRIVMSG => $channel, 'Commands:');
+         $self->send_server_safe (PRIVMSG => $channel, 'Commands:');
 
          my @copy = @commands;
 
@@ -785,26 +973,20 @@ sub _buildup {
             my $command_summary = '';
 
             foreach my $c (@tmp) {
+               next if($c->{require_admin});
                my $si = String::IRC->new($c->{name})->bold;
                $command_summary .= '['.$si.'] -> '.$c->{comment}."  ";
             }
 
             #warn $command_summary,"\n\n";
-            $self->{con}->send_srv (PRIVMSG => $channel, $command_summary);
+            $self->send_server_safe (PRIVMSG => $channel, $command_summary);
             $command_summary = '';
          }
 
          return 1;
     },
-      acl => sub {
-      
-         return 1;
-   });
-
-   # list coins
-   
-   # http://www.cryptocoincharts.info/v2/api/listCoins
-
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'btc', 
       delegate => sub {
@@ -818,21 +1000,14 @@ sub _buildup {
          my $ret =  "[btc_usd\@btce] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
          my $ret2 = "[btc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
 
-         $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+         $self->send_server_safe (PRIVMSG => $channel, $ret);
 
-         $self->{con}->send_srv (PRIVMSG => $channel, $ret2);
+         $self->send_server_safe (PRIVMSG => $channel, $ret2);
 
          return 1;
    },
-      acl => sub {
-         my ($who, $message, $channel, $channel_list) = @_;
-
-         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
-
-         # add in some other behavior here if needed.
-
-         return $ret;
-   });
+      acl => $simple_acl,
+   );
 
    $self->add_func(name => 'ltc', 
       delegate => sub {
@@ -848,25 +1023,14 @@ sub _buildup {
          
          my $ret2 = "[ltc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
 
-         $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+         $self->send_server_safe (PRIVMSG => $channel, $ret);
 
-         $self->{con}->send_srv (PRIVMSG => $channel, $ret2);
+         $self->send_server_safe (PRIVMSG => $channel, $ret2);
 
          return 1;
    },
-      acl => sub {
-         my ($who, $message, $channel, $channel_list) = @_;
-
-         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
-
-         # add in some other behavior here if needed.
-
-         return $ret;
-   }, 
-      cb => sub {
-
-         return 1;
-   });
+      acl => $simple_acl,
+   );
 
 
    $self->add_func(name => 'eur2usd', 
@@ -877,19 +1041,12 @@ sub _buildup {
 
          my $ret = "[eur_usd] Last: $json->{eur_usd}->{last} Low: $json->{eur_usd}->{low} High: $json->{eur_usd}->{high} Avg: $json->{eur_usd}->{avg} Vol: $json->{eur_usd}->{vol}";
 
-         $self->{con}->send_srv (PRIVMSG => $channel, $ret);
+         $self->send_server_safe (PRIVMSG => $channel, $ret);
 
          return 1;
    },
-      acl => sub {
-         my ($who, $message, $channel, $channel_list) = @_;
-
-         my $ret = $self->global_acl($who, $message, $channel, $channel_list);
-
-         # add in some other behavior here if needed.
-
-         return $ret;
-   });
+      acl => $simple_acl,
+   );
 
    $self->{con}->reg_cb (
       connect => sub {
@@ -899,19 +1056,8 @@ sub _buildup {
          }
       },
       registered => sub {
-
-         warn "* Registered!\n";
-         
          $self->{connected} = 1;
-
-         # in AnyEvent::IRC::Client, the function enable_ping sends "PING" => "AnyEvent::IRC". Lamers.
-         #$self->{con}->enable_ping (60, sub {
-         #   my ($con) = @_;
-
-         #   warn "No PONG was received from server in 60 seconds\n";
-
-         #   return;
-         #});
+         $self->connect_time(time());
       },
       disconnect => sub {
 
@@ -921,12 +1067,29 @@ sub _buildup {
 
          $self->{c}->broadcast;
       },
+      join => sub {
+         my ($con,$nick, $channel, $is_myself) = (@_);
+
+         #warn Dumper($nick);
+         #warn "Nick $nick joined $channel\n";
+
+         return if $is_myself;
+
+         my $ident = $con->nick_ident($nick);
+
+         return unless defined $ident;
+
+         if($self->is_admin($ident)) {
+            $self->send_server_safe( MODE => $channel, '+o', $nick);   
+         }
+
+      },
       kick => sub {
          my($con, $kicked_nick, $channel, $is_myself, $msg, $kicker_nick) = (@_);
 
          warn "* KICK CALLED -> $kicked_nick by $kicker_nick from $channel with message $msg -> is myself: $is_myself!\n";
 
-         warn "my nick is ". $self->{con}->nick() ."\n";
+         # warn "my nick is ". $self->{con}->nick() ."\n";
 
          if($self->{con}->nick() eq $kicked_nick || $self->{con}->is_my_nick($kicked_nick)) {
             
@@ -935,15 +1098,16 @@ sub _buildup {
             }
 
             sleep(2);
-            $self->{con}->send_srv (JOIN => $channel);
+            $self->send_server_safe (JOIN => $channel);
 
             my $si = String::IRC->new($kicker_nick)->red->bold;
 
-            $self->{con}->send_srv (PRIVMSG => $channel,"kicked by $si, behavior logged");
+            $self->send_server_safe (PRIVMSG => $channel,"kicked by $si, behavior logged");
          }
       }
    );
 
+   
    $self->{con}->reg_cb ('irc_privmsg'  => sub {
       my ($nick, $ircmsg) = @_;
 
@@ -1003,18 +1167,12 @@ sub _buildup {
       } else {
          warn "< " .$cmd."\t\t".$params."\n";
       }
-
-      #print Dumper($msg),"\n";
    });
 
    $self->{con}->reg_cb ('debug_send' => sub {
       my ($con, $command, @params) = @_;
-
-      #warn Dumper(@params),"\n";
-      #warn Dumper($command),"\n";
       my $sent = "> " .$command."\t\t" . join("\t", @params) . "\n";
       warn $sent;
-      #warn $sent;
    });
 
 }
@@ -1024,19 +1182,23 @@ sub _start {
 
    $self->_buildup();
 
-   # $self->{con}->send_srv (PRIVMSG => 'dek',"Hello there!");
+   foreach my $chan ( @{$self->{channels}} ) {
+      $self->send_server_safe (JOIN => $chan);
+   }
 
-   $self->{con}->send_srv (JOIN => '#hadouken');
+   my $server_count = scalar @{$self->{servers}};
+   my $server_hashref = $self->{servers}[int rand $server_count];
 
-   # $self->{con}->send_srv (PRIVMSG => '#tr3b0r',"hello");
+   # When connecting, sometimes if a nick is in use it requires an alternative.
+   my $nick_change = sub {
+      my ($badnick) = @_;
+      $self->{nick} .= "_";
+      return $self->{nick};
+   };
 
-   #my $server_count = scalar @{$self->{servers}};
+   $self->{con}->set_nick_change_cb($nick_change);
 
-   #my ($host,$port) = split(/:/, $self->{servers}[int rand $server_count]);
-
-   #warn "* Using random server: $host\n";
-
-   $self->{con}->connect ('198.52.200.8', '61066', { nick => 'fartinato', password => 'temp123', send_initial_whois => 1});
+   $self->{con}->connect ($server_hashref->{host}, $server_hashref->{port}, { nick => $self->{nick}, password => $server_hashref->{password}, send_initial_whois => 1});
 
    $self->{c}->wait;
 
@@ -1066,15 +1228,35 @@ sub parse_calc_result {
 }
 
 sub cidr2usable_v4 {
-
     my ($self, $bit) = @_;
 
     return (2 ** (32 - $bit));
     # return 1 << ( 32-$bit ); works but its fucking up my IDE lol
 }
 
-sub calc_netmask {
+sub netmask2cidr {
+   my ($self,$mask, $network) = @_;
+   my @octet = split (/\./, $mask);
+   my @bits;
+   my $binmask;
+   my $binoct;
+   my $bitcount = 0;
 
+   foreach (@octet) {
+      $binoct = unpack("B32", pack("N", $_));
+      $binmask = $binmask . substr $binoct, -8;
+   }
+
+   @bits = split (//,$binmask);
+   foreach (@bits) {
+      $bitcount++ if ($_ eq "1");
+   }
+
+   my $cidr = $network . "/" . $bitcount;
+   return $cidr;
+}
+
+sub calc_netmask {
     my($self, $subnet) = @_;
 
     my($network, $netbit) = split(/\//, $subnet);
@@ -1100,9 +1282,7 @@ sub calc {
       $ret = $self->parse_calc_result($response->content);
 
    } else {
-
       warn "calc failed with server response code ".$response->status_line."\n";
-
    }
 
    return $ret;
@@ -1131,58 +1311,58 @@ sub _webclient {
    return $self->{wc};
 }
 
-sub _test {
-   my $self = shift;
+#sub _test {
+#   my $self = shift;
 
-   print $self->calc_netmask('172.19.0.0/16'),"\n";
+#   print $self->calc_netmask('172.19.0.0/16'),"\n";
 
-   my $expr_parser = do{
-   use Regexp::Grammars;
+#   my $expr_parser = do{
+#   use Regexp::Grammars;
 
-   our %cmds = ();
+#   our %cmds = ();
 
-   $cmds{'menace'}='thekey';
-   $cmds{'dek'}='hello';
+#   $cmds{'menace'}='thekey';
+#   $cmds{'dek'}='hello';
 
-    qr{
-      <nocontext:>
+#    qr{
+#      <nocontext:>
+#
+#      <findquote>
 
-      <findquote>
+#      <getquote>
 
-      <getquote>
+#      <rule: findquote>
+#         findquote \s* <uid>? \s* <query>
+#
+#         <rule: uid>     <_user=ulist>
+#         <rule: query>   <_query=comment>
+#
+#         <token: ulist>  <%cmds { [\w-/.]+ }>
+#         <token: comment> [\w\s*.]+
 
-      <rule: findquote>
-         findquote \s* <uid>? \s* <query>
+#      <rule: getquote>
+#         getquote \s* <num>
 
-         <rule: uid>     <_user=ulist>
-         <rule: query>   <_query=comment>
+#         <rule: num>     <_index=validint>
 
-         <token: ulist>  <%cmds { [\w-/.]+ }>
-         <token: comment> [\w\s*.]+
-
-      <rule: getquote>
-         getquote \s* <num>
-
-         <rule: num>     <_index=validint>
-
-         <token: validint> [\d]+
+#         <token: validint> [\d]+
 
 
-    }xms
-};
+#    }xms
+#};
 
-   my $text = 'mv test.txt something.txt findquote fart haha getquote 55555 test';
+#   my $text = 'mv test.txt something.txt findquote fart haha getquote 55555 test';
 
-    if ($text =~ $expr_parser) {
-         print "MATCHED\n\n";
+#    if ($text =~ $expr_parser) {
+#         print "MATCHED\n\n";
         # If successful, the hash %/ will have the hierarchy of results...
 
-        warn Dumper \%/;
-    }
+#        warn Dumper \%/;
+#    }
 
 
-   exit;
-}
+#   exit;
+#}
 
 1;
 
@@ -1190,24 +1370,68 @@ package main;
 
    use Cwd ();
 
-   my $daemon = CashBot->new_with_options(
-      basedir => Cwd::abs_path(__FILE__),
-      servers => ['irc.underworld.no:6667','irc.efnet.org:6667'],
-      channels => [ '#hadouken' ],
+   use File::Basename();
+
+   use Daemon::Control;
+
+   use Data::Printer alias => 'Dumper',colored => 1;
+
+   use TryCatch;
+
+   use namespace::autoclean;
+
+   my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
+
+   my $cb = CashBot->new_with_options(
+      nick => 'fartinato',
+      servers => [ {host => '198.52.200.8', port => '61066', password => 'temp123'} ],
+      channels => [ '#hadouken', '#dekpriv' ],
       admin => 'dek@2607:fb98:1a::666',
       rejoin_on_kick => 1,
    );
 
-   my ($command) = @{$daemon->extra_argv};
+   my $daemon = Daemon::Control->new(
+      name        => "Hadouken",
+      lsb_start   => '$syslog $remote_fs',
+      lsb_stop    => '$syslog',
+      lsb_sdesc   => 'Hadouke bot',
+      lsb_desc    => 'Hadouken bot by dek',
+
+      program => sub { $cb->start },
+
+      help => "What?\n\n",
+      kill_timeout => 5,
+
+      pid_file    => $filedirname.'/hadoueken.pid',
+      stderr_file => $filedirname.'/hadoueken.out',
+      stdout_file => $filedirname.'/hadoueken.out',
+
+      fork        => 2,
+   );
+
+   my ($command) = @{$cb->extra_argv};
 
    defined $command || die "No command specified";
 
-   $daemon->start   if $command eq 'start';
-   $daemon->status  if $command eq 'status';
-   $daemon->restart if $command eq 'restart';
-   $daemon->stop    if $command eq 'stop';
+   my $exit_code;
 
-   $daemon->_test   if $command eq 'test';
+   if ($command eq 'stop') {
+      $daemon->pretty_print("Shutting Down", "red") if(defined $cb->start_time && $cb->start_time ne '');
 
-   warn($daemon->status_message) if defined $daemon->status_message;
-   exit(($daemon->exit_code || 0));
+      $cb->stop(); # Clean disconnect.
+
+      $exit_code = $daemon->run_command('stop');
+      exit($exit_code || 0);
+   }
+
+   try {
+      $exit_code = $daemon->run_command($command);
+   }
+   catch (Str $e where { $_ =~ /^Error: undefined action/i } ) {
+      warn "You must specify an action.\n";
+   }
+   catch($e) {
+      warn $e,"\n";
+   }
+
+   exit(($exit_code || 0));
