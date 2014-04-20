@@ -1883,7 +1883,7 @@ package main;
 
    use Daemon::Control;
 
-   use Data::Printer alias => 'Dumper',colored => 1;
+   # use Data::Printer alias => 'Dumper',colored => 1;
 
    use Config::General;
 

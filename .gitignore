@@ -28,8 +28,16 @@ nytprof.out
 *.o
 *.bs
 
-
+admins.txt
+whitelist.txt
+blacklist.txt
 quotes.txt
+hadouken.conf
+hadouken.out
+hadouken.pid
+hadoukeninit
+testdaemon.pl
+
 geoip/GeoIP.dat
 geoip/GeoIPCity.dat
 geoip/GeoIPOrg.dat
