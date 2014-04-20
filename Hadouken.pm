@@ -1887,9 +1887,6 @@ package main;
    my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $filedirname."/hadouken.conf", -AutoTrue => "yes") or die "Config file missing!";
    my %config = $conf->getall;
 
-  #print Dumper(%config);
-  # exit(0);
-
   # unless(exists $config{host} && $config{host} ne '' && exists $config{port} && $config{port} ne '') {
   #    die "Missing config items: host and/or port.\n";
   # }
