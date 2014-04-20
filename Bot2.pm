@@ -5,9 +5,10 @@ use warnings;
 use diagnostics;
 
 our $VERSION = '0.1';
+our $AUTHOR = 'dek';
 
 #use Data::Dumper;
-use Data::Printer alias => 'Dumper',colored => 1;
+use Data::Printer alias => 'Dumper', colored => 1;
 
 use Cwd ();
 
@@ -29,83 +30,61 @@ use Time::HiRes qw( time sleep );
 use Geo::IP;
 use Tie::Array::CSV ();
 use Regexp::Common;
-
 use String::IRC;
+use Net::Whois::IP ();
+
+use IO::Handle;
+
+use TryCatch;
 
 use Moose;
-# use Regexp::Grammars;
-#with qw(MooseX::Daemonize);
-#with 'MooseX::Getopt';
+
 with 'MooseX::Getopt::GLD' => { getopt_conf => [ 'pass_through' ] };
 
 use namespace::autoclean;
 
-#sub run {
-#    my $self = shift;
-     
-#    $self->start();
-     
-#    exit(0);
-#}
-
-# after start => sub {
-#    my $self = shift;
-#    return unless $self->is_daemon;
-
-#    $self->{connected} = 0;
-#    $self->{c} = AnyEvent->condvar;
-#    $self->{con} = AnyEvent::IRC::Client->new();
-
-#    $self->_start;
-# };
-
-# after status => sub {
-#    my $self = shift;
-#    #return unless $self->is_daemon;
-
-#    warn "Status was called: ".$self->status_message."\n";
-# };
-
-# after stop => sub {
-#    my $self = shift;
-#    return unless $self->is_daemon;
-
-#    $self->{c}->recv;
-
-#    #$self->{connected} = 0;
-#    #$self->{c} = AnyEvent->condvar;
-#    #$self->{con} = AnyEvent::IRC::Client->new();
-
-#    #$self->_start;
-# };
-
 has 'start_time' => (is => 'rw', isa => 'Str', required => 0);
 has 'connect_time' => (is => 'rw', isa => 'Str', required => 0);
+has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.25');
+has 'quote_limit' => (is => 'rw', isa => 'Str', required => 0, default => '3');
 
-my $command_prefix = '^(!|\.)';
-my $safe_delay = '0.25';
+my $command_prefix = '^(!|\.|hadouken\s+|hadouken\,\s+)';
 
-my @commands = (
-      {name => 'channeladd', regex => 'channeladd\s.+?',       comment => 'add channel', require_admin => 1 },
-      {name => 'channeldel', regex => 'channeldel\s.+?',       comment => 'delete channel', require_admin => 1 },
-      {name => 'powerup',  regex => 'powerup$',                comment => 'power up +o', require_admin => 1 },
-      {name => 'admindel', regex => 'admindel\s.+?',           comment => 'delete admin <nick@host>', require_admin => 1 },
-      {name => 'adminadd', regex => 'adminadd\s.+?',           comment => 'add admin <nick@host>', require_admin => 1 },
-      {name => 'ipcalc',   regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
-      {name => 'calc',     regex => 'calc\s.+?',               comment => 'google calculator' },
-      {name => 'ticker',   regex => 'ticker\s.+?',             comment => 'look up coin(ltc,doge,nmc) or coin pair(ltc_usd,doge_ltc,nvc_btc)' },
-      {name => 'geoip',    regex => 'geoip\s.+?',              comment => 'geo ip lookup' },
-      {name => 'lq',       regex => '(lq|lastquote)$',         comment => 'get most recently added quote' },
-      {name => 'aq',       regex => '(aq|addquote)\s.+?',      comment => 'add a quote' },
-      {name => 'dq',       regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote' },
-      {name => 'fq',       regex => '(fq|findquote)\s.+?',     comment => 'find a quote' },
-      {name => 'rq',       regex => '(rq|randquote)$',         comment => 'get a random quote' },
-      {name => 'q',        regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)' },
-      {name => 'btc',      regex => 'btc$',                    comment => 'display btc ticker' },
-      {name => 'ltc',      regex => 'ltc$',                    comment => 'display ltc ticker' },
-      {name => 'eur2usd',  regex => '(e2u|eur2usd)$',          comment => 'display euro to usd ticker' },
-      {name => 'commands', regex => '(commands|cmds)$',        comment => 'display list of commands' },
+my @commands = ( # Admin commands now privmsg the user instead of channel.
+      {name => 'raw',            regex => 'raw\s.+?',                comment => 'send raw command',               require_admin => 1 }, 
+      {name => 'statistics',     regex => '(stats|statistics)$',     comment => 'get statistics about bot',       require_admin => 1 },   
+      {name => 'channeladd',     regex => 'channeladd\s.+?',         comment => 'add channel',                    require_admin => 1 },
+      {name => 'channeldel',     regex => 'channeldel\s.+?',         comment => 'delete channel',                 require_admin => 1 },
+      {name => 'powerup',        regex => '(powerup|power\^)$',      comment => 'power up +o',                    require_admin => 1 },
+      {name => 'admindel',       regex => 'admindel\s.+?',           comment => 'delete admin <nick@host>',       require_admin => 1 },
+      {name => 'adminadd',       regex => 'adminadd\s.+?',           comment => 'add admin <nick@host>',          require_admin => 1 },
+      {name => 'whitelistdel',   regex => 'whitelistdel\s.+?',       comment => 'delete whitelist <nick@host>',   require_admin => 1 },
+      {name => 'whitelistadd',   regex => 'whitelistadd\s.+?',       comment => 'add whitelist <nick@host>',      require_admin => 1 },
+      {name => 'blacklistdel',   regex => 'blacklistdel\s.+?',       comment => 'delete blacklist <nick@host>',   require_admin => 1 },
+      {name => 'blacklistadd',   regex => 'blacklistadd\s.+?',       comment => 'add blacklist <nick@host>',      require_admin => 1 },
+      {name => 'whois',          regex => 'whois\s.+?',              comment => 'whois lookup <ip> or <domain>' ,}, 
+      {name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
+      {name => 'calc',           regex => 'calc\s.+?',               comment => 'google calculator' },
+      {name => 'ticker',         regex => 'ticker\s.+?',             comment => 'look up coin(ltc,doge,nmc) or coin pair(ltc_usd,doge_ltc,nvc_btc)' },
+      {name => 'geoip',          regex => 'geoip\s.+?',              comment => 'geo ip lookup' },
+      {name => 'lq',             regex => '(lq|lastquote)$',         comment => 'get most recently added quote' },
+      {name => 'aq',             regex => '(aq|addquote)\s.+?',      comment => 'add a quote' },
+      {name => 'dq',             regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote' },
+      {name => 'fq',             regex => '(fq|findquote)\s.+?',     comment => 'find a quote' },
+      {name => 'rq',             regex => '(rq|randquote)$',         comment => 'get a random quote' },
+      {name => 'q',              regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)' },
+      {name => 'btc',            regex => 'btc$',                    comment => 'display btc ticker' },
+      {name => 'ltc',            regex => 'ltc$',                    comment => 'display ltc ticker' },
+      {name => 'eur2usd',        regex => '(e2u|eur2usd)$',          comment => 'display euro to usd ticker' },
+      {name => 'commands',       regex => '(commands|cmds)$',        comment => 'display list of available commands' },
+      {name => 'help',           regex => 'help$',                   comment => 'get help info' },
 );
+
+# TODO: Wildcard matching in whitelist's and blacklist's
+# TODO: Whois command, finish up
+# TODO: Add layer of encryption for admin stuff
+# TODO: URL catch/shorten
+
 
 sub new {
    my $class = shift;
@@ -140,12 +119,12 @@ sub start {
 before 'send_server_safe' => sub {
    my $self = shift;
 
-   sleep($safe_delay);
+   Time::HiRes::sleep($self->safe_delay);
 };
 
 sub send_server_safe {
    my ($self,$command, @params) = @_;
-   return unless defined $self->{con};
+   return unless defined $self->{con} && defined $command;
    $self->{con}->send_srv($command,@params);
 }
 
@@ -308,36 +287,46 @@ sub global_acl {
 
       return 0 if($self->blacklisted($who));
 
-      if(/(o|v)$/ ~~ $channel_list->{$nickname}) {
-         return 1;
-      } else {
+      #if(/(o|v)$/ ~~ $channel_list->{$nickname}) {
+      #   return 1;
+      #} else {
          if($self->whitelisted($who)) {
             return 1;
          }
-      }
+      #}
    }
 
    return 0;
 }
 
 sub blacklisted {
-   my $self = shift;
-   my ($who, $fromwhat) = @_;
+   my ($self, $who) = @_;
 
-   my $ret = 0;
+   my ($nick,$host) = $self->get_nick_and_host($who);
 
-   warn "* blacklisted called\n";
+   $nick = lc($nick);
+   $host = lc($host);
 
-   return $ret;
+   if(grep {lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{blacklistdb}}) {
+      return 1;
+   }
+
+   return 0;
 }
 
 sub whitelisted {
-   my $self = shift;
-   my $who = shift;
+   my ($self, $who) = @_;
 
-   my $ret = 0;
+   my ($nick,$host) = $self->get_nick_and_host($who);
 
-   return $ret;
+   $nick = lc($nick);
+   $host = lc($host);
+
+   if(grep {lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{whitelistdb}}) {
+      return 1;
+   }
+
+   return 0;
 }
 
 sub get_nick_and_host {
@@ -410,6 +399,88 @@ sub admin_add {
    return 1;
 }
 
+sub whitelist_add {
+   my ($self, $who, $statement) = @_;
+
+   return unless $self->is_admin($who) && defined $statement;
+
+   my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
+
+   my ($nick, $host) = $self->get_nick_and_host($statement);
+
+   return unless defined($nick) && defined($host);
+
+   return if($self->whitelisted($statement));
+
+   my @whitelist_row = [$nick, $host, '*', time(), $creator_nick];
+
+   push($self->{whitelistdb}, @whitelist_row);
+
+   return 1;
+}
+
+sub whitelist_delete {
+   my ($self, $who, $statement) = @_;
+
+   return unless $self->is_admin($who) && defined $statement;
+
+   my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
+
+   my ($nick, $host) = $self->get_nick_and_host($statement);
+
+   return unless defined($nick) && defined($host);
+
+   my $index = -1;
+   # Returns -1 if no such item could be found.
+   if ( ($index = List::MoreUtils::first_index { $_->[0] eq $nick && $_->[1] eq $host } @{$self->{whitelistdb}}) >= 0 ) {
+
+      splice(@{$self->{whitelistdb}}, $index, 1);
+
+      return 1;
+   }
+}
+
+sub blacklist_add {
+   my ($self, $who, $statement) = @_;
+
+   return unless $self->is_admin($who) && defined $statement;
+
+   my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
+
+   my ($nick, $host) = $self->get_nick_and_host($statement);
+
+   return unless defined($nick) && defined($host);
+
+   return if($self->blacklisted($statement));
+
+   my @blacklist_row = [$nick, $host, '*', time(), $creator_nick];
+
+   push($self->{blacklistdb}, @blacklist_row);
+
+   return 1;
+}
+
+sub blacklist_delete {
+   my ($self, $who, $statement) = @_;
+
+   return unless $self->is_admin($who) && defined $statement;
+
+   my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
+
+   my ($nick, $host) = $self->get_nick_and_host($statement);
+
+   return unless defined($nick) && defined($host);
+
+   my $index = -1;
+   # Returns -1 if no such item could be found.
+   if ( ($index = List::MoreUtils::first_index { $_->[0] eq $nick && $_->[1] eq $host } @{$self->{blacklistdb}}) >= 0 ) {
+
+      splice(@{$self->{blacklistdb}}, $index, 1);
+
+      return 1;
+   }
+}
+
 sub add_func {
    my $self = shift;
 
@@ -463,6 +534,8 @@ sub _buildup {
 
    $self->{quotesdb} = ();
    $self->{adminsdb} = ();
+   $self->{blacklistdb} = ();
+   $self->{whitelistdb} = ();
 
    #my $redis = Redis->new;
 
@@ -470,7 +543,11 @@ sub _buildup {
 
    my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', 'quotes.txt', memory => 20_000_000 or die $!;
 
-   my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.txt', memory => 20_000_000 or die $!;
+   my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.txt' or die $!;
+
+   my $tiewhitelistobj = tie @{$self->{whitelistdb}}, 'Tie::Array::CSV', 'whitelist.txt' or die $!;
+
+   my $tieblacklistobj = tie @{$self->{blacklistdb}}, 'Tie::Array::CSV', 'blacklist.txt' or die $!;
 
    # Add ourselves into the db if we arent in already!
    unless ($self->is_admin($self->{admin})) {
@@ -490,7 +567,13 @@ sub _buildup {
          my ($who, $message, $channel, $channel_list) = @_;
          my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
-         $self->send_server_safe( MODE => $channel, '+o', $nickname);
+         my $ref_modes = $self->{con}->nick_modes ($channel, $nickname);
+
+         return unless defined $ref_modes;
+
+         unless($ref_modes->{'o'}) {
+            $self->send_server_safe( MODE => $channel, '+o', $nickname);
+         }
 
          return 1;
     },
@@ -553,7 +636,7 @@ sub _buildup {
 
          if($del_ret) {
             my $out_msg = "[admindel] deleted admin $arg -> by $nickname";
-            $self->send_server_safe (PRIVMSG => $channel, $out_msg);
+            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
          }
 
          return 1;
@@ -576,8 +659,135 @@ sub _buildup {
 
          if($add_ret) {
             my $out_msg = "[adminadd] added admin $arg -> by $nickname";
-            $self->send_server_safe (PRIVMSG => $channel, $out_msg);
+
+            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
          }
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+   $self->add_func(name => 'whitelistadd',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless defined $arg;
+
+         my $add_ret = $self->whitelist_add($who, $arg);
+
+         if($add_ret) {
+            my $out_msg = "[whitelistadd] added whitelist $arg -> by $nickname";
+
+            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+         }
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+
+   $self->add_func(name => 'whitelistdel',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless defined $arg;
+
+         my $del_ret = $self->whitelist_delete($who, $arg);
+
+         if($del_ret) {
+            my $out_msg = "[whitelistdel] deleted whitelist $arg -> by $nickname";
+            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+         }
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+  $self->add_func(name => 'blacklistadd',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless defined $arg;
+
+         my $add_ret = $self->blacklist_add($who, $arg);
+
+         if($add_ret) {
+            my $out_msg = "[blacklistadd] added blacklist $arg -> by $nickname";
+
+            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+         }
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+
+   $self->add_func(name => 'blacklistdel',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless defined $arg;
+
+         my $del_ret = $self->blacklist_delete($who, $arg);
+
+         if($del_ret) {
+            my $out_msg = "[blacklistdel] deleted blacklist $arg -> by $nickname";
+            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+         }
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+   $self->add_func(name => 'raw',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+         
+         return unless defined $arg;
+
+         my @send_params = split(/ /, $arg);
+         return unless($#send_params >= 0);
+         my $send_command = shift(@send_params);
+
+         warn "Send command $send_command\n";
+         warn "Params:\n";
+         print Dumper(@send_params);
+
+         $self->send_server_safe ($send_command, @send_params);
 
          return 1;
     },
@@ -685,6 +895,40 @@ sub _buildup {
       acl => $simple_acl,
    );
 
+
+
+   $self->add_func(name => 'whois',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my ($cmd, $arg) = split(/ /, lc($message), 2);
+
+         return unless (defined($arg) && length($arg));
+
+         if( $arg =~ /$RE{net}{IPv4}/ ) {
+
+            my $record = Net::Whois::IP::whoisip_query($arg);
+
+            print Dumper($record);
+
+
+         } elsif ( $arg =~ m{($RE{URI})}gos ) {
+
+            my $uri = URI->new($arg);
+            my $host_only = $uri->host;
+
+         } else {
+
+
+         }  
+
+         return 1;
+   },
+      acl => $simple_acl,
+   );
+
    $self->add_func(name => 'geoip',
       delegate => sub {
          my ($who, $message, $channel, $channel_list) = @_;
@@ -741,7 +985,39 @@ sub _buildup {
                } 
             );
          } else {
+            try {
+               warn "Trying Other..\n";
 
+               #my $uri = URI->new($arg,'http');
+               #my $host_only = $uri->host;
+               AnyEvent::DNS::resolver->resolve ($arg, "a", sub {
+
+                  my $row = List::MoreUtils::last_value { grep { $_ eq "a" } @$_  } @_;
+
+                  return unless (defined $row) || (@$row[4] =~ /$RE{net}{IPv4}/);
+
+                  my $ip_addr = @$row[4];
+
+                  return unless ($ip_addr =~ /$RE{net}{IPv4}/);
+
+                  my $record = $self->{geoip}->record_by_addr($ip_addr);   
+
+                  unless(defined $record) {
+                     $self->send_server_safe (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
+                     return;
+                  }
+
+                  my $dom_result = "$arg ($ip_addr) ->";
+                  $dom_result .= " City:".$record->city if defined $record->city && $record->city ne '';
+                  $dom_result .= " Region:".$record->region if defined $record->region && $record->region ne '';
+                  $dom_result .= " Country:".$record->country_code if defined $record->country_code && $record->country_code ne '';
+
+                  $self->send_server_safe (PRIVMSG => $channel, $dom_result);
+            });
+         }
+         catch($e) {
+               warn "* GeoIP failled for $e\n";
+         }
             # maybe implement by nick (in channel)
             # .geoip dek
             # if(exists $channel_list->{$nickname}) {
@@ -772,10 +1048,36 @@ sub _buildup {
 
          return unless length($blah);
 
-         #if($arg =~ 'creator:')
-         #(?:^creator+$)
+         my $creator = undef;
 
-         my @found = List::MoreUtils::indexes { lc($_->[1]) =~ lc($arg) } @{$self->{quotesdb}};
+         if($arg =~ m/creator:(\w+)/ ) {
+            $creator = $1;
+            $creator =~ s/^\s+//;
+            $creator =~ s/\s+$//;
+
+            #warn "creator: [$creator]\n";
+
+            $arg =~ s/creator:(\w+)//;
+         }
+
+         $arg =~ s/^\s+//;
+         $arg =~ s/\s+$//;
+         #warn "searching for [$arg]\n";
+
+         my @found;
+
+         unless(defined $creator) {
+            @found = List::MoreUtils::indexes { lc($_->[1]) =~ lc($arg) } @{$self->{quotesdb}};
+         } else {
+
+            @found = List::MoreUtils::indexes { $arg ne '' ? (lc($_->[1]) =~ lc($arg)) && (lc($_->[0]) =~ lc($creator)) : lc($_->[0]) =~ lc($creator) } @{$self->{quotesdb}};
+
+            #if(defined $arg && $arg ne '') {
+            #   @found = List::MoreUtils::indexes { (lc($_->[1]) =~ lc($arg)) && (lc($_->[0]) =~ lc($creator)) } @{$self->{quotesdb}};
+            #} else {
+            #   @found = List::MoreUtils::indexes { lc($_->[0]) =~ lc($creator) } @{$self->{quotesdb}};
+            #}
+         }
 
          my $found_count = scalar @found;
 
@@ -792,11 +1094,12 @@ sub _buildup {
          foreach my $z (@found) {
 
             $limit++;
-            last if($limit > 9);
+            last if($limit > $self->quote_limit);
 
             my @the_quote = $self->{quotesdb}[$z];
             my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($the_quote[0][0]);
             my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($the_quote[0][3]);
+
             $self->send_server_safe (PRIVMSG => $channel, '['.int($z + 1).'/'.$quote_count.'] '.$the_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
          }
 
@@ -819,15 +1122,14 @@ sub _buildup {
 
          my @rand_quote = $self->{quotesdb}[$rand_idx];
 
-         my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($rand_quote[0][0]);
+         #my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($rand_quote[0][0]);
 
-         my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($rand_quote[0][3]);
+         #my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($rand_quote[0][3]);
 
-         #my $si = String::IRC->new("$rand_idx")->bold;
+         $self->send_server_safe (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1]);
 
-         $self->send_server_safe (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+         # $self->send_server_safe (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
       
-
          return 1;
     },
       acl => $simple_acl,
@@ -885,20 +1187,44 @@ sub _buildup {
          while($arg =~ /$RE{num}{int}{-sep => ' '}{-keep}/g) {
             push(@real_indexes,int($1 - 1));
          }
+    
 
          my @x = List::MoreUtils::distinct @real_indexes;
 
-
-         splice @x, 5 if($#x > 5 );
+         splice @x, $self->quote_limit if($#x >= $self->quote_limit );
 
          my $search_count = scalar @x;
 
          foreach my $j (@x) {
             next unless $j >=0 && $j < $quote_count;
 
-            my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($self->{quotesdb}[$j][0][0]);
-            my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($self->{quotesdb}[$j][0][3]);
-            $self->send_server_safe (PRIVMSG => $channel, '['.int($j+1).'/'.$quote_count.'] '.$self->{quotesdb}[$j][0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+            my @curr_quote = $self->{quotesdb}[$j]; # Don't dereference this.
+
+            #print Dumper(@curr_quote);
+
+            my $col_who       = $curr_quote[0][0];
+            my $col_quote     = $curr_quote[0][1];
+            my $col_channel   = $curr_quote[0][2];
+            my $col_time      = $curr_quote[0][3];
+
+            next 
+               unless 
+                  defined($col_who) && $col_who ne '' && 
+                  defined($col_quote) && $col_quote ne '' && 
+                  defined($col_channel) && $col_channel ne '' && 
+                  defined($col_time) && $col_time ne '';
+
+            my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($col_who);
+            my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($col_time);
+
+            my $si1 = String::IRC->new('[')->black;
+            my $si2 = String::IRC->new(int($j+1))->red('black')->bold;
+            my $si3 = String::IRC->new('/'.$quote_count)->yellow('black');
+            my $si4 = String::IRC->new('] '.$col_quote.' - added by '.$q_nickname.' on '.$epoch_string)->black;
+
+            my $msg = "$si1$si2$si3$si4";
+
+            $self->send_server_safe (PRIVMSG => $channel, $msg); #$si1.''.$si2.''.$si3.''.$si4
          }
 
          return 1;
@@ -962,31 +1288,76 @@ sub _buildup {
 
          #my $cmd_names = _->pluck(\@commands, 'name');
 
-         $self->send_server_safe (PRIVMSG => $channel, 'Commands:');
-
          my @copy = @commands;
 
          my $iter = List::MoreUtils::natatime 2, @copy;
+
+         my $si1 = String::IRC->new('Available Commands:')->bold;
+
+         $self->send_server_safe (PRIVMSG => $nickname, $si1);
 
          while( my @tmp = $iter->() ){
 
             my $command_summary = '';
 
             foreach my $c (@tmp) {
-               next if($c->{require_admin});
+
+               if($c->{require_admin}) {
+                  next unless $self->is_admin($who);
+               }
+
+               next 
+                  unless 
+                     defined($c->{name}) && $c->{name} ne '' && 
+                     defined($c->{comment}) && $c->{comment} ne '';
+
                my $si = String::IRC->new($c->{name})->bold;
                $command_summary .= '['.$si.'] -> '.$c->{comment}."  ";
             }
 
-            #warn $command_summary,"\n\n";
-            $self->send_server_safe (PRIVMSG => $channel, $command_summary);
-            $command_summary = '';
+            $self->send_server_safe (PRIVMSG => $nickname, $command_summary);
+            undef $command_summary;
          }
 
          return 1;
     },
       acl => $simple_acl,
    );
+
+   $self->add_func(name => 'help',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         #my $cmd_names = _->pluck(\@commands, 'name');
+
+         my $si = String::IRC->new('Hi '.$nickname.', type .commands in the channel.')->bold;
+
+         $self->send_server_safe (PRIVMSG => $nickname, $si);
+
+         return 1;
+    },
+      acl => $simple_acl,
+   );
+
+   $self->add_func(name => 'statistics',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+         my $si = String::IRC->new('Hi '.$nickname.', no statistics available.')->bold;
+
+         $self->send_server_safe (PRIVMSG => $nickname, $si);
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
 
    $self->add_func(name => 'btc', 
       delegate => sub {
@@ -1016,8 +1387,6 @@ sub _buildup {
          my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/ltc_usd');
 
          my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/ltc_usd');
-
-         #print Dumper($json),"\n";
 
          my $ret =  "[ltc_usd\@btce] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
          
@@ -1124,8 +1493,6 @@ sub _buildup {
 
       my $channel = $ircmsg->{params}[0];
 
-      return unless ((defined $channel) && ($self->{con}->is_channel_name($channel)));
-
       my $message = $ircmsg->{params}[1];
 
       my $channel_list = $self->{con}->channel_list($channel);
@@ -1133,17 +1500,23 @@ sub _buildup {
       my $cmd = undef;
       if ( defined($cmd = List::MoreUtils::first_value { $message =~ /$command_prefix$_->{'regex'}/ } @commands) ) {
 
-         print "$cmd->{'name'} was matched\n";
+         unless($self->is_admin($who) && $cmd->{'require_admin'}) {
+            return unless ((defined $channel) && ($self->{con}->is_channel_name($channel)));
+         }
+
+         print "* Command $cmd->{'name'} was matched\n";
+
+         $message =~ s/$command_prefix//g;
 
          if( defined $cmd->{acl}) {
-            my $ret = $cmd->{acl}->($who, $message, $channel, $channel_list);
+            my $ret = $cmd->{acl}->($who, $message, $channel || undef, $channel_list || undef);
 
-            warn "* ACL returned $ret\n";
+            warn "* Command $cmd->{'name'} -> ACL returned $ret\n";
 
             if($ret) {
                if(defined $cmd->{delegate}) {
 
-                  warn "* Calling delegate ".$cmd->{name}."\n";
+                  warn "* Command $cmd->{'name'} -> Calling delegate\n";
 
                   $cmd->{delegate}->($who, AnyEvent::IRC::Util::filter_colors($message), $channel, $channel_list);
                }
@@ -1280,6 +1653,7 @@ sub calc {
    if($response->is_success) {
 
       $ret = $self->parse_calc_result($response->content);
+      $ret =~ s/[^[:ascii:]]+//g;
 
    } else {
       warn "calc failed with server response code ".$response->status_line."\n";
@@ -1376,18 +1750,29 @@ package main;
 
    use Data::Printer alias => 'Dumper',colored => 1;
 
+   use Config::General;
+
    use TryCatch;
 
    use namespace::autoclean;
 
    my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
+   my $conf = Config::General->new($filedirname."/hadouken.conf") or die "Config file missing!";
+   my %config = $conf->getall;
+
+   unless(exists $config{host} && $config{host} ne '' && exists $config{port} && $config{port} ne '') {
+      die "Missing config items: host and/or port.\n";
+   }
+
    my $cb = CashBot->new_with_options(
-      nick => 'fartinato',
-      servers => [ {host => '198.52.200.8', port => '61066', password => 'temp123'} ],
+      nick => 'hadouken',
+      servers => [ {host => $config{host}, port => $config{port}, password => $config{password}} ],
       channels => [ '#hadouken', '#dekpriv' ],
       admin => 'dek@2607:fb98:1a::666',
       rejoin_on_kick => 1,
+      safe_delay => '0.025',
+      quote_limit => '3',
    );
 
    my $daemon = Daemon::Control->new(
