@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use diagnostics;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
 #use Data::Dumper;
@@ -33,9 +33,6 @@ use Regexp::Common;
 use String::IRC;
 use Net::Whois::IP ();
 
-
-use IO::Handle;
-
 use TryCatch;
 
 use Moose;
@@ -46,12 +43,15 @@ use namespace::autoclean;
 
 has 'start_time' => (is => 'rw', isa => 'Str', required => 0);
 has 'connect_time' => (is => 'rw', isa => 'Str', required => 0);
-has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.025');
+has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.25');
 has 'quote_limit' => (is => 'rw', isa => 'Str', required => 0, default => '3');
 
 my $command_prefix = '^(!|\.|hadouken\s+|hadouken\,\s+)';
 
-my @commands = ( # Admin commands now privmsg the user instead of channel.
+# Admin commands now privmsg the user instead of channel.
+# Make sure to check acl's of each command.
+
+my @commands = (
       {name => 'raw',            regex => 'raw\s.+?',                comment => 'send raw command',               require_admin => 1 }, 
       {name => 'statistics',     regex => '(stats|statistics)$',     comment => 'get statistics about bot',       require_admin => 1 },   
       {name => 'channeladd',     regex => 'channeladd\s.+?',         comment => 'add channel',                    require_admin => 1 },
@@ -85,8 +85,6 @@ my @commands = ( # Admin commands now privmsg the user instead of channel.
 # TODO: Wildcard matching in whitelist's and blacklist's
 # TODO: Whois command, finish up
 # TODO: Add layer of encryption for admin stuff
-# TODO: URL catch/shorten
-
 
 sub new {
    my $class = shift;
@@ -100,8 +98,10 @@ sub stop {
    my ($self) = @_;
    return unless $self->{connected};
 
-   # In our registered callback for disconnect we handle the state vars and condvar
-   $self->{con}->disconnect();
+   if(defined $self->{con}) {
+      # In our registered callback for disconnect we handle the state vars and condvar
+      $self->{con}->disconnect();
+   }
 }
 
 sub start {
@@ -275,6 +275,34 @@ sub pluck {
 # if you are neither +o or +v, we check the whitelist.
 #
 
+sub passive_acl {
+   my $self = shift;
+   my ($who, $message, $channel, $channel_list) = @_;
+
+   my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+   if($self->is_admin($who)) {
+      return 1;
+   }
+
+   if(exists $channel_list->{$nickname}) {
+
+      return 0 if($self->blacklisted($who));
+
+      if(/(o|v)$/ ~~ $channel_list->{$nickname}) {
+
+         return 1;
+
+      } else {
+         if($self->whitelisted($who)) {
+            return 1;
+         }
+      }
+   }
+
+   return 0;   
+}
+
 sub global_acl {
    my $self = shift;
    my ($who, $message, $channel, $channel_list) = @_;
@@ -289,13 +317,7 @@ sub global_acl {
 
       return 0 if($self->blacklisted($who));
 
-      #if(/(o|v)$/ ~~ $channel_list->{$nickname}) {
-      #   return 1;
-      #} else {
-         if($self->whitelisted($who)) {
-            return 1;
-         }
-      #}
+      return 1 if($self->whitelisted($who));
    }
 
    return 0;
@@ -561,6 +583,12 @@ sub _buildup {
    my $simple_acl = sub {
       my ($who, $message, $channel, $channel_list) = @_;
       my $ret = $self->global_acl($who, $message, $channel, $channel_list);
+      return $ret;
+   };
+
+   my $passive_acl = sub {
+      my ($who, $message, $channel, $channel_list) = @_;
+      my $ret = $self->passive_acl($who, $message, $channel, $channel_list);
       return $ret;
    };
 
@@ -866,7 +894,7 @@ sub _buildup {
 
          return 1;
     },
-      acl => $simple_acl,
+      acl => $passive_acl,
    );
 
    $self->add_func(name => 'calc',
@@ -887,7 +915,7 @@ sub _buildup {
 
          return 1;
    },
-      acl => $simple_acl,
+      acl => $passive_acl,
    );
 
    $self->add_func(name => 'ticker',
@@ -921,7 +949,7 @@ sub _buildup {
 
          return 1;
    },
-      acl => $simple_acl,
+      acl => $passive_acl,
    );
 
 
@@ -1161,7 +1189,7 @@ sub _buildup {
       
          return 1;
     },
-      acl => $simple_acl,
+      acl => $passive_acl,
    );
 
    $self->add_func(name => 'dq',
@@ -1218,7 +1246,11 @@ sub _buildup {
          }
     
 
+         #warn "quote limit is ".$self->quote_limit." wtf\n";
+
          my @x = List::MoreUtils::distinct @real_indexes;
+
+         return unless(@x);
 
          splice @x, $self->quote_limit if($#x >= $self->quote_limit );
 
@@ -1258,7 +1290,7 @@ sub _buildup {
 
          return 1;
     },
-      acl => $simple_acl,
+      acl => $passive_acl,
    );
 
 
@@ -1406,7 +1438,7 @@ sub _buildup {
 
          return 1;
    },
-      acl => $simple_acl,
+      acl => $passive_acl,
    );
 
    $self->add_func(name => 'ltc', 
@@ -1427,7 +1459,7 @@ sub _buildup {
 
          return 1;
    },
-      acl => $simple_acl,
+      acl => $passive_acl,
    );
 
 
@@ -1443,7 +1475,7 @@ sub _buildup {
 
          return 1;
    },
-      acl => $simple_acl,
+      acl => $passive_acl,
    );
 
    $self->{con}->reg_cb (
@@ -1467,9 +1499,6 @@ sub _buildup {
       },
       join => sub {
          my ($con,$nick, $channel, $is_myself) = (@_);
-
-         #warn Dumper($nick);
-         #warn "Nick $nick joined $channel\n";
 
          return if $is_myself;
 
@@ -1600,12 +1629,22 @@ sub _start {
 
    $self->_buildup();
 
-   foreach my $chan ( @{$self->{channels}} ) {
-      $self->send_server_safe (JOIN => $chan);
-   }
-
    my $server_count = scalar @{$self->{servers}};
    my $server_hashref = $self->{servers}[int rand $server_count];
+
+   my @servernames = keys $server_hashref;
+   my $server_name = $servernames[0];
+
+   $self->{server_name} = $server_hashref->{$server_name};
+
+   foreach my $chan ( @{$server_hashref->{$server_name}{channel}} ) {
+
+      $chan = "#".$chan unless($chan =~ m/^\#/g); # Append # if doesn't begin with.
+
+      warn "* Joining $chan\n";
+
+      $self->send_server_safe (JOIN => $chan);
+   }
 
    # When connecting, sometimes if a nick is in use it requires an alternative.
    my $nick_change = sub {
@@ -1616,7 +1655,7 @@ sub _start {
 
    $self->{con}->set_nick_change_cb($nick_change);
 
-   $self->{con}->connect ($server_hashref->{host}, $server_hashref->{port}, { nick => $self->{nick}, password => $server_hashref->{password}, send_initial_whois => 1});
+   $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port}, { nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
 
    $self->{c}->wait;
 
@@ -1845,21 +1884,23 @@ package main;
 
    my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
-   my $conf = Config::General->new($filedirname."/hadouken.conf") or die "Config file missing!";
+   my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $filedirname."/hadouken.conf", -AutoTrue => "yes") or die "Config file missing!";
    my %config = $conf->getall;
 
-   unless(exists $config{host} && $config{host} ne '' && exists $config{port} && $config{port} ne '') {
-      die "Missing config items: host and/or port.\n";
-   }
+  #print Dumper(%config);
+  # exit(0);
+
+  # unless(exists $config{host} && $config{host} ne '' && exists $config{port} && $config{port} ne '') {
+  #    die "Missing config items: host and/or port.\n";
+  # }
 
    my $cb = CashBot->new_with_options(
       nick => 'hadouken',
-      servers => [ {host => $config{host}, port => $config{port}, password => $config{password}} ],
-      channels => [ '#hadouken', '#dekpriv' ],
-      admin => 'dek@2607:fb98:1a::666',
+      servers => [ $config{server} ],
+      admin => $config{admin},
       rejoin_on_kick => 1,
-      safe_delay => '0.1',
-      quote_limit => '3',
+      quote_limit => $config{quote_limit} || '2',
+      safe_delay => $config{safe_delay} || '0.25',
       bitly_user_id => $config{bitly_user_id} || '', # To disable shortening, remove from config!
       bitly_api_key => $config{bitly_api_key} || '',
    );
