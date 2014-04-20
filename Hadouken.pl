@@ -1921,7 +1921,7 @@ package main;
       program => sub { $cb->start },
 
       help => "What?\n\n",
-      kill_timeout => 5,
+      kill_timeout => 6,
 
       pid_file    => $filedirname.'/hadouken.pid',
       stderr_file => $filedirname.'/hadouken.out',
