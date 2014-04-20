@@ -33,6 +33,7 @@ use Regexp::Common;
 use String::IRC;
 use Net::Whois::IP ();
 
+
 use IO::Handle;
 
 use TryCatch;
@@ -45,7 +46,7 @@ use namespace::autoclean;
 
 has 'start_time' => (is => 'rw', isa => 'Str', required => 0);
 has 'connect_time' => (is => 'rw', isa => 'Str', required => 0);
-has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.25');
+has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.025');
 has 'quote_limit' => (is => 'rw', isa => 'Str', required => 0, default => '3');
 
 my $command_prefix = '^(!|\.|hadouken\s+|hadouken\,\s+)';
@@ -62,7 +63,8 @@ my @commands = ( # Admin commands now privmsg the user instead of channel.
       {name => 'whitelistadd',   regex => 'whitelistadd\s.+?',       comment => 'add whitelist <nick@host>',      require_admin => 1 },
       {name => 'blacklistdel',   regex => 'blacklistdel\s.+?',       comment => 'delete blacklist <nick@host>',   require_admin => 1 },
       {name => 'blacklistadd',   regex => 'blacklistadd\s.+?',       comment => 'add blacklist <nick@host>',      require_admin => 1 },
-      {name => 'whois',          regex => 'whois\s.+?',              comment => 'whois lookup <ip> or <domain>' ,}, 
+      {name => 'shorten',        regex => 'shorten\s.+?',            comment => 'shorten <url>' },
+      {name => 'whois',          regex => 'whois\s.+?',              comment => 'whois lookup <ip> or <domain>' }, 
       {name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
       {name => 'calc',           regex => 'calc\s.+?',               comment => 'google calculator' },
       {name => 'ticker',         regex => 'ticker\s.+?',             comment => 'look up coin(ltc,doge,nmc) or coin pair(ltc_usd,doge_ltc,nvc_btc)' },
@@ -788,6 +790,33 @@ sub _buildup {
          print Dumper(@send_params);
 
          $self->send_server_safe ($send_command, @send_params);
+
+         return 1;
+    },
+      acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
+   $self->add_func(name => 'shorten',
+      delegate => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+         
+         my ($cmd, $arg) = split(/ /, $message, 2); # DO NOT LC THE MESSAGE!
+         
+         return unless defined $arg;
+
+         my ($url,$title) = $self->_shorten($arg);
+         
+         if(defined $url && $url ne '') {
+            if(defined $title && $title ne '') {
+               $self->send_server_safe (PRIVMSG => $channel, "$url ($title)");
+            } else {
+               $self->send_server_safe (PRIVMSG => $channel, "$url");   
+            }
+         }
 
          return 1;
     },
@@ -1526,6 +1555,22 @@ sub _buildup {
          else {
             warn "* Delegate not defined for $cmd->{'name'}\n";
          }
+      } else {
+
+         if ( $message =~ m{($RE{URI})}gos ) {
+
+            my ($shrt_url,$shrt_title) = $self->_shorten($message);
+
+            if(defined($shrt_url) && $shrt_url ne '') {
+
+               if(defined($shrt_title) && $shrt_title ne '') {
+                  $self->send_server_safe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
+               } else {
+                  $self->send_server_safe (PRIVMSG => $channel, "$shrt_url");      
+               }
+
+            }
+         }
       }
    });
 
@@ -1685,6 +1730,48 @@ sub _webclient {
    return $self->{wc};
 }
 
+sub _shorten {
+   my $self = shift;
+   my $url = shift;
+   
+   my $shortenurl = '';
+   my $title = '';
+
+   try {
+
+      return 
+         unless 
+            exists $self->{bitly_api_key} && $self->{bitly_api_key} ne '' && 
+            exists $self->{bitly_user_id} && $self->{bitly_user_id} ne '';
+
+      my $api2 = "https://api-ssl.bitly.com/v3/shorten?access_token=".$self->{bitly_api_key}."&longUrl=$url";
+
+      my $json = $self->fetch_json($api2);
+
+      if(exists $json->{'data'} && exists $json->{'data'}->{'url'}) {
+
+         $shortenurl = $json->{'data'}{'url'};
+
+         my $response = $self->_webclient->get($url);
+
+         my $p = HTML::TokeParser->new( \$response->decoded_content );
+         if ($p->get_tag("title")) {
+            $title = $p->get_trimmed_text;
+         }
+
+         #my $api3 = "https://api-ssl.bitly.com/v3/info?access_token=".$self->{bitly_api_key}."&shortUrl=$shortenurl";
+         #my $json2 = $self->fetch_json($api3);
+         #$title = $json2->{'data'}{'info'}{'title'};
+      }
+   }
+   catch($e) {
+      $shortenurl = '';
+      warn "Error occured at shorten with url $url - $e";
+   }
+
+   return ($shortenurl,$title);
+}
+
 #sub _test {
 #   my $self = shift;
 
@@ -1771,8 +1858,10 @@ package main;
       channels => [ '#hadouken', '#dekpriv' ],
       admin => 'dek@2607:fb98:1a::666',
       rejoin_on_kick => 1,
-      safe_delay => '0.025',
+      safe_delay => '0.1',
       quote_limit => '3',
+      bitly_user_id => $config{bitly_user_id} || '', # To disable shortening, remove from config!
+      bitly_api_key => $config{bitly_api_key} || '',
    );
 
    my $daemon = Daemon::Control->new(
