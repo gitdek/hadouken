@@ -1,8 +1,12 @@
+#!/usr/bin/env perl
+
 package CashBot;
 
 use strict;
 use warnings;
 use diagnostics;
+
+use 5.014;
 
 our $VERSION = '0.2';
 our $AUTHOR = 'dek';
@@ -563,15 +567,17 @@ sub _buildup {
 
    #my $redis = Redis->new;
 
-   $self->{geoip} = Geo::IP->open(Cwd::abs_path('geoip/GeoIPCity.dat')) or die $!;
+   my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
-   my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', 'quotes.txt', memory => 20_000_000 or die $!;
+   $self->{geoip} = Geo::IP->open($filedirname.'/geoip/GeoIPCity.dat') or die $!;
 
-   my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', 'admins.txt' or die $!;
+   my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', $filedirname.'/quotes.txt', memory => 20_000_000 or die $!;
 
-   my $tiewhitelistobj = tie @{$self->{whitelistdb}}, 'Tie::Array::CSV', 'whitelist.txt' or die $!;
+   my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', $filedirname.'/admins.txt' or die $!;
 
-   my $tieblacklistobj = tie @{$self->{blacklistdb}}, 'Tie::Array::CSV', 'blacklist.txt' or die $!;
+   my $tiewhitelistobj = tie @{$self->{whitelistdb}}, 'Tie::Array::CSV', $filedirname.'/whitelist.txt' or die $!;
+
+   my $tieblacklistobj = tie @{$self->{blacklistdb}}, 'Tie::Array::CSV', $filedirname.'/blacklist.txt' or die $!;
 
    # Add ourselves into the db if we arent in already!
    unless ($self->is_admin($self->{admin})) {
@@ -1868,6 +1874,9 @@ sub _shorten {
 
 package main;
 
+   use strict;
+   use warnings;
+
    use Cwd ();
 
    use File::Basename();
@@ -1914,9 +1923,9 @@ package main;
       help => "What?\n\n",
       kill_timeout => 5,
 
-      pid_file    => $filedirname.'/hadoueken.pid',
-      stderr_file => $filedirname.'/hadoueken.out',
-      stdout_file => $filedirname.'/hadoueken.out',
+      pid_file    => $filedirname.'/hadouken.pid',
+      stderr_file => $filedirname.'/hadouken.out',
+      stdout_file => $filedirname.'/hadouken.out',
 
       fork        => 2,
    );
