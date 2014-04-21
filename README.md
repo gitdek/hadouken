@@ -22,3 +22,13 @@ Change $paridir = "../pari-2.1.7";
 perl Makefile.PL machine=none
 
 make install
+
+
+
+Ok here is another dependency I had an issue with. Digest::MD2 not found on CPAN so
+
+apt-get install libdigest-md2-perl
+
+is required.
+
+
