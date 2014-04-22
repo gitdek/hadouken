@@ -32,6 +32,7 @@ use JSON::XS qw( decode_json );
 use POSIX qw(strftime);
 use Time::HiRes qw( time sleep );
 use Geo::IP;
+use Yahoo::Weather;
 
 use Tie::Array::CSV;
 use Text::CSV_XS;
@@ -80,6 +81,7 @@ my @commands = (
       {name => 'whitelistadd',   regex => 'whitelistadd\s.+?',       comment => 'add whitelist <nick@host>',      require_admin => 1 },
       {name => 'blacklistdel',   regex => 'blacklistdel\s.+?',       comment => 'delete blacklist <nick@host>',   require_admin => 1 },
       {name => 'blacklistadd',   regex => 'blacklistadd\s.+?',       comment => 'add blacklist <nick@host>',      require_admin => 1 },
+      {name => 'weather',        regex => 'weather\s.+?',            comment => 'weather <zip> or <location>' },
       {name => 'shorten',        regex => 'shorten\s.+?',            comment => 'shorten <url>' },
       {name => 'whois',          regex => 'whois\s.+?',              comment => 'whois lookup <ip> or <domain>' }, 
       {name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
@@ -194,10 +196,23 @@ before 'send_server_safe' => sub {
    Time::HiRes::sleep($self->safe_delay);
 };
 
+before 'send_server_long_safe' => sub {
+   my $self = shift;
+
+   Time::HiRes::sleep($self->safe_delay);
+};
+
 sub send_server_safe {
    my ($self,$command, @params) = @_;
    return unless defined $self->{con} && defined $command;
    $self->{con}->send_srv($command,@params);
+}
+
+sub send_server_long_safe {
+   my ($self,$command,@params) = @_;
+   return unless defined $self->{con} && defined $command;
+
+   $self->{con}->send_long_message("utf8",0,$command,@params);
 }
 
 # ident,quote,channel,time
@@ -418,7 +433,7 @@ sub blacklisted {
    $nick = lc($nick);
    $host = lc($host);
 
-   if(grep {lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{blacklistdb}}) {
+   if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host: lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{blacklistdb}}) {
       return 1;
    }
 
@@ -462,10 +477,10 @@ sub is_admin {
    $nick = lc($nick);
    $host = lc($host);
 
-   if(grep {lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{adminsdb}}) {
+   if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host : lc($_->[1]) eq $host && lc($_->[0]) eq $nick } @{$self->{adminsdb}}) {
+      warn "* Wildcard matching !\n";
       return 1;
    }
-
    return 0;
 }
 
@@ -969,11 +984,29 @@ sub _buildup {
 
          return 1;
     },
-      acl => sub {
+      acl => $simple_acl
+   );
+
+   $self->add_func(name => 'weather',
+      delegate => sub {
          my ($who, $message, $channel, $channel_list) = @_;
-         my $ret = $self->is_admin($who);
-         return $ret;
-   });
+         my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+         
+         my ($cmd, $arg) = split(/ /, $message, 2); # DO NOT LC THE MESSAGE!
+         
+         return unless defined $arg;
+
+         my $summary = $self->_weather($arg);
+
+         if(defined $summary && $summary ne '') {
+            my $weather_msg = "$arg -> $summary";
+            $self->send_server_safe (PRIVMSG => $channel, $weather_msg);
+         }
+
+         return 1;
+    },
+      acl => $simple_acl
+   );
 
    $self->add_func(name => 'ipcalc',
       delegate => sub {
@@ -1500,7 +1533,10 @@ sub _buildup {
 
          my $si1 = String::IRC->new('Available Commands:')->bold;
 
-         $self->send_server_safe (PRIVMSG => $nickname, $si1);
+
+         $self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $si1);
+
+         # $self->send_server_safe (PRIVMSG => $nickname, $si1);
 
          while( my @tmp = $iter->() ){
 
@@ -1521,7 +1557,9 @@ sub _buildup {
                $command_summary .= '['.$si.'] -> '.$c->{comment}."  ";
             }
 
-            $self->send_server_safe (PRIVMSG => $nickname, $command_summary);
+            
+            $self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $command_summary);
+            #$self->send_server_safe (PRIVMSG => $nickname, $command_summary);
             undef $command_summary;
          }
 
@@ -1540,7 +1578,10 @@ sub _buildup {
 
          my $si = String::IRC->new('Hi '.$nickname.', type .commands in the channel.')->bold;
 
-         $self->send_server_safe (PRIVMSG => $nickname, $si);
+         
+         $self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $si);
+         
+         # $self->send_server_safe (PRIVMSG => $nickname, $si);
 
          return 1;
     },
@@ -1953,6 +1994,32 @@ sub _webclient {
 
    return $self->{wc};
 }
+
+sub _weather {
+   my ($self, $location) = @_;
+
+   return unless defined $location && $location ne '';
+
+   unless(defined $self->{weatherclient}) {
+      $self->{weatherclient} = Yahoo::Weather->new();
+   }
+
+   my $summary = '';
+   try {
+      my $ret = $self->{weatherclient}->getWeatherByLocation($location,'F');
+      if(exists $ret->{'CurrentObservation'} )  {
+
+         $summary = "Temp: ".$ret->{'CurrentObservation'}{'temp'};
+         $summary .= " Condition: ".$ret->{'CurrentObservation'}{'text'};
+      }
+   }
+   catch($e) {
+      $summary = '';
+   }
+
+   return $summary;
+}
+
 
 sub _shorten {
    my $self = shift;
