@@ -32,10 +32,20 @@ use JSON::XS qw( decode_json );
 use POSIX qw(strftime);
 use Time::HiRes qw( time sleep );
 use Geo::IP;
-use Tie::Array::CSV ();
+
+use Tie::Array::CSV;
+use Text::CSV_XS;
 use Regexp::Common;
 use String::IRC;
 use Net::Whois::IP ();
+
+use Crypt::RSA;
+use Convert::PEM;
+use MIME::Base64 ();
+use Crypt::OpenSSL::RSA;
+
+
+use Time::Elapsed ();
 
 use TryCatch;
 
@@ -50,12 +60,15 @@ has 'connect_time' => (is => 'rw', isa => 'Str', required => 0);
 has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.25');
 has 'quote_limit' => (is => 'rw', isa => 'Str', required => 0, default => '3');
 
-my $command_prefix = '^(!|\.|hadouken\s+|hadouken\,\s+)';
+my $command_prefix = '^(\.|hadouken\s+|hadouken\,\s+)'; # requested remove of ! by nesta.
 
 # Admin commands now privmsg the user instead of channel.
 # Make sure to check acl's of each command.
 
+
 my @commands = (
+      {name => 'trivstop',       regex => 'trivstop$',               comment => 'stop trivia bot',                require_admin => 1 }, 
+      {name => 'trivstart',      regex => 'trivstart$',              comment => 'start trivia bot',               require_admin => 1 }, 
       {name => 'raw',            regex => 'raw\s.+?',                comment => 'send raw command',               require_admin => 1 }, 
       {name => 'statistics',     regex => '(stats|statistics)$',     comment => 'get statistics about bot',       require_admin => 1 },   
       {name => 'channeladd',     regex => 'channeladd\s.+?',         comment => 'add channel',                    require_admin => 1 },
@@ -108,6 +121,44 @@ sub stop {
    }
 }
 
+sub readPrivateKey {
+  my ($self,$file,$password) = @_;
+  my $key_string;
+
+  if (!$password) {
+    open(PRIV,$file) || die "$file: $!";
+    read(PRIV,$key_string, -s PRIV); # Suck in the whole file
+    close(PRIV);
+  } else {
+    $key_string = $self->decryptPEM($file,$password);
+  }
+  $key_string
+}
+
+sub decryptPEM {
+   my ($self,$file,$password) = @_;
+
+   my $pem = Convert::PEM->new(
+       Name => 'RSA PRIVATE KEY', 
+       ASN  => qq(RSAPrivateKey SEQUENCE {
+                  version INTEGER,
+                  n INTEGER,
+                  e INTEGER,
+                  d INTEGER,
+                  p INTEGER,
+                  q INTEGER,
+                  dp INTEGER,
+                  dq INTEGER,
+                  iqmp INTEGER
+               }
+   ));
+
+  my $pkey = $pem->read(Filename => $file, Password => $password);
+
+  $pem->encode(Content => $pkey);
+}
+
+
 sub start {
    my ($self) = @_;
    
@@ -115,10 +166,25 @@ sub start {
       $self->stop();
    }
 
+   # state variables
    $self->start_time(time());
    $self->{connected} = 0;
+   $self->{trivia_running} = 0;
+
+   if( $self->{private_rsa_key_filename} ne '' ) {
+      
+      my $key_string = $self->readPrivateKey($self->{private_rsa_key_filename}, 
+      $self->{private_rsa_key_password} ne '' ? $self->{private_rsa_key_password} : undef );
+
+      $self->{_rsa} = Crypt::OpenSSL::RSA->new_private_key($key_string);
+      
+      #$self->{_rsa}->use_sslv23_padding();
+
+   }
+   
    $self->{c} = AnyEvent->condvar;
    $self->{con} = AnyEvent::IRC::Client->new();
+   
    $self->_start;
 }
 
@@ -133,6 +199,23 @@ sub send_server_safe {
    return unless defined $self->{con} && defined $command;
    $self->{con}->send_srv($command,@params);
 }
+
+# ident,quote,channel,time
+#
+# $row is an array ref.
+sub write_quote_row {
+   my ($self, $row) = @_;
+
+   if(defined $self->{_rsa}) {
+      # The second param in encode_base64 removes line endings
+      my $encrypted = MIME::Base64::encode_base64($self->{_rsa}->encrypt($row->[1]),''); 
+      
+      $row->[1] = "$encrypted";
+   }
+   
+   push($self->{quotesdb},$row);
+}
+
 
 sub chain {
   my $self = shift;
@@ -571,8 +654,39 @@ sub _buildup {
 
    $self->{geoip} = Geo::IP->open($filedirname.'/geoip/GeoIPCity.dat') or die $!;
 
-   my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', $filedirname.'/quotes.txt', memory => 20_000_000 or die $!;
+   my $after_parse_cb = sub { 
+      my ($csv, $row) = @_;
+      
+      if( exists $self->{_rsa} ) {
+         
+         my $therow = $row->[1];
 
+         # if($row->[1] =~ /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) {
+         
+         try {
+            $therow = MIME::Base64::decode_base64($row->[1]);
+            $therow = $self->{_rsa}->decrypt($therow);
+         }
+         catch($e) {
+            $therow = $row->[1];
+         }
+         
+         $row->[1] = $therow;
+
+         #if ($therow =~ m{^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=|[A-Za-z0-9+/][AQgw]==)?\z}x ) {
+         #   warn "MATCHED\n";
+         #my $blah = $self->{_rsa}->decrypt(MIME::Base64::decode_base64($row->[1]));
+            #$row->[1] = $blah;
+      }
+   };
+
+   my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', $filedirname.'/quotes.txt', 
+         {  memory => 20_000_000,  
+            text_csv => { binary => 1, 
+               callbacks => { after_parse => $after_parse_cb } 
+            } 
+         } or die $!;
+   
    my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', $filedirname.'/admins.txt' or die $!;
 
    my $tiewhitelistobj = tie @{$self->{whitelistdb}}, 'Tie::Array::CSV', $filedirname.'/whitelist.txt' or die $!;
@@ -811,7 +925,7 @@ sub _buildup {
       delegate => sub {
          my ($who, $message, $channel, $channel_list) = @_;
          my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-         my ($cmd, $arg) = split(/ /, lc($message), 2);
+         my ($cmd, $arg) = split(/ /, $message, 2);
          
          return unless defined $arg;
 
@@ -842,7 +956,8 @@ sub _buildup {
          
          return unless defined $arg;
 
-         my ($url,$title) = $self->_shorten($arg);
+         # Only grab title for admins.
+         my ($url,$title) = $self->_shorten($arg,$self->is_admin($who));
          
          if(defined $url && $url ne '') {
             if(defined $title && $title ne '') {
@@ -1130,10 +1245,14 @@ sub _buildup {
          my @found;
 
          unless(defined $creator) {
-            @found = List::MoreUtils::indexes { lc($_->[1]) =~ lc($arg) } @{$self->{quotesdb}};
+            @found = List::MoreUtils::indexes { lc($_->[1]) =~ lc($arg) && $_->[2] eq $channel } @{$self->{quotesdb}};
          } else {
 
-            @found = List::MoreUtils::indexes { $arg ne '' ? (lc($_->[1]) =~ lc($arg)) && (lc($_->[0]) =~ lc($creator)) : lc($_->[0]) =~ lc($creator) } @{$self->{quotesdb}};
+            @found = List::MoreUtils::indexes { 
+               $arg ne '' 
+               ? (($_->[2] eq $channel) && lc($_->[1]) =~ lc($arg)) && (lc($_->[0]) =~ lc($creator)) 
+               : lc($_->[0]) =~ lc($creator) && $_->[2] eq $channel 
+            } @{$self->{quotesdb}};
 
             #if(defined $arg && $arg ne '') {
             #   @found = List::MoreUtils::indexes { (lc($_->[1]) =~ lc($arg)) && (lc($_->[0]) =~ lc($creator)) } @{$self->{quotesdb}};
@@ -1160,10 +1279,19 @@ sub _buildup {
             last if($limit > $self->quote_limit);
 
             my @the_quote = $self->{quotesdb}[$z];
-            my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($the_quote[0][0]);
-            my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($the_quote[0][3]);
+            
+            #my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($the_quote[0][0]);
+            #my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($the_quote[0][3]);
 
-            $self->send_server_safe (PRIVMSG => $channel, '['.int($z + 1).'/'.$quote_count.'] '.$the_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+            my $hightlighted = $the_quote[0][1];
+
+            my $highlight_sub = sub {
+                return String::IRC->new($_[0])->bold;
+            };
+            
+            $hightlighted =~ s/($arg)/$highlight_sub->($1)/ge;
+
+            $self->send_server_safe (PRIVMSG => $channel, '['.int($z + 1).'/'.$quote_count.'] '.$hightlighted); # - added by '.$q_nickname.' on '.$epoch_string);
          }
 
          return 1;
@@ -1177,7 +1305,11 @@ sub _buildup {
 
          my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
-         my $quote_count = scalar @{$self->{quotesdb}};
+         my @this_channel_only;
+        
+         @this_channel_only = List::MoreUtils::indexes { $_->[2] eq $channel } @{$self->{quotesdb}};
+         
+         my $quote_count = scalar @this_channel_only;
 
          return unless($quote_count > 0);
 
@@ -1185,14 +1317,8 @@ sub _buildup {
 
          my @rand_quote = $self->{quotesdb}[$rand_idx];
 
-         #my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($rand_quote[0][0]);
-
-         #my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($rand_quote[0][3]);
-
          $self->send_server_safe (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1]);
 
-         # $self->send_server_safe (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
-      
          return 1;
     },
       acl => $passive_acl,
@@ -1224,8 +1350,12 @@ sub _buildup {
 
          return 1;
     },
-      acl => $simple_acl,
-   );
+     acl => sub {
+         my ($who, $message, $channel, $channel_list) = @_;
+         my $ret = $self->is_admin($who);
+         return $ret;
+   });
+
 
    $self->add_func(name => 'q',
       delegate => sub {
@@ -1243,24 +1373,20 @@ sub _buildup {
 
          my @real_indexes = ();
 
-         while($arg =~ /$RE{num}{int}{-sep => ','}{-keep}/g) {
-            push(@real_indexes,int($1 - 1));
+         while($arg =~ /$RE{num}{int}{-sep => ""}{-keep}/g) {
+            push(@real_indexes,int($3 - 1));
          }
 
-         while($arg =~ /$RE{num}{int}{-sep => ' '}{-keep}/g) {
-            push(@real_indexes,int($1 - 1));
-         }
-    
-
-         #warn "quote limit is ".$self->quote_limit." wtf\n";
 
          my @x = List::MoreUtils::distinct @real_indexes;
 
          return unless(@x);
 
-         splice @x, $self->quote_limit if($#x >= $self->quote_limit );
+         # splice @x, $self->quote_limit if($#x >= $self->quote_limit );
 
          my $search_count = scalar @x;
+
+         my $sent = 0;
 
          foreach my $j (@x) {
             next unless $j >=0 && $j < $quote_count;
@@ -1280,6 +1406,14 @@ sub _buildup {
                   defined($col_quote) && $col_quote ne '' && 
                   defined($col_channel) && $col_channel ne '' && 
                   defined($col_time) && $col_time ne '';
+
+            #only show for this channel!
+            next unless $col_channel eq $channel;
+
+
+            next if $sent >= $self->quote_limit;
+
+            $sent++;
 
             my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($col_who);
             my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($col_time);
@@ -1306,17 +1440,20 @@ sub _buildup {
 
          my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
-         my $quote_count = scalar @{$self->{quotesdb}};
+         
+         my $this_channel_only_last = List::MoreUtils::last_index { $_->[2] eq $channel } @{$self->{quotesdb}};
+         
+         # my $quote_count = scalar @this_channel_only;
 
-         if ($quote_count > 0) {
+         if ($this_channel_only_last > -1) {
 
-            my @last_quote = $self->{quotesdb}[int($quote_count - 1)];
+            my @last_quote = $self->{quotesdb}[$this_channel_only_last];
 
             my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($last_quote[0][0]);
 
             my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($last_quote[0][3]);
 
-            $self->send_server_safe (PRIVMSG => $channel, '['.$quote_count.'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+            $self->send_server_safe (PRIVMSG => $channel, '['.$this_channel_only_last.'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
          }
 
          return 1;
@@ -1336,7 +1473,9 @@ sub _buildup {
 
          my @test = [$ident, $arg, $channel, time()];
 
-         push($self->{quotesdb}, @test);
+         # push($self->{quotesdb}, @test);
+
+         $self->write_quote_row(@test);
 
          my $quote_count = scalar @{$self->{quotesdb}};
 
@@ -1413,10 +1552,14 @@ sub _buildup {
          my ($who, $message, $channel, $channel_list) = @_;
 
          my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+         
+         my $running_elapsed = Time::Elapsed::elapsed( time - $self->{start_time });
 
-         my $si = String::IRC->new('Hi '.$nickname.', no statistics available.')->bold;
+         my $basic_info = sprintf("Hadouken %s by dek. Current uptime: %s", 
+             String::IRC->new($VERSION)->bold, 
+             String::IRC->new($running_elapsed)->bold );
 
-         $self->send_server_safe (PRIVMSG => $nickname, $si);
+         $self->send_server_safe (PRIVMSG => $nickname, $basic_info);
 
          return 1;
     },
@@ -1467,7 +1610,6 @@ sub _buildup {
    },
       acl => $passive_acl,
    );
-
 
    $self->add_func(name => 'eur2usd', 
       delegate => sub {
@@ -1530,12 +1672,11 @@ sub _buildup {
                warn "* Rejoin automatically is set!\n";
             }
 
-            sleep(2);
             $self->send_server_safe (JOIN => $channel);
 
-            my $si = String::IRC->new($kicker_nick)->red->bold;
+            # my $si = String::IRC->new($kicker_nick)->red->bold;
 
-            $self->send_server_safe (PRIVMSG => $channel,"kicked by $si, behavior logged");
+            # $self->send_server_safe (PRIVMSG => $channel,"kicked by $si, behavior logged");
          }
       }
    );
@@ -1594,7 +1735,8 @@ sub _buildup {
 
          if ( $message =~ m{($RE{URI})}gos ) {
 
-            my ($shrt_url,$shrt_title) = $self->_shorten($message);
+            my $get_title = $self->is_admin($who);
+            my ($shrt_url,$shrt_title) = $self->_shorten($message, $get_title );
 
             if(defined($shrt_url) && $shrt_url ne '') {
 
@@ -1630,6 +1772,41 @@ sub _buildup {
 
 }
 
+sub _start_trivia {
+   my $self = shift;
+
+   if($self->{triviarunning}) {
+       return 1;
+   }
+
+
+   my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
+
+   my $questionsdir = $filedirname.'/questions';
+
+   return 0 unless(-d $questionsdir);
+
+   opendir(DIR, $questionsdir) or die $!;
+
+   my @question_files 
+        = grep { 
+            /^questions/            # question_00
+	    && -f "$questionsdir/$_"    # and is a file
+	} readdir(DIR);
+
+    # Loop through the array printing out the filenames
+    foreach my $file (@question_files) {
+        print "$file\n";
+    }
+
+    closedir(DIR);   
+    
+
+
+
+    return 0;
+}
+
 sub _start {
    my $self = shift;
 
@@ -1662,6 +1839,8 @@ sub _start {
    $self->{con}->set_nick_change_cb($nick_change);
 
    $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port}, { nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
+# ident,quote,channel,time
+
 
    $self->{c}->wait;
 
@@ -1778,6 +1957,7 @@ sub _webclient {
 sub _shorten {
    my $self = shift;
    my $url = shift;
+   my $get_title = shift || 0;
    
    my $shortenurl = '';
    my $title = '';
@@ -1797,16 +1977,16 @@ sub _shorten {
 
          $shortenurl = $json->{'data'}{'url'};
 
-         my $response = $self->_webclient->get($url);
+         if($get_title) {
+            my $response = $self->_webclient->get($url);
 
-         my $p = HTML::TokeParser->new( \$response->decoded_content );
-         if ($p->get_tag("title")) {
-            $title = $p->get_trimmed_text;
+            my $p = HTML::TokeParser->new( \$response->decoded_content );
+            
+            if ($p->get_tag("title")) {
+               $title = $p->get_trimmed_text;
+            }
          }
 
-         #my $api3 = "https://api-ssl.bitly.com/v3/info?access_token=".$self->{bitly_api_key}."&shortUrl=$shortenurl";
-         #my $json2 = $self->fetch_json($api3);
-         #$title = $json2->{'data'}{'info'}{'title'};
       }
    }
    catch($e) {
@@ -1883,8 +2063,6 @@ package main;
 
    use Daemon::Control;
 
-   # use Data::Printer alias => 'Dumper',colored => 1;
-
    use Config::General;
 
    use TryCatch;
@@ -1894,11 +2072,11 @@ package main;
    my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
    my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $filedirname."/hadouken.conf", -AutoTrue => "yes") or die "Config file missing!";
+   
    my %config = $conf->getall;
 
-  # unless(exists $config{host} && $config{host} ne '' && exists $config{port} && $config{port} ne '') {
-  #    die "Missing config items: host and/or port.\n";
-  # }
+   # todo: check for required config items.
+   #
 
    my $cb = CashBot->new_with_options(
       nick => 'hadouken',
@@ -1909,6 +2087,8 @@ package main;
       safe_delay => $config{safe_delay} || '0.25',
       bitly_user_id => $config{bitly_user_id} || '', # To disable shortening, remove from config!
       bitly_api_key => $config{bitly_api_key} || '',
+      private_rsa_key_filename => $config{rsa_key_file} || '',
+      private_rsa_key_password => $config{rsa_key_password} || '',
    );
 
    my $daemon = Daemon::Control->new(
