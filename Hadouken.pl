@@ -45,6 +45,8 @@ use Convert::PEM;
 use MIME::Base64 ();
 use Crypt::OpenSSL::RSA;
 
+use Crypt::Blowfish_PP;
+# use Crypt::CBC;
 
 use Time::Elapsed ();
 
@@ -62,6 +64,9 @@ has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.25')
 has 'quote_limit' => (is => 'rw', isa => 'Str', required => 0, default => '3');
 
 my $command_prefix = '^(\.|hadouken\s+|hadouken\,\s+)'; # requested remove of ! by nesta.
+
+use constant B64 =>
+  './0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 # Admin commands now privmsg the user instead of channel.
 # Make sure to check acl's of each command.
@@ -109,6 +114,9 @@ sub new {
    my $class = shift;
    my $self = {@_};
    bless $self, $class;
+
+   
+   $self->_set_key( 'all', $self->{blowfish_key} );
 
    return $self;
 }
@@ -801,7 +809,10 @@ sub _buildup {
 
          if($del_ret) {
             my $out_msg = "[admindel] deleted admin $arg -> by $nickname";
-            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+            
+            my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+            
+            $self->send_server_safe (PRIVMSG => $nickname, $msg);
          }
 
          return 1;
@@ -823,9 +834,11 @@ sub _buildup {
          my $add_ret = $self->admin_add($who, $arg);
 
          if($add_ret) {
-            my $out_msg = "[adminadd] added admin $arg -> by $nickname";
+            my $out_msg = '[adminadd] added admin '.$arg.' - > by '.$nickname;
 
-            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+            my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+            $self->send_server_safe (PRIVMSG => $nickname, $msg);
          }
 
          return 1;
@@ -848,8 +861,9 @@ sub _buildup {
 
          if($add_ret) {
             my $out_msg = "[whitelistadd] added whitelist $arg -> by $nickname";
+            my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-            $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+            $self->send_server_safe (PRIVMSG => $nickname, $msg);
          }
 
          return 1;
@@ -875,7 +889,11 @@ sub _buildup {
 
          if($del_ret) {
             my $out_msg = "[whitelistdel] deleted whitelist $arg -> by $nickname";
+            
+            my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
             $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+
          }
 
          return 1;
@@ -899,7 +917,10 @@ sub _buildup {
          if($add_ret) {
             my $out_msg = "[blacklistadd] added blacklist $arg -> by $nickname";
 
+            my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
             $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+
          }
 
          return 1;
@@ -925,6 +946,9 @@ sub _buildup {
 
          if($del_ret) {
             my $out_msg = "[blacklistdel] deleted blacklist $arg -> by $nickname";
+
+            my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
             $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
          }
 
@@ -1005,7 +1029,7 @@ sub _buildup {
 
          return 1;
     },
-      acl => $simple_acl
+      acl => $passive_acl
    );
 
    $self->add_func(name => 'ipcalc',
@@ -1458,7 +1482,9 @@ sub _buildup {
 
             my $msg = "$si1$si2$si3$si4";
 
-            $self->send_server_safe (PRIVMSG => $channel, $msg); #$si1.''.$si2.''.$si3.''.$si4
+            my $no_color = "[".int($j+1)."/".$quote_count."] $col_quote - added by $q_nickname on $epoch_string";
+
+            $self->send_server_safe (PRIVMSG => $channel, $no_color); #$si1.''.$si2.''.$si3.''.$si4
          }
 
          return 1;
@@ -1596,11 +1622,13 @@ sub _buildup {
          
          my $running_elapsed = Time::Elapsed::elapsed( time - $self->{start_time });
 
-         my $basic_info = sprintf("Hadouken %s by dek. Current uptime: %s", 
-             String::IRC->new($VERSION)->bold, 
-             String::IRC->new($running_elapsed)->bold );
+         my $basic_info = sprintf("Hadouken %s by dek. Current uptime: %s", #$VERSION, $running_elapsed);
+            String::IRC->new($VERSION)->bold, 
+            String::IRC->new($running_elapsed)->bold );
 
-         $self->send_server_safe (PRIVMSG => $nickname, $basic_info);
+          my $msg = sprintf '+OK %s', $self->_encrypt( $basic_info, $self->{keys}->[0] );
+
+          $self->send_server_safe (PRIVMSG => $nickname, $msg);
 
          return 1;
     },
@@ -1719,6 +1747,28 @@ sub _buildup {
 
             # $self->send_server_safe (PRIVMSG => $channel,"kicked by $si, behavior logged");
          }
+      },
+      dcc_request => sub {
+         my ($con, $id, $src, $type, $arg, $addr, $port) = @_;
+
+         warn "* DCC Request from $addr\n";
+
+         $self->{con}->dcc_accept($id);
+
+         warn "* DCC Accepting\n";
+      },
+      dcc_chat_msg => sub {
+         my ($con, $id, $msg) = @_;
+
+         warn "* DCC CHAT MSG $msg\n";
+
+         if ($msg =~ s/^\+OK //) {
+            $msg = $self->_decrypt( $msg, $self->{keys}->[0] );
+            $msg =~ s/\0//g;
+
+            warn "* Decrypted $msg\n";
+
+         }
       }
    );
 
@@ -1742,6 +1792,26 @@ sub _buildup {
       my $message = $ircmsg->{params}[1];
 
       my $channel_list = $self->{con}->channel_list($channel);
+
+      if($self->is_admin($who)) {
+         try {
+            if ($message =~ s/^\+OK //) {
+               $message = $self->_decrypt( $message, $self->{keys}->[0] );
+               $message =~ s/\0//g;
+
+               warn "* Decrypted $message\n";
+
+               #my $init_msg = 'Hello there how are you';
+
+               #my $msg = sprintf '+OK %s', $self->_encrypt( $init_msg, $self->{keys}->[0] );
+               #$self->send_server_safe(PRIVMSG => $nickname, $msg);
+            }
+         } catch($e) {
+            $message = $ircmsg->{params}[1];
+            warn "Error decrypting $e\n";
+         }
+      }
+
 
       my $cmd = undef;
       if ( defined($cmd = List::MoreUtils::first_value { $message =~ /$command_prefix$_->{'regex'}/ } @commands) ) {
@@ -2064,6 +2134,107 @@ sub _shorten {
    return ($shortenurl,$title);
 }
 
+
+sub _encrypt {
+   my ( $self, $text, $key ) = @_;
+
+   $text =~ s/(.{8})/$1\n/g;
+   my $result = '';
+   #try {
+      my $cipher = new Crypt::Blowfish_PP $key;
+      foreach ( split /\n/, $text ) {
+         $result .= $self->_inflate( $cipher->encrypt($_) );
+      }
+      #} catch($e) {
+      #}
+   return $result;
+}
+
+sub _decrypt {
+   my ( $self, $text, $key ) = @_;
+
+   $text =~ s/(.{12})/$1\n/g;
+   my $result = '';
+   my $cipher = new Crypt::Blowfish_PP $key;
+   foreach ( split /\n/, $text ) {
+      $result .= $cipher->decrypt( $self->_deflate($_) );
+   }
+
+   return $result;
+}
+
+sub _set_key {
+   my ( $self, $user, $key ) = @_;
+
+   $self->{keys} = [ $key, $key ];
+
+   my $l = length($key);
+
+   if ( $l < 8 ) {
+      my $longkey = '';
+      my $i       = 8 / $l;
+      $i = $1 + 1 if $i =~ /(\d+)\.\d+/;
+      while ( $i > 0 ) {
+         $longkey .= $key;
+         $i--;
+      }
+      $self->{keys} = [ $longkey, $key ];
+   }
+}
+
+sub _inflate {
+   my ( $self, $text ) = @_;
+   my $result = '';
+   my $k      = -1;
+
+   while ( $k < ( length($text) - 1 ) ) {
+      my ( $l, $r ) = ( 0, 0 );
+      for ( $l, $r ) {
+         foreach my $i ( 24, 16, 8 ) {
+            $_ += ord( substr( $text, ++$k, 1 ) ) << $i;
+         }
+         $_ += ord( substr( $text, ++$k, 1 ) );
+      }
+      for ( $r, $l ) {
+         foreach my $i ( 0 .. 5 ) {
+            $result .= substr( B64, $_ & 0x3F, 1 );
+            $_ = $_ >> 6;
+         }
+      }
+   }
+   return $result;
+}
+
+sub _deflate {
+   my ( $self, $text ) = @_;
+   my $result = '';
+   my $k      = -1;
+
+   while ( $k < ( length($text) - 1 ) ) {
+      my ( $l, $r ) = ( 0, 0 );
+      for ( $r, $l ) {
+         foreach my $i ( 0 .. 5 ) {
+            $_ |= index( B64, substr( $text, ++$k, 1 ) ) << ( $i * 6 );
+         }
+      }
+      for ( $l, $r ) {
+         foreach my $i ( 0 .. 3 ) {
+            $result .=
+            chr( ( $_ & ( 0xFF << ( ( 3 - $i ) * 8 ) ) )
+               >> ( ( 3 - $i ) * 8 ) );
+         }
+      }
+   }
+
+   return $result;
+}
+
+
+
+
+
+
+
 #sub _test {
 #   my $self = shift;
 
@@ -2156,7 +2327,9 @@ package main;
       bitly_api_key => $config{bitly_api_key} || '',
       private_rsa_key_filename => $config{rsa_key_file} || '',
       private_rsa_key_password => $config{rsa_key_password} || '',
+      blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
    );
+
 
    my $daemon = Daemon::Control->new(
       name        => "Hadouken",
