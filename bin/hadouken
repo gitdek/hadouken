@@ -1,0 +1,95 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Hadouken;
+
+use Cwd ();
+
+use File::Basename();
+
+use Daemon::Control;
+
+use Config::General;
+
+use TryCatch;
+
+use namespace::autoclean;
+
+my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
+
+my $config_filename = '/etc/hadouken.conf';
+
+my $log_filename = '/var/log/hadouken.log';
+
+my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $config_filename, -AutoTrue => "yes") or die "Config file missing!";
+
+my %config = $conf->getall;
+
+# todo: check for required config items.
+#
+
+my $cb = Hadouken->new_with_options(
+  nick => 'hadouken',
+  servers => [ $config{server} ],
+  admin => $config{admin},
+  rejoin_on_kick => 1,
+  quote_limit => $config{quote_limit} || '2',
+  safe_delay => $config{safe_delay} || '0.25',
+  bitly_user_id => $config{bitly_user_id} || '', # To disable shortening, remove from config!
+  bitly_api_key => $config{bitly_api_key} || '',
+  private_rsa_key_filename => $config{rsa_key_file} || '',
+  private_rsa_key_password => $config{rsa_key_password} || '',
+  blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
+  ownerdir => $filedirname,
+);
+
+
+my $daemon = Daemon::Control->new(
+  name        => "Hadouken",
+  lsb_start   => '$syslog $remote_fs',
+  lsb_stop    => '$syslog',
+  lsb_sdesc   => 'Hadouke bot',
+  lsb_desc    => 'Hadouken bot by dek',
+
+  program => sub { $cb->start },
+
+  help => "What?\n\n",
+  kill_timeout => 6,
+
+  pid_file    => $filedirname.'/hadouken.pid',
+  stderr_file => $log_filename,
+  stdout_file => $log_filename,
+
+  fork        => 2,
+);
+
+my ($command) = @{$cb->extra_argv};
+
+defined $command || die "No command specified";
+
+my $exit_code;
+
+if ($command eq 'stop') {
+  $daemon->pretty_print("Shutting Down", "red") if(defined $cb->start_time && $cb->start_time ne '');
+
+  $cb->stop(); # Clean disconnect.
+
+  $exit_code = $daemon->run_command('stop');
+  exit($exit_code || 0);
+}
+
+try {
+  $exit_code = $daemon->run_command($command);
+}
+catch (Str $e where { $_ =~ /^Error: undefined action/i } ) {
+  warn "You must specify an action.\n";
+}
+catch($e) {
+  warn $e,"\n";
+}
+
+exit(($exit_code || 0));
+
+
