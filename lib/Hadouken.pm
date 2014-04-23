@@ -1,6 +1,4 @@
-#!/usr/bin/env perl
-
-package CashBot;
+package Hadouken;
 
 use strict;
 use warnings;
@@ -11,7 +9,7 @@ use 5.014;
 our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
-#use Data::Dumper;
+# use Data::Dumper;
 use Data::Printer alias => 'Dumper', colored => 1;
 
 use Cwd ();
@@ -673,9 +671,9 @@ sub _buildup {
 
    #my $redis = Redis->new;
 
-   my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
+   #my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
-   $self->{geoip} = Geo::IP->open($filedirname.'/geoip/GeoIPCity.dat') or die $!;
+   $self->{geoip} = Geo::IP->open($self->{ownerdir}.'/../data/geoip/GeoIPCity.dat') or die $!;
 
    my $after_parse_cb = sub { 
       my ($csv, $row) = @_;
@@ -703,18 +701,18 @@ sub _buildup {
       }
    };
 
-   my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', $filedirname.'/quotes.txt', 
+   my $tieobj = tie @{$self->{quotesdb}}, 'Tie::Array::CSV', $self->{ownerdir}.'/../data/quotes.txt', 
          {  memory => 20_000_000,  
             text_csv => { binary => 1, 
                callbacks => { after_parse => $after_parse_cb } 
             } 
          } or die $!;
    
-   my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', $filedirname.'/admins.txt' or die $!;
+   my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', $self->{ownerdir}.'/../data/admins.txt' or die $!;
 
-   my $tiewhitelistobj = tie @{$self->{whitelistdb}}, 'Tie::Array::CSV', $filedirname.'/whitelist.txt' or die $!;
+   my $tiewhitelistobj = tie @{$self->{whitelistdb}}, 'Tie::Array::CSV', $self->{ownerdir}.'/../data/whitelist.txt' or die $!;
 
-   my $tieblacklistobj = tie @{$self->{blacklistdb}}, 'Tie::Array::CSV', $filedirname.'/blacklist.txt' or die $!;
+   my $tieblacklistobj = tie @{$self->{blacklistdb}}, 'Tie::Array::CSV', $self->{ownerdir}.'/../data/blacklist.txt' or die $!;
 
    # Add ourselves into the db if we arent in already!
    unless ($self->is_admin($self->{admin})) {
@@ -1891,9 +1889,9 @@ sub _start_trivia {
    }
 
 
-   my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
+   #my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
-   my $questionsdir = $filedirname.'/questions';
+   my $questionsdir = $self->{ownerdir}.'/../data/questions';
 
    return 0 unless(-d $questionsdir);
 
@@ -1902,8 +1900,8 @@ sub _start_trivia {
    my @question_files 
         = grep { 
             /^questions/            # question_00
-	    && -f "$questionsdir/$_"    # and is a file
-	} readdir(DIR);
+       && -f "$questionsdir/$_"    # and is a file
+   } readdir(DIR);
 
     # Loop through the array printing out the filenames
     foreach my $file (@question_files) {
@@ -2290,89 +2288,4 @@ sub _deflate {
 
 1;
 
-package main;
 
-   use strict;
-   use warnings;
-
-   use Cwd ();
-
-   use File::Basename();
-
-   use Daemon::Control;
-
-   use Config::General;
-
-   use TryCatch;
-
-   use namespace::autoclean;
-
-   my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
-
-   my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $filedirname."/hadouken.conf", -AutoTrue => "yes") or die "Config file missing!";
-   
-   my %config = $conf->getall;
-
-   # todo: check for required config items.
-   #
-
-   my $cb = CashBot->new_with_options(
-      nick => 'hadouken',
-      servers => [ $config{server} ],
-      admin => $config{admin},
-      rejoin_on_kick => 1,
-      quote_limit => $config{quote_limit} || '2',
-      safe_delay => $config{safe_delay} || '0.25',
-      bitly_user_id => $config{bitly_user_id} || '', # To disable shortening, remove from config!
-      bitly_api_key => $config{bitly_api_key} || '',
-      private_rsa_key_filename => $config{rsa_key_file} || '',
-      private_rsa_key_password => $config{rsa_key_password} || '',
-      blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
-   );
-
-
-   my $daemon = Daemon::Control->new(
-      name        => "Hadouken",
-      lsb_start   => '$syslog $remote_fs',
-      lsb_stop    => '$syslog',
-      lsb_sdesc   => 'Hadouke bot',
-      lsb_desc    => 'Hadouken bot by dek',
-
-      program => sub { $cb->start },
-
-      help => "What?\n\n",
-      kill_timeout => 6,
-
-      pid_file    => $filedirname.'/hadouken.pid',
-      stderr_file => $filedirname.'/hadouken.out',
-      stdout_file => $filedirname.'/hadouken.out',
-
-      fork        => 2,
-   );
-
-   my ($command) = @{$cb->extra_argv};
-
-   defined $command || die "No command specified";
-
-   my $exit_code;
-
-   if ($command eq 'stop') {
-      $daemon->pretty_print("Shutting Down", "red") if(defined $cb->start_time && $cb->start_time ne '');
-
-      $cb->stop(); # Clean disconnect.
-
-      $exit_code = $daemon->run_command('stop');
-      exit($exit_code || 0);
-   }
-
-   try {
-      $exit_code = $daemon->run_command($command);
-   }
-   catch (Str $e where { $_ =~ /^Error: undefined action/i } ) {
-      warn "You must specify an action.\n";
-   }
-   catch($e) {
-      warn $e,"\n";
-   }
-
-   exit(($exit_code || 0));
