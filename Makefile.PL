@@ -1,6 +1,7 @@
 use strict;
 use warnings;
-use ExtUtils::MakeMaker;
+#use ExtUtils::MakeMaker;
+use inc::Module::Install;
 
 WriteMakefile(
     NAME                => 'Hadouken',
@@ -12,11 +13,11 @@ WriteMakefile(
       : ()),
     CONFIGURE_REQUIRES => { 
         'ExtUtils::MakeMaker'   => 0, 
-        'File::Copy'            => 0, 
+        'YAML',                 => 0,
+        'Test::More'            => 0,
+        'File::Copy'            => 0 
     },
     PREREQ_PM => {
-        'Test::More'            => 0,
-        'YAML'                  => 0,
         'Cwd'                   => 0,
         'Moose'                 => 0,
         'List::MoreUtils'       => 0,
@@ -28,6 +29,8 @@ WriteMakefile(
         'HTML::TokeParser'      => 0,
         'URI'                   => 0,
         'LWP::UserAgent'        => 0,
+        'LWP::ConnCache'        => 0,
+        'HTTP::Cookies'         => 0,
         'Encode'                => 0,
         'JSON::XS'              => 0,
         'POSIX'                 => 0,
@@ -48,6 +51,7 @@ WriteMakefile(
         'TryCatch'              => 0,
         'Daemon::Control'       => 0,
         'Config::General'       => 0,
+        'File::Basename'        => 0,
     },
 	PM => {'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm'},
 	# EXE_FILES => ['bin/hadouken'],
@@ -55,3 +59,4 @@ WriteMakefile(
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
 );
 
+auto_install();

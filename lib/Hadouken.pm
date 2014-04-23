@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use diagnostics;
 
-use 5.014;
+# use 5.014;
 
 our $VERSION = '0.2';
 our $AUTHOR = 'dek';
