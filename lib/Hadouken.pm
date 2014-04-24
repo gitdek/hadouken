@@ -10,8 +10,8 @@ use diagnostics;
 our $VERSION = '0.3';
 our $AUTHOR = 'dek';
 
-# use Data::Dumper;
-use Data::Printer alias => 'Dumper', colored => 1;
+use Data::Dumper;
+#use Data::Printer alias => 'Dumper', colored => 1;
 
 use Cwd ();
 
@@ -43,14 +43,15 @@ use Crypt::RSA;
 use Convert::PEM;
 use MIME::Base64 ();
 use Crypt::OpenSSL::RSA;
-
 use Crypt::Blowfish_PP;
 
 use Time::Elapsed ();
 
 use TryCatch;
-
+use Config::General;
 use Moose;
+
+use utf8::all;
 
 with 'MooseX::Getopt::GLD' => { getopt_conf => [ 'pass_through' ] };
 
@@ -65,10 +66,6 @@ my $command_prefix = '^(\.|hadouken\s+|hadouken\,\s+)'; # requested remove of ! 
 
 use constant B64 =>
 './0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-# Admin commands now privmsg the user instead of channel.
-# Make sure to check acl's of each command.
-
 
 my @commands = (
     {name => 'trivstop',       regex => 'trivstop$',               comment => 'stop trivia bot',                require_admin => 1 }, 
@@ -180,14 +177,11 @@ sub start {
     $self->{trivia_running} = 0;
 
     if( $self->{private_rsa_key_filename} ne '' ) {
-
-        my $key_string = $self->readPrivateKey($self->{private_rsa_key_filename}, 
-            $self->{private_rsa_key_password} ne '' ? $self->{private_rsa_key_password} : undef );
+        my $key_string = $self->readPrivateKey($self->{private_rsa_key_filename}, $self->{private_rsa_key_password} ne '' ? $self->{private_rsa_key_password} : undef );
 
         $self->{_rsa} = Crypt::OpenSSL::RSA->new_private_key($key_string);
 
         #$self->{_rsa}->use_sslv23_padding();
-
     }
 
     $self->{c} = AnyEvent->condvar;
@@ -211,6 +205,9 @@ before 'send_server_long_safe' => sub {
 sub send_server_safe {
     my ($self,$command, @params) = @_;
     return unless defined $self->{con} && defined $command;
+    
+    encode ('utf8', $_  ) foreach @params;
+    
     $self->{con}->send_srv($command,@params);
 }
 
@@ -219,6 +216,44 @@ sub send_server_long_safe {
     return unless defined $self->{con} && defined $command;
 
     $self->{con}->send_long_message("utf8",0,$command,@params);
+}
+
+sub channel_add {
+    my ($self, $channel) = @_;
+
+    my $conf = $self->{config_hash};
+    my $server_name = $self->{server_name};
+    
+    $channel =~ s/^\#//;
+    $conf->{server}{$server_name}{channel}{$channel}{shorten_urls} = 1;
+    $conf->{server}{$server_name}{channel}{$channel}{op_admins} = 1;
+    $conf->{server}{$server_name}{channel}{$channel}{protect_admins} = 1;
+
+    $self->{conf_obj}->save_file($self->{config_filename}, $conf);
+
+    $self->send_server_safe (JOIN => '#'.$channel);
+    
+    return 1;
+}
+
+
+sub channel_del {
+    my ($self, $channel) = @_;
+
+    my $conf = $self->{config_hash};
+    my $server_name = $self->{server_name};
+    
+    $channel =~ s/^\#//;
+    
+    if(exists $conf->{server}{$server_name}{channel}{$channel}) {
+        delete $conf->{server}{$server_name}{channel}{$channel};
+    }
+
+    $self->{conf_obj}->save_file($self->{config_filename}, $conf);
+
+    $self->send_server_safe (PART => '#'.$channel);
+    
+    return 1;
 }
 
 # ident,quote,channel,time
@@ -630,26 +665,20 @@ sub add_func {
 
 sub jsonify {
     my $self = shift;
-
     my $hashref = decode_json( encode("utf8", shift) );
-
     return $hashref;
 }
 
 sub fetch_json {
     my $self = shift;
     my $url = shift;
-
     my $json;
 
-    eval {
-        my $request = HTTP::Request->new('GET', $url);
-        my $response = $self->_webclient->request($request);
+    try {
+        my $response = $self->_webclient->get($url);
         $json = $self->jsonify($response->content);
-    };
-
-    if($@) {
-        warn "Error: $@\n";
+    } catch($e) {
+        warn "Error in fetch_json $e\n";
     }
 
     return $json;
@@ -657,7 +686,6 @@ sub fetch_json {
 
 sub get_commands {
     my $self = shift;
-
     return _->map(\@commands, sub { my ($h) = @_; $h; });
 }
 
@@ -671,8 +699,6 @@ sub _buildup {
 
     #my $redis = Redis->new;
 
-    #my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
-
     $self->{geoip} = Geo::IP->open($self->{ownerdir}.'/../data/geoip/GeoIPCity.dat') or die $!;
 
     my $after_parse_cb = sub { 
@@ -681,8 +707,6 @@ sub _buildup {
         if( exists $self->{_rsa} ) {
 
             my $therow = $row->[1];
-
-            # if($row->[1] =~ /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) {
 
             try {
                 $therow = MIME::Base64::decode_base64($row->[1]);
@@ -693,11 +717,6 @@ sub _buildup {
             }
 
             $row->[1] = $therow;
-
-            #if ($therow =~ m{^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}[AEIMQUYcgkosw048]=|[A-Za-z0-9+/][AQgw]==)?\z}x ) {
-            #   warn "MATCHED\n";
-            #my $blah = $self->{_rsa}->decrypt(MIME::Base64::decode_base64($row->[1]));
-            #$row->[1] = $blah;
         }
     };
 
@@ -761,10 +780,11 @@ sub _buildup {
 
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
-            my ($cmd, $arg) = split(/ /, lc($message), 2);
+            my ($cmd, $arg) = split(/ /, $message, 2);
 
             return unless ((defined $arg) && ($self->{con}->is_channel_name($arg)));
-            $self->send_server_safe (PART => $arg);
+            
+            $self->channel_del($arg);
 
             return 1;
         },
@@ -780,10 +800,11 @@ sub _buildup {
 
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
-            my ($cmd, $arg) = split(/ /, lc($message), 2);
+            my ($cmd, $arg) = split(/ /, $message, 2);
 
             return unless ((defined $arg) && ($self->{con}->is_channel_name($arg)));
-            $self->send_server_safe (JOIN => $arg);
+            
+            $self->channel_add($arg);
 
             return 1;
         },
@@ -1133,17 +1154,13 @@ sub _buildup {
     $self->add_func(name => 'whois',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my ($cmd, $arg) = split(/ /, lc($message), 2);
 
             return unless (defined($arg) && length($arg));
 
             if( $arg =~ /$RE{net}{IPv4}/ ) {
-
                 my $record = Net::Whois::IP::whoisip_query($arg);
-
                 print Dumper($record);
 
 
@@ -1316,6 +1333,11 @@ sub _buildup {
                 #}
             }
 
+            unless(@found) {
+                $self->send_server_safe (PRIVMSG => $channel, 'nothing found in quotes!');
+                return;
+            }
+
             my $found_count = scalar @found;
 
             unless($found_count > 0) {
@@ -1345,8 +1367,7 @@ sub _buildup {
                 };
 
                 $hightlighted =~ s/($arg)/$highlight_sub->($1)/ge;
-
-                $self->send_server_safe (PRIVMSG => $channel, '['.int($z + 1).'/'.$quote_count.'] '.$hightlighted); # - added by '.$q_nickname.' on '.$epoch_string);
+                $self->send_server_safe (PRIVMSG => $channel, '['.int($z + 1).'] '.$hightlighted); # - added by '.$q_nickname.' on '.$epoch_string);
             }
 
             return 1;
@@ -1357,9 +1378,7 @@ sub _buildup {
     $self->add_func(name => 'rq',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my @this_channel_only;
 
             @this_channel_only = List::MoreUtils::indexes { $_->[2] eq $channel } @{$self->{quotesdb}};
@@ -1369,10 +1388,8 @@ sub _buildup {
             return unless($quote_count > 0);
 
             my $rand_idx = int(rand($quote_count));
-
-            my @rand_quote = $self->{quotesdb}[$rand_idx];
-
-            $self->send_server_safe (PRIVMSG => $channel, '['.int($rand_idx + 1).'/'.$quote_count.'] '.$rand_quote[0][1]);
+            my @rand_quote = $self->{quotesdb}[$this_channel_only[$rand_idx]];
+            $self->send_server_safe (PRIVMSG => $channel, '['.int($this_channel_only[$rand_idx] + 1).'] '.$rand_quote[0][1]);
 
             return 1;
         },
@@ -1382,9 +1399,7 @@ sub _buildup {
     $self->add_func(name => 'dq',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my ($cmd, $arg) = split(/ /,$message, 2);
 
             return unless (defined $arg) && (length $arg);
@@ -1415,9 +1430,7 @@ sub _buildup {
     $self->add_func(name => 'q',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my ($cmd, $arg) = split(/ /,$message, 2);
 
             return unless (defined $arg) && (length $arg);
@@ -1429,9 +1442,8 @@ sub _buildup {
             my @real_indexes = ();
 
             while($arg =~ /$RE{num}{int}{-sep => ""}{-keep}/g) {
-                push(@real_indexes,int($3 - 1));
+                push(@real_indexes,int($1 - 1));
             }
-
 
             my @x = List::MoreUtils::distinct @real_indexes;
 
@@ -1440,16 +1452,12 @@ sub _buildup {
             # splice @x, $self->quote_limit if($#x >= $self->quote_limit );
 
             my $search_count = scalar @x;
-
             my $sent = 0;
 
             foreach my $j (@x) {
                 next unless $j >=0 && $j < $quote_count;
 
                 my @curr_quote = $self->{quotesdb}[$j]; # Don't dereference this.
-
-                #print Dumper(@curr_quote);
-
                 my $col_who       = $curr_quote[0][0];
                 my $col_quote     = $curr_quote[0][1];
                 my $col_channel   = $curr_quote[0][2];
@@ -1464,8 +1472,6 @@ sub _buildup {
 
                 #only show for this channel!
                 next unless $col_channel eq $channel;
-
-
                 next if $sent >= $self->quote_limit;
 
                 $sent++;
@@ -1479,7 +1485,6 @@ sub _buildup {
                 my $si4 = String::IRC->new('] '.$col_quote.' - added by '.$q_nickname.' on '.$epoch_string)->black;
 
                 my $msg = "$si1$si2$si3$si4";
-
                 my $no_color = "[".int($j+1)."/".$quote_count."] $col_quote - added by $q_nickname on $epoch_string";
 
                 $self->send_server_safe (PRIVMSG => $channel, $no_color); #$si1.''.$si2.''.$si3.''.$si4
@@ -1494,23 +1499,21 @@ sub _buildup {
     $self->add_func(name => 'lq',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            my @quote_indexes;
+            
+            @quote_indexes = List::MoreUtils::indexes { $_->[2] eq $channel } @{$self->{quotesdb}};
+            
+            return unless(@quote_indexes);
 
-
-            my $this_channel_only_last = List::MoreUtils::last_index { $_->[2] eq $channel } @{$self->{quotesdb}};
-
-            # my $quote_count = scalar @this_channel_only;
-
-            if ($this_channel_only_last > -1) {
-
-                my @last_quote = $self->{quotesdb}[$this_channel_only_last];
-
+            my $channel_quote_count = scalar @quote_indexes;
+            
+            if ($channel_quote_count > 0) {
+                my @last_quote = $self->{quotesdb}[$quote_indexes[int($channel_quote_count - 1)]];
                 my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($last_quote[0][0]);
-
                 my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($last_quote[0][3]);
 
-                $self->send_server_safe (PRIVMSG => $channel, '['.$this_channel_only_last.'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+                $self->send_server_safe (PRIVMSG => $channel, '['.int($quote_indexes[$channel_quote_count - 1] + 1).'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
             }
 
             return 1;
@@ -1521,18 +1524,14 @@ sub _buildup {
     $self->add_func(name => 'aq',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my ($cmd, $arg) = split(/ /,$message, 2);
 
             return unless (defined $arg) && (length $arg);
 
-            my @test = [$ident, $arg, $channel, time()];
+            my @quote_row = [$ident, $arg, $channel, time()];
 
-            # push($self->{quotesdb}, @test);
-
-            $self->write_quote_row(@test);
+            $self->write_quote_row(@quote_row);
 
             my $quote_count = scalar @{$self->{quotesdb}};
 
@@ -1546,28 +1545,21 @@ sub _buildup {
     $self->add_func(name => 'commands',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
             #my $cmd_names = _->pluck(\@commands, 'name');
 
             my @copy = @commands;
-
             my $iter = List::MoreUtils::natatime 2, @copy;
-
             my $si1 = String::IRC->new('Available Commands:')->bold;
-
 
             $self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $si1);
 
             # $self->send_server_safe (PRIVMSG => $nickname, $si1);
 
             while( my @tmp = $iter->() ){
-
                 my $command_summary = '';
-
                 foreach my $c (@tmp) {
-
                     if($c->{require_admin}) {
                         next unless $self->is_admin($who);
                     }
@@ -1580,8 +1572,6 @@ sub _buildup {
                     my $si = String::IRC->new($c->{name})->bold;
                     $command_summary .= '['.$si.'] -> '.$c->{comment}."  ";
                 }
-
-
                 $self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $command_summary);
                 #$self->send_server_safe (PRIVMSG => $nickname, $command_summary);
                 undef $command_summary;
@@ -1595,16 +1585,10 @@ sub _buildup {
     $self->add_func(name => 'help',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             #my $cmd_names = _->pluck(\@commands, 'name');
-
             my $si = String::IRC->new('Hi '.$nickname.', type .commands in the channel.')->bold;
-
-
             $self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $si);
-
             # $self->send_server_safe (PRIVMSG => $nickname, $si);
 
             return 1;
@@ -1615,17 +1599,12 @@ sub _buildup {
     $self->add_func(name => 'statistics',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my $running_elapsed = Time::Elapsed::elapsed( time - $self->{start_time });
-
             my $basic_info = sprintf("Hadouken %s by dek. Current uptime: %s", #$VERSION, $running_elapsed);
                 String::IRC->new($VERSION)->bold, 
                 String::IRC->new($running_elapsed)->bold );
-
             my $msg = sprintf '+OK %s', $self->_encrypt( $basic_info, $self->{keys}->[0] );
-
             $self->send_server_safe (PRIVMSG => $nickname, $msg);
 
             return 1;
@@ -1639,17 +1618,12 @@ sub _buildup {
     $self->add_func(name => 'btc', 
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/btc_usd');
             my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/btc_usd');
-
             my $ret =  "[btc_usd\@btce] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
             my $ret2 = "[btc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
-
             $self->send_server_safe (PRIVMSG => $channel, $ret);
-
             $self->send_server_safe (PRIVMSG => $channel, $ret2);
 
             return 1;
@@ -1660,17 +1634,12 @@ sub _buildup {
     $self->add_func(name => 'ltc', 
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/ltc_usd');
-
             my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/ltc_usd');
-
             my $ret =  "[ltc_usd\@btce] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
-
             my $ret2 = "[ltc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
 
             $self->send_server_safe (PRIVMSG => $channel, $ret);
-
             $self->send_server_safe (PRIVMSG => $channel, $ret2);
 
             return 1;
@@ -1681,11 +1650,8 @@ sub _buildup {
     $self->add_func(name => 'eur2usd', 
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/eur_usd');
-
             my $ret = "[eur_usd] Last: $json->{eur_usd}->{last} Low: $json->{eur_usd}->{low} High: $json->{eur_usd}->{high} Avg: $json->{eur_usd}->{avg} Vol: $json->{eur_usd}->{vol}";
-
             $self->send_server_safe (PRIVMSG => $channel, $ret);
 
             return 1;
@@ -1697,17 +1663,11 @@ sub _buildup {
         connect => sub {
             my ($con, $err) = @_;
             if (defined $err) {
-
                 warn "* Couldn't connect to server: $err\n";
-
                 if ($self->{reconnect}){
-
                     warn "* Reconnecting in ".$self->{reconnect_delay}."\n";
-
                     Time::HiRes::sleep $self->{reconnect_delay};
-
                     warn "* Trying to reconnecting...\n";
-
                     $self->{reconnecting} = 1;
                     $self->_start;
                 } else {
@@ -1720,18 +1680,12 @@ sub _buildup {
             $self->connect_time(time());
         },
         disconnect => sub {
-
             $self->{connected} = 0;
-
             warn "* Disconnected\n";
-
             if ($self->{reconnect}) {
                 warn "* Reconnecting in ".$self->{reconnect_delay}."\n";
-
                 Time::HiRes::sleep $self->{reconnect_delay};
-
                 warn "* Trying to reconnect\n";
-
                 $self->_start;
 
             } else {
@@ -1740,36 +1694,35 @@ sub _buildup {
         },
         join => sub {
             my ($con,$nick, $channel, $is_myself) = (@_);
-
             return if $is_myself;
-
             my $ident = $con->nick_ident($nick);
-
             return unless defined $ident;
-
             if($self->is_admin($ident)) {
-                $self->send_server_safe( MODE => $channel, '+o', $nick);   
-            }
+            
+                my $cur_channel_clean = $channel;
+                $cur_channel_clean =~ s/^\#//;
+                    
+                my $server_hash_ref = $self->{current_server};
 
+                if(exists $server_hash_ref->{channel}{$cur_channel_clean}) {
+                    if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{op_admins}) {
+                        $self->send_server_safe( MODE => $channel, '+o', $nick);   
+                    }
+                }
+
+                # $self->send_server_safe( MODE => $channel, '+o', $nick);   
+            }
         },
         kick => sub {
             my($con, $kicked_nick, $channel, $is_myself, $msg, $kicker_nick) = (@_);
-
             warn "* KICK CALLED -> $kicked_nick by $kicker_nick from $channel with message $msg -> is myself: $is_myself!\n";
-
             # warn "my nick is ". $self->{con}->nick() ."\n";
-
             if($self->{con}->nick() eq $kicked_nick || $self->{con}->is_my_nick($kicked_nick)) {
-
                 if($self->{rejoin_on_kick}) {
                     warn "* Rejoining $channel automatically\n";
-
                     $self->send_server_safe (JOIN => $channel);
                 }
-
-
                 # my $si = String::IRC->new($kicker_nick)->red->bold;
-
                 # $self->send_server_safe (PRIVMSG => $channel,"kicked by $si, behavior logged");
             }
         },
@@ -1871,18 +1824,33 @@ sub _buildup {
 
                 if ( $message =~ m{($RE{URI})}gos ) {
 
-                    my $get_title = $self->is_admin($who);
-                    my ($shrt_url,$shrt_title) = $self->_shorten($message, $get_title );
+                    my $cur_channel_clean = $channel;
+                    $cur_channel_clean =~ s/^\#//;
+                    
+                    warn "* Matched a URL\n";
 
-                    if(defined($shrt_url) && $shrt_url ne '') {
+                    my $server_hash_ref = $self->{current_server};
 
-                        if(defined($shrt_title) && $shrt_title ne '') {
-                            $self->send_server_safe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
-                        } else {
-                            $self->send_server_safe (PRIVMSG => $channel, "$shrt_url");      
+                    if(exists $server_hash_ref->{channel}{$cur_channel_clean}) {
+                        if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{shorten_urls}) {
+
+                            warn "* shorten_urls IS set for this channel\n";
+
+                            # Only get titles if admin, since we trust admins.
+                            my $get_title = $self->is_admin($who);
+                            
+                            my ($shrt_url,$shrt_title) = $self->_shorten($message, $get_title );
+
+                            if(defined($shrt_url) && $shrt_url ne '') {
+                                if(defined($shrt_title) && $shrt_title ne '') {
+                                    $self->send_server_safe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
+                                } else {
+                                    $self->send_server_safe (PRIVMSG => $channel, "$shrt_url");      
+                                }
+                            }
                         }
-
                     }
+
                 }
             }
         });
@@ -1949,14 +1917,19 @@ sub _start {
     $self->_buildup();
 
     my $server_count = scalar @{$self->{servers}};
-    my $server_hashref = $self->{servers}[int rand $server_count];
+    $self->{current_server_index} = int rand $server_count;
 
+    my $server_hashref = $self->{servers}[$self->{current_server_index}]; 
     my @servernames = keys $server_hashref;
     my $server_name = $servernames[0];
 
-    $self->{server_name} = $server_hashref->{$server_name};
+    $self->{current_server} = $server_hashref->{$server_name};
+    $self->{server_name} = $server_name;
+    my @channels = keys $server_hashref->{$server_name}{channel};
 
-    foreach my $chan ( @{$server_hashref->{$server_name}{channel}} ) {
+    # TODO: Handle if no channels defined.
+    foreach my $chan (@channels) {
+    #foreach my $chan ( @{$server_hashref->{$server_name}{channel}} ) {
 
         $chan = "#".$chan unless($chan =~ m/^\#/); # Append # if doesn't begin with.
 
@@ -2147,6 +2120,7 @@ sub _shorten {
 
                 if ($p->get_tag("title")) {
                     $title = $p->get_trimmed_text;
+                    $title =~ s/[^[:ascii:]]+//g;
                 }
             }
 
@@ -2154,6 +2128,7 @@ sub _shorten {
     }
     catch($e) {
         $shortenurl = '';
+        $title = '';
         warn "Error occured at shorten with url $url - $e";
     }
 

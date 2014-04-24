@@ -12,6 +12,8 @@ use Config::General;
 use TryCatch;
 use namespace::autoclean;
 
+use Data::Printer alias => 'Dumper', colored => 1;
+
 my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
 # Change into the current file directory
@@ -36,6 +38,9 @@ my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $config_filenam
 
 my %config = $conf->getall;
 
+#print Dumper(%config);
+#exit(0);
+
 my $log_filename = exists $config{log} ? Cwd::abs_path($config{log}) : '/var/log/hadouken.log';
 
 my $pid_filename = exists $config{pid} ? Cwd::abs_path($config{pid}) : '/var/run/hadouken.pid';
@@ -53,10 +58,17 @@ unless(exists $config{admin} && $config{server}) {
     die "Missing configuration values";
 }
 
+sub on_config_update {
+
+}
+
 my $cb = Hadouken->new_with_options(
     nick => 'hadouken',
     servers => [ $config{server} ],
     admin => $config{admin},
+    config_hash => \%config,
+    config_filename => $config_filename,
+    conf_obj => $conf,
     rejoin_on_kick => 1,
     quote_limit => $config{quote_limit} || '2',
     safe_delay => $config{safe_delay} || '0.25',
@@ -88,6 +100,7 @@ my $daemon = Daemon::Control->new(
     stdout_file => $log_filename,
 
     fork        => 2,
+    quiet       => 0,
 );
 
 $daemon->user($config{user}) if(exists $config{user});
