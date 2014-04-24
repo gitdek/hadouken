@@ -6,64 +6,94 @@ use warnings;
 use Hadouken;
 
 use Cwd ();
-
 use File::Basename();
-
 use Daemon::Control;
-
 use Config::General;
-
 use TryCatch;
-
 use namespace::autoclean;
 
 my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
+# Change into the current file directory
+# so items in our config are relative from here.
+chdir $filedirname;
+
+my $config_flag = "--config=";
+
 my $config_filename = '/etc/hadouken.conf';
 
-my $log_filename = '/var/log/hadouken.log';
+if (my ($idx) = grep $ARGV[$_] =~ $config_flag, 0 .. $#ARGV) {
+    my($flag,$cf) = split(/=/, $ARGV[$idx]);
+    splice @ARGV,$idx,1; # Remove so it does not affect the Daemon.
+    $config_filename = $cf;
+}
 
-my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $config_filename, -AutoTrue => "yes") or die "Config file missing!";
+unless(-e $config_filename && -r $config_filename) {
+    die "Error reading configuration file";
+}
+
+my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $config_filename, -AutoTrue => "yes");
 
 my %config = $conf->getall;
 
-# todo: check for required config items.
-#
+my $log_filename = exists $config{log} ? Cwd::abs_path($config{log}) : '/var/log/hadouken.log';
+
+my $pid_filename = exists $config{pid} ? Cwd::abs_path($config{pid}) : '/var/run/hadouken.pid';
+
+my $rsakey_filename = exists $config{rsa_key_file} ? Cwd::abs_path($config{rsa_key_file}) : '';
+
+if($rsakey_filename ne '') {
+    # Make sure file exists and is readable by effective uid/gid.
+    unless(-e $rsakey_filename && -r $rsakey_filename) {
+        die "RSA key is specified but does not exist.";
+    }
+}
+
+unless(exists $config{admin} && $config{server}) {
+    die "Missing configuration values";
+}
 
 my $cb = Hadouken->new_with_options(
-  nick => 'hadouken',
-  servers => [ $config{server} ],
-  admin => $config{admin},
-  rejoin_on_kick => 1,
-  quote_limit => $config{quote_limit} || '2',
-  safe_delay => $config{safe_delay} || '0.25',
-  bitly_user_id => $config{bitly_user_id} || '', # To disable shortening, remove from config!
-  bitly_api_key => $config{bitly_api_key} || '',
-  private_rsa_key_filename => $config{rsa_key_file} || '',
-  private_rsa_key_password => $config{rsa_key_password} || '',
-  blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
-  ownerdir => $filedirname,
+    nick => 'hadouken',
+    servers => [ $config{server} ],
+    admin => $config{admin},
+    rejoin_on_kick => 1,
+    quote_limit => $config{quote_limit} || '2',
+    safe_delay => $config{safe_delay} || '0.25',
+    bitly_user_id => $config{bitly_user_id} || '', # To disable shortening, remove from config!
+    bitly_api_key => $config{bitly_api_key} || '',
+    private_rsa_key_filename => $rsakey_filename,
+    private_rsa_key_password => $config{rsa_key_password} || '',
+    blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
+    ownerdir => $filedirname,
+    reconnect => $config{reconnect} || 1,
+    reconnect_delay => $config{reconnect_delay} || 30,
 );
 
 
 my $daemon = Daemon::Control->new(
-  name        => "Hadouken",
-  lsb_start   => '$syslog $remote_fs',
-  lsb_stop    => '$syslog',
-  lsb_sdesc   => 'Hadouke bot',
-  lsb_desc    => 'Hadouken bot by dek',
+    name        => "Hadouken",
+    lsb_start   => '$syslog $remote_fs',
+    lsb_stop    => '$syslog',
+    lsb_sdesc   => 'Hadouke bot',
+    lsb_desc    => 'Hadouken bot by dek',
 
-  program => sub { $cb->start },
+    program => sub { $cb->start },
 
-  help => "What?\n\n",
-  kill_timeout => 6,
+    help => "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n",
+    kill_timeout => 6,
 
-  pid_file    => $filedirname.'/hadouken.pid',
-  stderr_file => $log_filename,
-  stdout_file => $log_filename,
+    pid_file    => $pid_filename,
+    stderr_file => $log_filename,
+    stdout_file => $log_filename,
 
-  fork        => 2,
+    fork        => 2,
 );
+
+$daemon->user($config{user}) if(exists $config{user});
+
+$daemon->group($config{group}) if(exists $config{group});
+
 
 my ($command) = @{$cb->extra_argv};
 
@@ -72,22 +102,22 @@ defined $command || die "No command specified";
 my $exit_code;
 
 if ($command eq 'stop') {
-  $daemon->pretty_print("Shutting Down", "red") if(defined $cb->start_time && $cb->start_time ne '');
+    $daemon->pretty_print("Shutting Down", "red") if(defined $cb->start_time && $cb->start_time ne '');
 
-  $cb->stop(); # Clean disconnect.
+    $cb->stop(); # Clean disconnect.
 
-  $exit_code = $daemon->run_command('stop');
-  exit($exit_code || 0);
+    $exit_code = $daemon->run_command('stop');
+    exit($exit_code || 0);
 }
 
 try {
-  $exit_code = $daemon->run_command($command);
+    $exit_code = $daemon->run_command($command);
 }
 catch (Str $e where { $_ =~ /^Error: undefined action/i } ) {
-  warn "You must specify an action.\n";
+    warn "You must specify an action.\n";
 }
 catch($e) {
-  warn $e,"\n";
+    warn $e,"\n";
 }
 
 exit(($exit_code || 0));

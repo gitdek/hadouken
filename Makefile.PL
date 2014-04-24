@@ -3,21 +3,20 @@ use warnings;
 #use ExtUtils::MakeMaker;
 use inc::Module::Install;
 
+license 'gpl';
+
 WriteMakefile(
     NAME                => 'Hadouken',
     AUTHOR              => q{dek <dek@dek.bz>},
     VERSION_FROM        => 'lib/Hadouken.pm',
     ABSTRACT            => 'Hadouken',
-    ($ExtUtils::MakeMaker::VERSION >= 6.3002
-      ? ('LICENSE'=> 'perl')
-      : ()),
-    CONFIGURE_REQUIRES => { 
+    CONFIGURE_REQUIRES  => { 
         'ExtUtils::MakeMaker'   => 0, 
         'YAML',                 => 0,
         'Test::More'            => 0,
         'File::Copy'            => 0 
     },
-    PREREQ_PM => {
+    PREREQ_PM           => {
         'Cwd'                   => 0,
         'Moose'                 => 0,
         'List::MoreUtils'       => 0,
