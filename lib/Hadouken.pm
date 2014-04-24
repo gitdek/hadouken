@@ -6,7 +6,7 @@ use diagnostics;
 
 # use 5.014;
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 our $AUTHOR = 'dek';
 
 # use Data::Dumper;
