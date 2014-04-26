@@ -10,11 +10,10 @@ use diagnostics;
 our $VERSION = '0.3';
 our $AUTHOR = 'dek';
 
-use Data::Dumper;
-#use Data::Printer alias => 'Dumper', colored => 1;
+
+use Data::Printer alias => 'Dumper', colored => 1;
 
 use Cwd ();
-
 use List::MoreUtils ();
 use List::Util ();
 
@@ -32,35 +31,49 @@ use POSIX qw(strftime);
 use Time::HiRes qw( time sleep );
 use Geo::IP;
 use Yahoo::Weather;
-
 use Tie::Array::CSV;
 use Text::CSV_XS;
 use Regexp::Common;
 use String::IRC;
 use Net::Whois::IP ();
-
 use Crypt::RSA;
 use Convert::PEM;
 use MIME::Base64 ();
 use Crypt::OpenSSL::RSA;
 use Crypt::Blowfish_PP;
+use Crypt::DH;
+use Math::BigInt;
+
+use Config::General;
 
 use Time::Elapsed ();
-
 use TryCatch;
 use Config::General;
+use Crypt::Random;
 use Moose;
-
-use utf8::all;
 
 with 'MooseX::Getopt::GLD' => { getopt_conf => [ 'pass_through' ] };
 
-use namespace::autoclean;
+# use namespace::autoclean; ### CANNOT USE !
+
+use utf8::all;
+
+use File::Spec;
+use FindBin qw($Bin);
+use Module::Pluggable search_dirs => [ "$Bin/plugins/" ], sub_name => '_plugins';
 
 has 'start_time' => (is => 'rw', isa => 'Str', required => 0);
 has 'connect_time' => (is => 'rw', isa => 'Str', required => 0);
 has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.25');
 has 'quote_limit' => (is => 'rw', isa => 'Str', required => 0, default => '3');
+
+has loaded_plugins => (
+    is => 'rw',
+    isa => 'HashRef[Object]',
+    lazy_build => 1,
+    traits => [ 'Hash' ],
+    handles => { _plugin => 'get' },
+);
 
 my $command_prefix = '^(\.|hadouken\s+|hadouken\,\s+)'; # requested remove of ! by nesta.
 
@@ -110,7 +123,136 @@ sub new {
 
     $self->_set_key( 'all', $self->{blowfish_key} );
 
+    #my $wee = $self->_plugin("StockTicker") if(defined $self->_plugin("StockTicker"));
+
+
+    $self->{plugin_regexes} = ();
+
+    foreach my $plugin (keys %{$self->loaded_plugins}) { 
+        my $mod = $self->_plugin($plugin);
+        my $rx = $mod->command_regex;
+        push @{$self->{plugin_regexes}}, {name => "$plugin", regex => $rx};
+    }
+
     return $self;
+}
+
+sub available_modules {
+    my $self = shift;
+
+    my @central_modules =
+    map {
+    my $mod = $_;
+    $mod =~ s/^Hadouken::Plugin:://;
+    $mod;
+    } $self->_plugins();
+
+    my @local_modules =
+    map { substr( ( File::Spec->splitpath($_) )[2], 0, -3 ) } glob('./*.pm'),
+    glob('./plugins/*.pm');
+
+    my @modules = sort @local_modules, @central_modules;
+
+    return @modules;            
+}
+
+sub _build_loaded_plugins {
+    my ($self) = @_;
+
+    my %loaded_plugins;
+    for my $plugin ($self->available_modules) {
+
+        my $m = undef;
+        my $command_regex = undef;
+
+        try {
+            $m = $self->load($plugin);
+
+            # Make sure not a blank regex.
+            $m = undef unless $m->can('command_regex');
+            $command_regex = $m->command_regex;
+
+            $m = undef unless defined $command_regex && $command_regex ne '';
+
+            $m = undef unless $m->can('command_name');
+            $m = undef unless $m->can('command_comment');
+            $m = undef unless $m->can('acl_check');
+            $m = undef unless $m->can('command_run');
+        }
+        catch($e) {
+            $m = undef;
+            warn "Plugin $plugin failed to load: $e";
+        }
+
+        next unless defined $m;
+
+        $loaded_plugins{$plugin} = $m;
+
+        my $ver = $m->VERSION || '0.0';
+
+        warn "Plugin $plugin $ver added successfully.\n";
+    }
+
+    return \%loaded_plugins;
+}
+
+sub load {
+    my $self   = shift;
+    my $module = shift;
+
+    # it's safe to die here, mostly this call is eval'd.
+    die "Cannot load module without a name" unless $module;
+    #die("Module $module already loaded") if $self->_plugin($module);
+
+    my $filename = $module;
+    $filename =~ s{::}{/}g;
+    my $file = "$filename.pm";
+
+    $file = "./$filename.pm"         if ( -e "./$filename.pm" );
+    $file = "./plugins/$filename.pm" if ( -e "./plugins/$filename.pm" );
+
+    warn "Loading module $module from file $file\n";
+
+    # force a reload of the file (in the event that we've already loaded it).
+    no warnings 'redefine';
+    delete $INC{$file};
+
+    try { require $file } catch { die "Can't load $module: $_"; };
+
+    no strict;
+    *{"Hadouken::Plugin::$module\::new"}     = sub { 
+        my $c = shift;
+        my $s = {@_};
+        bless $s, $c;
+        return $s; 
+    };
+
+    no warnings 'redefine';
+    *{"Hadouken::Plugin::$module\::send_server"} = sub { my $self = shift; $self->{Owner}->send_server_safe(@_); $self->{last_sent} = time(); };
+    *{"Hadouken::Plugin\::$module\::last_sent"} = $self->_make_accessor('last_sent');
+
+    my $m = "Hadouken::Plugin::$module"->new(
+        Owner   => $self,
+        Param => \@_
+    );
+
+    die "->new didn't return an object" unless ( $m and ref($m) );
+    die( ref($m) . " isn't a $module" ) unless ref($m) =~ /\Q$module/;
+
+    #$self->add_handler( $m, $module );
+
+    return $m;
+}
+
+sub _make_accessor {
+    my $self = shift;
+    my $attribute = shift;
+    return sub {
+        my $self            = shift;
+        my $new_val         = shift;
+        $self->{$attribute} = $new_val if defined $new_val;
+        return $self->{$attribute};
+    };
 }
 
 sub stop {
@@ -125,6 +267,122 @@ sub stop {
         $self->{con}->disconnect();
     }
 }
+
+# Maybe add in config file watching and reload?
+#
+sub reload_config {
+    my ($self) = @_;
+
+    my $ret = 0;
+
+    try {
+        my $config_filename = $self->{config_filename};
+        my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $config_filename, -AutoTrue => 1);                                                   
+        my %config = $conf->getall;
+
+        $self->{conf_obj} = $conf;
+        $self->{config_hash} = \%config;
+    }
+    catch($e) {
+        $ret = 1;
+        warn "Error reloading config $e\n";
+    }
+
+    return $ret;
+}
+
+sub dh_key_exchange {
+    my ($self,$user,$key) = @_;
+
+    return;
+
+    my $dh = Crypt::DH->new;
+
+    my $g=0;
+    while ($g<2){$g=int(rand(10));}
+
+    $dh->g($g);
+    my $p = $self->generate_prime;
+    $dh->p($p);
+
+    $dh->generate_keys;
+
+    my $my_pub_key = $dh->pub_key;
+    my $my_priv_key = $dh->priv_key;
+
+
+    my $decoded_key = MIME::Base64::decode_base64($key);
+
+    my $binstring = unpack('B*',pack ('a*', $decoded_key));
+
+    my $shared_secret = $dh->compute_secret( $binstring );
+
+    my $tempkey = unpack('B*',pack ('a*', $my_priv_key));
+
+    my $shared_bin = unpack('B*',pack ('a*', $shared_secret));    
+
+    $self->_set_key('all',$shared_secret);
+
+    #warn $shared_bin;
+
+    my $public_bin = unpack('B*',pack ('a*', $my_pub_key));
+
+    my $enc_key = MIME::Base64::encode_base64($my_pub_key,'');
+
+    warn $enc_key,"\n";
+
+    my $dhfinish = 'DH1080_FINISH '. $enc_key;
+
+    $self->send_server_safe(NOTICE => $user, $dhfinish);
+
+    #warn "* Shared secret $shared_secret\n";
+
+}
+
+sub generate_prime {
+    my ($self) = @_;
+
+    my $p = new Math::BigInt('0');
+
+    do {
+        # generate a random number composed of random binary digits
+        my $i=1;
+        my $n="";
+        while ($i<=254){
+            $n=$n.int(rand(2));
+            $i++;
+        }
+        # add 1 at the beginning and the end of n
+        # then $n is big and odd
+        $n = "1".$n."1";
+
+        # convert n into a bigint via binary conversion
+        my $bign = new Math::BigInt('0');
+        foreach my $i (1..256){
+            if(substr($n,-$i,1) eq '1'){$bign->badd(2**($i-1));}
+        }
+
+        my $temoin = new Math::BigInt('2');
+        if ($temoin->bmodpow(($bign-1),$bign) == 1){
+            $temoin->bone();$temoin->bmul(3);
+            if ($temoin->bmodpow(($bign-1),$bign) == 1){
+                $temoin->bone();$temoin->bmul(5);
+                if ($temoin->bmodpow(($bign-1),$bign) == 1){
+                    $temoin->bone();$temoin->bmul(7);
+                    if ($temoin->bmodpow(($bign-1),$bign) == 1){
+                        $p->bone();
+                        $p->bmul($bign);
+                    }
+                }
+            }
+        }
+
+    } while ($p == 0);    
+
+
+    return $p;
+}
+
 
 sub readPrivateKey {
     my ($self,$file,$password) = @_;
@@ -162,7 +420,6 @@ sub decryptPEM {
 
     $pem->encode(Content => $pkey);
 }
-
 
 sub start {
     my ($self) = @_;
@@ -202,12 +459,14 @@ before 'send_server_long_safe' => sub {
     Time::HiRes::sleep($self->safe_delay);
 };
 
+sub send_server {&send_server_safe}
+
 sub send_server_safe {
     my ($self,$command, @params) = @_;
     return unless defined $self->{con} && defined $command;
-    
+
     encode ('utf8', $_  ) foreach @params;
-    
+
     $self->{con}->send_srv($command,@params);
 }
 
@@ -223,7 +482,7 @@ sub channel_add {
 
     my $conf = $self->{config_hash};
     my $server_name = $self->{server_name};
-    
+
     $channel =~ s/^\#//;
     $conf->{server}{$server_name}{channel}{$channel}{shorten_urls} = 1;
     $conf->{server}{$server_name}{channel}{$channel}{op_admins} = 1;
@@ -232,7 +491,7 @@ sub channel_add {
     $self->{conf_obj}->save_file($self->{config_filename}, $conf);
 
     $self->send_server_safe (JOIN => '#'.$channel);
-    
+
     return 1;
 }
 
@@ -242,9 +501,9 @@ sub channel_del {
 
     my $conf = $self->{config_hash};
     my $server_name = $self->{server_name};
-    
+
     $channel =~ s/^\#//;
-    
+
     if(exists $conf->{server}{$server_name}{channel}{$channel}) {
         delete $conf->{server}{$server_name}{channel}{$channel};
     }
@@ -252,7 +511,7 @@ sub channel_del {
     $self->{conf_obj}->save_file($self->{config_filename}, $conf);
 
     $self->send_server_safe (PART => '#'.$channel);
-    
+
     return 1;
 }
 
@@ -368,8 +627,6 @@ sub map {
     return $self->_finalize($result);
 }
 
-sub toArray {&to_array}
-
 sub to_array {
     my $self = shift;
     my ($list) = $self->_prepare(@_);
@@ -421,7 +678,6 @@ sub pluck {
 sub passive_acl {
     my $self = shift;
     my ($who, $message, $channel, $channel_list) = @_;
-
     my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
     if($self->is_admin($who)) {
@@ -449,7 +705,6 @@ sub passive_acl {
 sub global_acl {
     my $self = shift;
     my ($who, $message, $channel, $channel_list) = @_;
-
     my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
     if($self->is_admin($who)) {
@@ -468,7 +723,6 @@ sub global_acl {
 
 sub blacklisted {
     my ($self, $who) = @_;
-
     my ($nick,$host) = $self->get_nick_and_host($who);
 
     $nick = lc($nick);
@@ -483,7 +737,6 @@ sub blacklisted {
 
 sub whitelisted {
     my ($self, $who) = @_;
-
     my ($nick,$host) = $self->get_nick_and_host($who);
 
     $nick = lc($nick);
@@ -519,7 +772,7 @@ sub is_admin {
     $host = lc($host);
 
     if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host : lc($_->[1]) eq $host && lc($_->[0]) eq $nick } @{$self->{adminsdb}}) {
-        warn "* Wildcard matching !\n";
+        # warn "* Wildcard matching !\n";
         return 1;
     }
     return 0;
@@ -531,7 +784,6 @@ sub admin_delete {
     return unless $self->is_admin($who) && defined $statement;
 
     my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
-
     my ($nick, $host) = $self->get_nick_and_host($statement);
 
     return unless defined($nick) && defined($host);
@@ -552,7 +804,6 @@ sub admin_add {
     return unless $self->is_admin($who) && defined $statement;
 
     my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
-
     my ($nick, $host) = $self->get_nick_and_host($statement);
 
     return unless defined($nick) && defined($host);
@@ -572,7 +823,6 @@ sub whitelist_add {
     return unless $self->is_admin($who) && defined $statement;
 
     my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
-
     my ($nick, $host) = $self->get_nick_and_host($statement);
 
     return unless defined($nick) && defined($host);
@@ -592,7 +842,6 @@ sub whitelist_delete {
     return unless $self->is_admin($who) && defined $statement;
 
     my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
-
     my ($nick, $host) = $self->get_nick_and_host($statement);
 
     return unless defined($nick) && defined($host);
@@ -613,7 +862,6 @@ sub blacklist_add {
     return unless $self->is_admin($who) && defined $statement;
 
     my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
-
     my ($nick, $host) = $self->get_nick_and_host($statement);
 
     return unless defined($nick) && defined($host);
@@ -633,7 +881,6 @@ sub blacklist_delete {
     return unless $self->is_admin($who) && defined $statement;
 
     my ($creator_nick,$creator_host) = $self->get_nick_and_host($who);
-
     my ($nick, $host) = $self->get_nick_and_host($statement);
 
     return unless defined($nick) && defined($host);
@@ -756,7 +1003,6 @@ sub _buildup {
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my $ref_modes = $self->{con}->nick_modes ($channel, $nickname);
 
             return unless defined $ref_modes;
@@ -777,13 +1023,11 @@ sub _buildup {
     $self->add_func(name => 'channeldel',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my ($cmd, $arg) = split(/ /, $message, 2);
 
             return unless ((defined $arg) && ($self->{con}->is_channel_name($arg)));
-            
+
             $self->channel_del($arg);
 
             return 1;
@@ -797,13 +1041,11 @@ sub _buildup {
     $self->add_func(name => 'channeladd',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my ($cmd, $arg) = split(/ /, $message, 2);
 
             return unless ((defined $arg) && ($self->{con}->is_channel_name($arg)));
-            
+
             $self->channel_add($arg);
 
             return 1;
@@ -817,9 +1059,7 @@ sub _buildup {
     $self->add_func(name => 'admindel',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
-
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
             my ($cmd, $arg) = split(/ /, lc($message), 2);
 
             return unless defined $arg;
@@ -1501,13 +1741,13 @@ sub _buildup {
             my ($who, $message, $channel, $channel_list) = @_;
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
             my @quote_indexes;
-            
+
             @quote_indexes = List::MoreUtils::indexes { $_->[2] eq $channel } @{$self->{quotesdb}};
-            
+
             return unless(@quote_indexes);
 
             my $channel_quote_count = scalar @quote_indexes;
-            
+
             if ($channel_quote_count > 0) {
                 my @last_quote = $self->{quotesdb}[$quote_indexes[int($channel_quote_count - 1)]];
                 my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($last_quote[0][0]);
@@ -1553,7 +1793,9 @@ sub _buildup {
             my $iter = List::MoreUtils::natatime 2, @copy;
             my $si1 = String::IRC->new('Available Commands:')->bold;
 
-            $self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $si1);
+
+            $self->send_server_safe (NOTICE => $nickname, $si1);
+            #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $si1);
 
             # $self->send_server_safe (PRIVMSG => $nickname, $si1);
 
@@ -1572,7 +1814,10 @@ sub _buildup {
                     my $si = String::IRC->new($c->{name})->bold;
                     $command_summary .= '['.$si.'] -> '.$c->{comment}."  ";
                 }
-                $self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $command_summary);
+
+
+                $self->send_server_safe (NOTICE => $nickname, $command_summary);
+                #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $command_summary);
                 #$self->send_server_safe (PRIVMSG => $nickname, $command_summary);
                 undef $command_summary;
             }
@@ -1628,8 +1873,11 @@ sub _buildup {
 
             return 1;
         },
-        acl => $passive_acl,
-    );
+        acl => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my $ret = $self->is_admin($who);
+            return $ret;
+        });
 
     $self->add_func(name => 'ltc', 
         delegate => sub {
@@ -1644,8 +1892,11 @@ sub _buildup {
 
             return 1;
         },
-        acl => $passive_acl,
-    );
+        acl => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my $ret = $self->is_admin($who);
+            return $ret;
+        });
 
     $self->add_func(name => 'eur2usd', 
         delegate => sub {
@@ -1698,16 +1949,14 @@ sub _buildup {
             my $ident = $con->nick_ident($nick);
             return unless defined $ident;
             if($self->is_admin($ident)) {
-            
+
                 my $cur_channel_clean = $channel;
                 $cur_channel_clean =~ s/^\#//;
-                    
+
                 my $server_hash_ref = $self->{current_server};
 
-                if(exists $server_hash_ref->{channel}{$cur_channel_clean}) {
-                    if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{op_admins}) {
-                        $self->send_server_safe( MODE => $channel, '+o', $nick);   
-                    }
+                if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{op_admins} == 1) {
+                    $self->send_server_safe( MODE => $channel, '+o', $nick);   
                 }
 
                 # $self->send_server_safe( MODE => $channel, '+o', $nick);   
@@ -1826,32 +2075,53 @@ sub _buildup {
 
                     my $cur_channel_clean = $channel;
                     $cur_channel_clean =~ s/^\#//;
-                    
+
                     warn "* Matched a URL\n";
 
                     my $server_hash_ref = $self->{current_server};
 
-                    if(exists $server_hash_ref->{channel}{$cur_channel_clean}) {
-                        if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{shorten_urls}) {
+                    if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{shorten_urls} == 1 ) {
 
-                            warn "* shorten_urls IS set for this channel\n";
+                        warn "* shorten_urls IS set for this channel\n";
 
-                            # Only get titles if admin, since we trust admins.
-                            my $get_title = $self->is_admin($who);
-                            
-                            my ($shrt_url,$shrt_title) = $self->_shorten($message, $get_title );
+                        # Only get titles if admin, since we trust admins.
+                        my $get_title = $self->is_admin($who);
 
-                            if(defined($shrt_url) && $shrt_url ne '') {
-                                if(defined($shrt_title) && $shrt_title ne '') {
-                                    $self->send_server_safe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
-                                } else {
-                                    $self->send_server_safe (PRIVMSG => $channel, "$shrt_url");      
-                                }
+                        my ($shrt_url,$shrt_title) = $self->_shorten($message, $get_title );
+
+                        if(defined($shrt_url) && $shrt_url ne '') {
+                            if(defined($shrt_title) && $shrt_title ne '') {
+                                $self->send_server_safe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
+                            } else {
+                                $self->send_server_safe (PRIVMSG => $channel, "$shrt_url");      
                             }
                         }
                     }
-
                 }
+
+                # Try to match a plugin command last(but not least).
+
+                my $clean_msg = AnyEvent::IRC::Util::filter_colors($message);
+                my $user_admin = $self->is_admin($who);
+                my $user_whitelisted = $self->whitelisted($who);
+
+
+                # Regex is cached ahead of time
+                for my $plugin_regex (@{$self->{plugin_regexes}}) {
+                    my $plugin = $plugin_regex->{name};
+                    my $regex = $plugin_regex->{regex};
+                    if($clean_msg =~ /$command_prefix$regex/) {
+                        my $m = $self->_plugin($plugin); # lazy load plugin :)
+                        my $plugin_acl_ret = $m->acl_check($nickname, $ident, $clean_msg, $channel || undef,$user_admin,$user_whitelisted);
+                        warn "* Plugin $plugin -> ACL returned $plugin_acl_ret\n";
+                        if($plugin_acl_ret) {
+                            warn "* Plugin $plugin -> Calling delegate\n";
+                            my $cmd_ret = $m->command_run($nickname, $ident, $clean_msg, $channel || undef, $user_admin, $user_whitelisted);
+                        }
+                    }
+                }
+
+
             }
         });
 
@@ -1863,6 +2133,61 @@ sub _buildup {
             if(defined $msg->{prefix}) {
                 my ($m,$nick,$ident) = $con->split_nick_mode ($msg->{prefix});
                 warn "< " .$cmd."\t\t$nick\t".$params."\n";
+
+                if($cmd eq 'NOTICE') {
+                    warn "* NOTICE ". $params ."\n";
+
+                    my ($notice_dest,$notice_msg) = @{$msg->{params}};
+
+                    if($notice_dest eq $self->{nick}) {
+                        if($notice_msg  =~ 'DH1080_INIT') {
+                            my ($h,$pubkey) = split(/ /,$notice_msg);
+                            if(defined $pubkey && $pubkey ne '') {
+
+                                warn "* Key Exchange Initialized\n";
+
+                                $self->dh_key_exchange($nick,$pubkey);
+
+                            }
+                        }
+                    }
+                }
+
+                if($cmd eq 'MODE') {
+                    my ($chan, $modeset) = @{$msg->{params}};
+                    if(defined $chan && $chan ne '' && $chan =~ /^#/ ) {
+                        my $cur_channel_clean = $chan;
+                        $cur_channel_clean =~ s/^\#//;
+
+                        my $server_hash_ref = $self->{current_server};
+                        if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{protect_admins} == 1) {
+
+                            my @x = List::MoreUtils::after { $_ =~ '-o' } @{$msg->{params}};
+
+                            return unless(@x);
+
+                            my @admins = grep { $self->is_admin($con->nick_ident($_)) } @x;
+
+                            return unless(@admins);
+
+                            my $it = List::MoreUtils::natatime 3, @admins;
+
+                            while (my @vals = $it->()) {
+                                my $mode = '+';
+                                $mode .= 'o' x ($#vals + 1);
+
+                                warn "* Protect triggered in $chan, setting MODE $mode ".join('  ',@vals) ."\n";
+
+                                unshift(@vals,$mode);
+                                $self->send_server_safe( MODE => $chan, @vals);
+                            }
+
+                        }
+                    }
+                }
+
+                #}
+
             } else {
                 warn "< " .$cmd."\t\t".$params."\n";
             }
@@ -1929,7 +2254,7 @@ sub _start {
 
     # TODO: Handle if no channels defined.
     foreach my $chan (@channels) {
-    #foreach my $chan ( @{$server_hashref->{$server_name}{channel}} ) {
+        #foreach my $chan ( @{$server_hashref->{$server_name}{channel}} ) {
 
         $chan = "#".$chan unless($chan =~ m/^\#/); # Append # if doesn't begin with.
 

@@ -34,7 +34,7 @@ unless(-e $config_filename && -r $config_filename) {
     die "Error reading configuration file";
 }
 
-my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $config_filename, -AutoTrue => "yes");
+my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $config_filename, -AutoTrue => 1);
 
 my %config = $conf->getall;
 
@@ -82,8 +82,7 @@ my $cb = Hadouken->new_with_options(
     reconnect_delay => $config{reconnect_delay} || 30,
 );
 
-
-my $daemon = Daemon::Control->new(
+my %daemon_args = ( 
     name        => "Hadouken",
     lsb_start   => '$syslog $remote_fs',
     lsb_stop    => '$syslog',
@@ -103,10 +102,10 @@ my $daemon = Daemon::Control->new(
     quiet       => 0,
 );
 
-$daemon->user($config{user}) if(exists $config{user});
+$daemon_args{user} = $config{user} if(exists $config{user});
+$daemon_args{group} = $config{group} if(exists $config{group});
 
-$daemon->group($config{group}) if(exists $config{group});
-
+my $daemon = Daemon::Control->new(%daemon_args);
 
 my ($command) = @{$cb->extra_argv};
 

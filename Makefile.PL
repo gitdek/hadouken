@@ -51,6 +51,7 @@ WriteMakefile(
         'Daemon::Control'       => 0,
         'Config::General'       => 0,
         'File::Basename'        => 0,
+        'Crypt::DH'             => 0,
     },
 	PM => {'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm'},
 	# EXE_FILES => ['bin/hadouken'],
