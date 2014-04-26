@@ -17,6 +17,7 @@ WriteMakefile(
         'File::Copy'            => 0 
     },
     PREREQ_PM           => {
+        'Scalar::Util'          => 0,
         'Cwd'                   => 0,
         'Moose'                 => 0,
         'List::MoreUtils'       => 0,

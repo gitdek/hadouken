@@ -4,14 +4,21 @@ use strict;
 use warnings;
 use diagnostics;
 
+use constant BIT_ADMIN => 0;
+use constant BIT_WHITELIST => 1;
+use constant BIT_BLACKLIST => 2;
+use constant BIT_OP => 3;
+use constant BIT_VOICE => 4;
+
 # 
 # use 5.014;
 
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
 
+use Scalar::Util ();
 use Cwd ();
 use List::MoreUtils ();
 use List::Util ();
@@ -29,7 +36,6 @@ use JSON::XS qw( decode_json );
 use POSIX qw(strftime);
 use Time::HiRes qw( time sleep );
 use Geo::IP;
-use Yahoo::Weather;
 use Tie::Array::CSV;
 use Text::CSV_XS;
 use Regexp::Common;
@@ -57,10 +63,10 @@ use File::Spec;
 use FindBin qw($Bin);
 use Module::Pluggable search_dirs => [ "$Bin/plugins/" ], sub_name => '_plugins';
 
-has 'start_time' => (is => 'rw', isa => 'Str', required => 0);
-has 'connect_time' => (is => 'rw', isa => 'Str', required => 0);
-has 'safe_delay' => (is => 'rw', isa => 'Str', required => 0, default => '0.25');
-has 'quote_limit' => (is => 'rw', isa => 'Str', required => 0, default => '3');
+has start_time => (is => 'ro', isa => 'Str', writer => '_set_start_time');
+has connect_time => (is => 'ro', isa => 'Str', writer => '_set_connect_time');
+has safe_delay => (is => 'rw', isa => 'Str', required => 0, default => '0.25');
+has quote_limit => (is => 'rw', isa => 'Str', required => 0, default => '3');
 
 has loaded_plugins => (
     is => 'rw',
@@ -89,7 +95,6 @@ my @commands = (
     {name => 'whitelistadd',   regex => 'whitelistadd\s.+?',       comment => 'add whitelist <nick@host>',      require_admin => 1 },
     {name => 'blacklistdel',   regex => 'blacklistdel\s.+?',       comment => 'delete blacklist <nick@host>',   require_admin => 1 },
     {name => 'blacklistadd',   regex => 'blacklistadd\s.+?',       comment => 'add blacklist <nick@host>',      require_admin => 1 },
-    {name => 'weather',        regex => 'weather\s.+?',            comment => 'weather <zip> or <location>' },
     {name => 'shorten',        regex => 'shorten\s.+?',            comment => 'shorten <url>' },
     {name => 'whois',          regex => 'whois\s.+?',              comment => 'whois lookup <ip> or <domain>' }, 
     {name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
@@ -117,19 +122,73 @@ sub new {
     my $self = {@_};
     bless $self, $class;
 
-    $self->_set_key( 'all', $self->{blowfish_key} );
 
-    #my $wee = $self->_plugin("StockTicker") if(defined $self->_plugin("StockTicker"));
+# { use integer;
 
-    $self->{plugin_regexes} = ();
+#     my $userFlags = pack('b8','00001100');
 
-    foreach my $plugin (keys %{$self->loaded_plugins}) { 
-        my $mod = $self->_plugin($plugin);
-        my $rx = $mod->command_regex;
-        push @{$self->{plugin_regexes}}, {name => "$plugin", regex => $rx};
-    }
+#     my $adminByte = 2;
+
+
+#     #$userFlags = $self->addFlag($userFlags,2);
+#     warn "bit is set: ".$self->isSet($userFlags,0)."\n";
+
+
+#     my $isbitset = $self->isSet($userFlags,2);
+
+#     my ($carry, undef, $parity, undef, $auxcarry, undef, $zero, $sign,
+#     $trace, $interrupt, $direction, $overflow) =
+
+#     my @what = split( //, unpack( 'b16', $userFlags ) );
+
+#     print Dumper(@what);
+
+#     exit(0);
+
+#     $userFlags = $self->addFlag($userFlags,0);
+#     $isbitset = $self->isSet($userFlags,0);
+#     warn "bit is set: $isbitset\n";
+
+#     warn "$userFlags\n";
+
+#     #$adminByte = 2;
+#     #$mask = (1 << $adminByte);
+#     ##$userFlags = ($userFlags | $mask);
+#     #$isbitset = $self->isSet($userFlags,2);
+#     #warn "bit is set: $isbitset\n";
+# }
+#     exit(0);
 
     return $self;
+}
+
+sub isSet {
+    { use integer;
+        my ($self,$userFlags,$flagNum) = @_;
+
+        my $mask = (1 << $flagNum);
+
+        return ($userFlags & $mask);
+    }
+}
+sub removeFlag {
+    { use integer;
+        my ($self,$userFlags,$flagPos) = @_;
+
+        my $mask = (1 << $flagPos);
+        $userFlags = ($userFlags & ~$mask);
+        return $userFlags;
+    }
+}
+
+sub addFlag {
+    { use integer;
+        my ($self,$userFlags,$flagPos) = @_;
+
+        my $mask = (1 << $flagPos);
+        $userFlags = ($userFlags | $mask);
+        return $userFlags;
+    }
 }
 
 sub available_modules {
@@ -137,9 +196,9 @@ sub available_modules {
 
     my @central_modules =
     map {
-        my $mod = $_;
-        $mod =~ s/^Hadouken::Plugin:://;
-        $mod;
+    my $mod = $_;
+    $mod =~ s/^Hadouken::Plugin:://;
+    $mod;
     } _plugins();
 
     my @local_modules =
@@ -189,6 +248,17 @@ sub _build_loaded_plugins {
     }
 
     return \%loaded_plugins;
+}
+
+sub unload {
+    my $self = shift;
+    my $module = shift;
+
+    warn "Unloading $module\n";
+
+    my $x = List::MoreUtils::first_index { $_->{name} eq $module } @{$self->{plugin_regexes}};
+
+    splice @{$self->{plugin_regexes}}, $x, 1 if $x > -1;
 }
 
 sub load {
@@ -424,9 +494,26 @@ sub start {
     }
 
     # state variables
-    $self->start_time(time());
+    $self->_set_start_time(time());
     $self->{connected} = 0;
     $self->{trivia_running} = 0;
+
+
+    if(exists $self->{blowfish_key} && $self->{blowfish_key} ne '') {
+        $self->_set_key( 'all', $self->{blowfish_key} );
+    }
+
+    #my $wee = $self->_plugin("StockTicker") if(defined $self->_plugin("StockTicker"));
+
+    $self->{plugin_regexes} = ();
+
+    foreach my $plugin (keys %{$self->loaded_plugins}) { 
+        my $mod = $self->_plugin($plugin);
+        my $rx = $mod->command_regex;
+        push @{$self->{plugin_regexes}}, {name => "$plugin", regex => $rx};
+    }
+
+    $self->unload('ExamplePlugin');
 
     if( $self->{private_rsa_key_filename} ne '' ) {
         my $key_string = $self->readPrivateKey($self->{private_rsa_key_filename}, $self->{private_rsa_key_password} ne '' ? $self->{private_rsa_key_password} : undef );
@@ -542,6 +629,21 @@ sub _prepare {
     return @_;
 }
 
+sub each {
+    my $self = shift;
+    my ($array, $cb, $context) = $self->_prepare(@_);
+
+    return unless defined $array;
+
+    $context = $array unless defined $context;
+
+    my $i = 0;
+    foreach (@$array) {
+        $cb->($_, $i, $context);
+        $i++;
+    }
+}
+
 sub range {
     my $self = shift;
     my ($start, $stop, $step) =
@@ -630,8 +732,7 @@ sub to_array {
     return [@$list];
 }
 
-
-sub each {
+sub forEach {
     my $self = shift;
     my ($array, $cb, $context) = $self->_prepare(@_);
 
@@ -660,57 +761,39 @@ sub pluck {
     return $self->_finalize($result);
 }
 
-# Global rules are:
-# 
-# is_admin overrides everything.
-# If you are +o or +v, and not on the blacklist you return OK.
-# if you are neither +o or +v, we check the whitelist.
-#
-
-sub passive_acl {
+sub select {
     my $self = shift;
-    my ($who, $message, $channel, $channel_list) = @_;
-    my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+    my ($list, $iterator, $context) = $self->_prepare(@_);
 
-    if($self->is_admin($who)) {
-        return 1;
-    }
+    my $result = [grep { $iterator->($_) } @$list];
 
-    if(exists $channel_list->{$nickname}) {
-
-        return 0 if($self->blacklisted($who));
-
-        if(/(o|v)$/ ~~ $channel_list->{$nickname}) {
-
-            return 1;
-
-        } else {
-            if($self->whitelisted($who)) {
-                return 1;
-            }
-        }
-    }
-
-    return 0;   
+    $self->_finalize($result);
 }
 
-sub global_acl {
+sub size {
     my $self = shift;
-    my ($who, $message, $channel, $channel_list) = @_;
-    my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+    my ($list) = $self->_prepare(@_);
 
-    if($self->is_admin($who)) {
-        return 1;
+    return scalar @$list if ref $list eq 'ARRAY';
+
+    return scalar keys %$list if ref $list eq 'HASH';
+
+    return 1;
+}
+
+sub unique {
+    my $self = shift;
+    my ($array, $is_sorted) = $self->_prepare(@_);
+
+    return [List::MoreUtils::uniq(@$array)] unless $is_sorted;
+
+    # We can push first value to prevent unneeded -1 check
+    my $new_array = [shift @$array];
+    foreach (@$array) {
+        push @$new_array, $_ unless $_ eq $new_array->[-1];
     }
 
-    if(exists $channel_list->{$nickname}) {
-
-        return 0 if($self->blacklisted($who));
-
-        return 1 if($self->whitelisted($who));
-    }
-
-    return 0;
+    return $new_array;
 }
 
 sub blacklisted {
@@ -979,17 +1062,128 @@ sub _buildup {
         push($self->{adminsdb}, @admin_row);
     }
 
-    my $simple_acl = sub {
+    my $func_flags = sub {
         my ($who, $message, $channel, $channel_list) = @_;
-        my $ret = $self->global_acl($who, $message, $channel, $channel_list);
-        return $ret;
+
+        { use integer;
+
+            my $userFlags = pack('b8','00001100');
+
+            $userFlags = $self->addFlag($userFlags, BIT_ADMIN) if $self->is_admin($who);
+            $userFlags = $self->addFlag($userFlags, BIT_BLACKLIST) if $self->blacklisted($who);
+            $userFlags = $self->addFlag($userFlags, BIT_WHITELIST) if $self->whitelisted($who);
+
+            if(defined $channel_list) {
+
+                my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+                if(exists $channel_list->{$nickname}) {
+                    $userFlags = $self->addFlag($userFlags, BIT_OP) if(/o$/ ~~ $channel_list->{$nickname});
+                    $userFlags = $self->addFlag($userFlags, BIT_VOICE) if(/v$/ ~~ $channel_list->{$nickname});
+                }
+            }
+
+            return $userFlags;
+        }
     };
 
-    my $passive_acl = sub {
-        my ($who, $message, $channel, $channel_list) = @_;
-        my $ret = $self->passive_acl($who, $message, $channel, $channel_list);
-        return $ret;
-    };
+    my $passive_access = _->wrap(
+        $func_flags => sub {
+            my $func = shift;
+            my ($who, $message, $channel, $channel_list) = @_;
+
+            { use integer;
+
+                my $flags = $func->(@_);
+
+                return 1 if($self->isSet($flags,BIT_ADMIN) || $self->isSet($flags,BIT_WHITELIST));
+
+                return 0 if($self->isSet($flags,BIT_BLACKLIST));
+
+                # We check blacklist first before checking these. ORDER COUNTS.
+                return 1 if($self->isSet($flags,BIT_OP) || $self->isSet($flags,BIT_VOICE));
+
+                return 0;
+            }
+        }
+    );
+
+    my $op_access = _->wrap(
+        $func_flags => sub {
+            my $func = shift;
+            my ($who, $message, $channel, $channel_list) = @_;
+
+            { use integer;
+
+                my $flags = $func->(@_);
+
+                return 1 if($self->isSet($flags,BIT_ADMIN) || $self->isSet($flags,BIT_WHITELIST));
+
+                return 0 if($self->isSet($flags,BIT_BLACKLIST));
+
+                # We check blacklist first before checking these. ORDER COUNTS.
+                return 1 if($self->isSet($flags,BIT_OP));
+
+                return 0;
+            }
+        }
+    );
+
+    my $restrictive_access = _->wrap(
+        $func_flags => sub {
+            my $func = shift;
+            my ($who, $message, $channel, $channel_list) = @_;
+
+            { use integer;
+
+                my $flags = $func->(@_);
+                return 1 if($self->isSet($flags,BIT_ADMIN) || $self->isSet($flags,BIT_WHITELIST));
+                return 0;
+            }
+        }
+    );
+
+    my $admin_access = _->wrap(
+        $func_flags => sub {
+            my $func = shift;
+            my ($who, $message, $channel, $channel_list) = @_;
+
+            { use integer;
+
+                my $flags = $func->(@_);
+                return 1 if($self->isSet($flags,BIT_ADMIN));
+                return 0;
+            }
+        }
+    );
+
+    my $whitelist_access = _->wrap(
+        $func_flags => sub {
+            my $func = shift;
+            my ($who, $message, $channel, $channel_list) = @_;
+
+            { use integer;
+
+                my $flags = $func->(@_);
+                return 1 if($self->isSet($flags,BIT_ADMIN) || $self->isSet($flags,BIT_WHITELIST));
+                return 0;
+            }
+        }
+    );
+
+    my $all_access_except_blacklist = _->wrap(
+        $func_flags => sub {
+            my $func = shift;
+            my ($who, $message, $channel, $channel_list) = @_;
+
+            { use integer;
+
+                my $flags = $func->(@_);
+                return 0 if($self->isSet($flags,BIT_BLACKLIST));
+                return 1;
+            }
+        }
+    );
 
     $self->add_func(name => 'powerup',
         delegate => sub {
@@ -1005,12 +1199,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
-
+        acl => $admin_access
+    );
 
     $self->add_func(name => 'channeldel',
         delegate => sub {
@@ -1024,11 +1214,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'channeladd',
         delegate => sub {
@@ -1042,11 +1229,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'admindel',
         delegate => sub {
@@ -1068,11 +1252,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'adminadd',
         delegate => sub {
@@ -1094,11 +1275,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'whitelistadd',
         delegate => sub {
@@ -1119,11 +1297,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
 
     $self->add_func(name => 'whitelistdel',
@@ -1149,11 +1324,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'blacklistadd',
         delegate => sub {
@@ -1176,11 +1348,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
 
     $self->add_func(name => 'blacklistdel',
@@ -1205,11 +1374,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'raw',
         delegate => sub {
@@ -1224,18 +1390,14 @@ sub _buildup {
             my $send_command = shift(@send_params);
 
             warn "Send command $send_command\n";
-            warn "Params:\n";
-            print Dumper(@send_params);
+            warn "Params: ".join("\t",@send_params)."\n";
 
             $self->send_server_safe ($send_command, @send_params);
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'shorten',
         delegate => sub {
@@ -1259,28 +1421,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl
-    );
-
-    $self->add_func(name => 'weather',
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
-            my ($cmd, $arg) = split(/ /, $message, 2); # DO NOT LC THE MESSAGE!
-
-            return unless defined $arg;
-
-            my $summary = $self->_weather($arg);
-
-            if(defined $summary && $summary ne '') {
-                my $weather_msg = "$arg -> $summary";
-                $self->send_server_safe (PRIVMSG => $channel, $weather_msg);
-            }
-
-            return 1;
-        },
-        acl => $passive_acl
+        acl => $passive_access
     );
 
     $self->add_func(name => 'ipcalc',
@@ -1323,7 +1464,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $passive_acl,
+        acl => $passive_access,
     );
 
     $self->add_func(name => 'calc',
@@ -1344,7 +1485,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $passive_acl,
+        acl => $passive_access,
     );
 
     $self->add_func(name => 'ticker',
@@ -1378,10 +1519,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => $passive_acl,
+        acl => $all_access_except_blacklist,
     );
-
-
 
     $self->add_func(name => 'whois',
         delegate => sub {
@@ -1393,7 +1532,7 @@ sub _buildup {
 
             if( $arg =~ /$RE{net}{IPv4}/ ) {
                 my $record = Net::Whois::IP::whoisip_query($arg);
-                print Dumper($record);
+                #print Dumper($record);
 
 
             } elsif ( $arg =~ m{($RE{URI})}gos ) {
@@ -1408,7 +1547,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl,
+        acl => $restrictive_access,
     );
 
     $self->add_func(name => 'geoip',
@@ -1508,7 +1647,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl,
+        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(name => 'fq',
@@ -1604,7 +1743,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl,
+        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(name => 'rq',
@@ -1625,7 +1764,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $passive_acl,
+        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(name => 'dq',
@@ -1652,11 +1791,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
 
     $self->add_func(name => 'q',
@@ -1677,16 +1813,12 @@ sub _buildup {
                 push(@real_indexes,int($1 - 1));
             }
 
-            my @x = List::MoreUtils::distinct @real_indexes;
+            my $x = _->unique(\@real_indexes,1);
 
-            return unless(@x);
-
-            # splice @x, $self->quote_limit if($#x >= $self->quote_limit );
-
-            my $search_count = scalar @x;
+            my $search_count = _->size($x);
             my $sent = 0;
 
-            foreach my $j (@x) {
+            foreach my $j (@$x) {
                 next unless $j >=0 && $j < $quote_count;
 
                 my @curr_quote = $self->{quotesdb}[$j]; # Don't dereference this.
@@ -1724,7 +1856,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $passive_acl,
+        acl => $all_access_except_blacklist,
     );
 
 
@@ -1750,7 +1882,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl,
+        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(name => 'aq',
@@ -1771,7 +1903,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl,
+        acl => $whitelist_access,
     );
 
     $self->add_func(name => 'commands',
@@ -1798,10 +1930,17 @@ sub _buildup {
                         next unless $self->is_admin($who);
                     }
 
+                    next unless(defined($c->{acl}));
+
                     next 
                     unless 
                     defined($c->{name}) && $c->{name} ne '' && 
                     defined($c->{comment}) && $c->{comment} ne '';
+
+                    # Only list the commands this user passes for that commands ACL definition.
+                    my $acl_ret = $c->{acl}->($who, $message, $channel || undef, $channel_list || undef);
+                    
+                    next unless $acl_ret;
 
                     my $si = String::IRC->new($c->{name})->bold;
                     $command_summary .= '['.$si.'] -> '.$c->{comment}."  ";
@@ -1817,7 +1956,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl,
+        acl => $all_access_except_blacklist,
     );
 
 
@@ -1837,7 +1976,8 @@ sub _buildup {
                     my $command_summary = '';
                     foreach my $k (@pinfo) {
                         my $p = $self->_plugin($k->{name});
-                        my $name = $k->{name};
+
+                        my $name = $p->command_name;
                         my $comment = $p->command_comment || '';
                         my $ver = $p->VERSION || '0.0';
 
@@ -1855,7 +1995,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl,
+        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(name => 'help',
@@ -1869,14 +2009,14 @@ sub _buildup {
 
             return 1;
         },
-        acl => $simple_acl,
+        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(name => 'statistics',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-            my $running_elapsed = Time::Elapsed::elapsed( time - $self->{start_time });
+            my $running_elapsed = Time::Elapsed::elapsed( time - $self->start_time );
             my $basic_info = sprintf("Hadouken %s by dek. Current uptime: %s", #$VERSION, $running_elapsed);
                 String::IRC->new($VERSION)->bold, 
                 String::IRC->new($running_elapsed)->bold );
@@ -1885,11 +2025,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'btc', 
         delegate => sub {
@@ -1904,11 +2041,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'ltc', 
         delegate => sub {
@@ -1923,11 +2057,8 @@ sub _buildup {
 
             return 1;
         },
-        acl => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $ret = $self->is_admin($who);
-            return $ret;
-        });
+        acl => $admin_access,
+    );
 
     $self->add_func(name => 'eur2usd', 
         delegate => sub {
@@ -1938,7 +2069,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $passive_acl,
+        acl => $all_access_except_blacklist,
     );
 
     $self->{con}->reg_cb (
@@ -1959,7 +2090,7 @@ sub _buildup {
         },
         registered => sub {
             $self->{connected} = 1;
-            $self->connect_time(time());
+            $self->_set_connect_time(time());
         },
         disconnect => sub {
             $self->{connected} = 0;
@@ -2420,32 +2551,6 @@ sub _webclient {
     return $self->{wc};
 }
 
-sub _weather {
-    my ($self, $location) = @_;
-
-    return unless defined $location && $location ne '';
-
-    unless(defined $self->{weatherclient}) {
-        $self->{weatherclient} = Yahoo::Weather->new();
-    }
-
-    my $summary = '';
-    try {
-        my $ret = $self->{weatherclient}->getWeatherByLocation($location,'F');
-        if(exists $ret->{'CurrentObservation'} )  {
-
-            $summary = "Temp: ".$ret->{'CurrentObservation'}{'temp'};
-            $summary .= " Condition: ".$ret->{'CurrentObservation'}{'text'};
-        }
-    }
-    catch($e) {
-        $summary = '';
-    }
-
-    return $summary;
-}
-
-
 sub _shorten {
     my $self = shift;
     my $url = shift;
@@ -2574,11 +2679,10 @@ sub _deflate {
                 $_ |= index( B64, substr( $text, ++$k, 1 ) ) << ( $i * 6 );
             }
         }
+
         for ( $l, $r ) {
             foreach my $i ( 0 .. 3 ) {
-                $result .=
-                chr( ( $_ & ( 0xFF << ( ( 3 - $i ) * 8 ) ) )
-                    >> ( ( 3 - $i ) * 8 ) );
+                $result .= chr( ( $_ & ( 0xFF << ( ( 3 - $i ) * 8 ) ) ) >> ( ( 3 - $i ) * 8 ) );
             }
         }
     }

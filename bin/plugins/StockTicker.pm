@@ -57,7 +57,7 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
 
     # You can call send_server, we rewrote symbol table.
-    $self->send_server(PRIVMSG => '#hadouken', "stock ticker plugin test");
+    #$self->send_server(PRIVMSG => '#hadouken', "stock ticker plugin test");
 
     return 1;
 }

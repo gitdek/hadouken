@@ -1,5 +1,9 @@
 bin/createconfig.pl
 bin/hadouken
+bin/plugins/
+bin/plugins/StockTicker.pm
+bin/plugins/Weather.pm
+bin/plugins/ExamplePlugin.pm
 data/geoip/
 data/geoip/GeoIP.dat
 data/geoip/GeoIPCity.dat

@@ -10,20 +10,20 @@ our $AUTHOR = 'dek';
 sub command_comment {
     my $self = shift;
 
-    return "Test Plugin weee";
+    return "Example Plugin";
 }
 
 # Clean name of command.
 sub command_name {
     my $self = shift;
 
-    return "Test Plugin";
+    return "Example Plugin";
 }
 
 sub command_regex {
     my $self = shift;
 
-    return 'plugintest$';
+    return 'exampleplugin$';
 }
 
 # Return 1 if OK.
@@ -42,7 +42,7 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
 
     # You can call send_server, we rewrote symbol table.
-    $self->send_server(PRIVMSG => '#hadouken', "plugin doing something weee");
+    #$self->send_server(PRIVMSG => '#hadouken', "plugin doing something weee");
 
     return 1;
 }
