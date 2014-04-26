@@ -19,27 +19,26 @@ package Hadouken::Plugin::StockTicker;
 use strict;
 use warnings;
 
-our $VERSION = '0.2';
+our $VERSION = '0.1';
 our $AUTHOR = 'dek';
 
 # Description of this command.
 sub command_comment {
     my $self = shift;
 
-    return "StockTicker Plugin weee";
+    return "Look up stock by stock <symbol>";
 }
 
 # Clean name of command.
 sub command_name {
     my $self = shift;
 
-    return "StockTicker Plugin";
+    return "stockticker";
 }
 
 sub command_regex {
-    my $self = shift;
 
-    return 'wee$';
+    return 'stock\s.+?';
 }
 
 # Return 1 if OK.
@@ -58,7 +57,7 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
 
     # You can call send_server, we rewrote symbol table.
-    $self->send_server(PRIVMSG => '#hadouken', "plugin doing something weee");
+    $self->send_server(PRIVMSG => '#hadouken', "stock ticker plugin test");
 
     return 1;
 }

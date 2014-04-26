@@ -52,10 +52,15 @@ WriteMakefile(
         'Config::General'       => 0,
         'File::Basename'        => 0,
         'Crypt::DH'             => 0,
+        'Crypt::Random'         => 0,
+        'Math::BigInt'          => 0,
+        'File::Spec'            => 0,
+        'FindBin'               => 0,
+        'Module::Pluggable'     => 0,
     },
-	PM => {'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm'},
-	# EXE_FILES => ['bin/hadouken'],
-	PL_FILES => {'bin/createconfig.pl' => '/etc/hadouken.conf'},
+    PM => {'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm'},
+    # EXE_FILES => ['bin/hadouken'],
+    PL_FILES => {'bin/createconfig.pl' => '/etc/hadouken.conf'},
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
 );
 

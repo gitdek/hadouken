@@ -10,7 +10,6 @@ use diagnostics;
 our $VERSION = '0.3';
 our $AUTHOR = 'dek';
 
-
 use Data::Printer alias => 'Dumper', colored => 1;
 
 use Cwd ();
@@ -43,9 +42,7 @@ use Crypt::OpenSSL::RSA;
 use Crypt::Blowfish_PP;
 use Crypt::DH;
 use Math::BigInt;
-
 use Config::General;
-
 use Time::Elapsed ();
 use TryCatch;
 use Config::General;
@@ -54,9 +51,7 @@ use Moose;
 
 with 'MooseX::Getopt::GLD' => { getopt_conf => [ 'pass_through' ] };
 
-# use namespace::autoclean; ### CANNOT USE !
-
-use utf8::all;
+use namespace::autoclean;
 
 use File::Spec;
 use FindBin qw($Bin);
@@ -111,6 +106,7 @@ my @commands = (
     {name => 'ltc',            regex => 'ltc$',                    comment => 'display ltc ticker' },
     {name => 'eur2usd',        regex => '(e2u|eur2usd)$',          comment => 'display euro to usd ticker' },
     {name => 'commands',       regex => '(commands|cmds)$',        comment => 'display list of available commands' },
+    {name => 'plugins',        regex => 'plugins$',                comment => 'display list of available plugins' },
     {name => 'help',           regex => 'help$',                   comment => 'get help info' },
 );
 
@@ -124,7 +120,6 @@ sub new {
     $self->_set_key( 'all', $self->{blowfish_key} );
 
     #my $wee = $self->_plugin("StockTicker") if(defined $self->_plugin("StockTicker"));
-
 
     $self->{plugin_regexes} = ();
 
@@ -142,10 +137,10 @@ sub available_modules {
 
     my @central_modules =
     map {
-    my $mod = $_;
-    $mod =~ s/^Hadouken::Plugin:://;
-    $mod;
-    } $self->_plugins();
+        my $mod = $_;
+        $mod =~ s/^Hadouken::Plugin:://;
+        $mod;
+    } _plugins();
 
     my @local_modules =
     map { substr( ( File::Spec->splitpath($_) )[2], 0, -3 ) } glob('./*.pm'),
@@ -435,10 +430,7 @@ sub start {
 
     if( $self->{private_rsa_key_filename} ne '' ) {
         my $key_string = $self->readPrivateKey($self->{private_rsa_key_filename}, $self->{private_rsa_key_password} ne '' ? $self->{private_rsa_key_password} : undef );
-
         $self->{_rsa} = Crypt::OpenSSL::RSA->new_private_key($key_string);
-
-        #$self->{_rsa}->use_sslv23_padding();
     }
 
     $self->{c} = AnyEvent->condvar;
@@ -1799,7 +1791,7 @@ sub _buildup {
 
             # $self->send_server_safe (PRIVMSG => $nickname, $si1);
 
-            while( my @tmp = $iter->() ){
+            while( my @tmp = $iter->() ) {
                 my $command_summary = '';
                 foreach my $c (@tmp) {
                     if($c->{require_admin}) {
@@ -1820,6 +1812,45 @@ sub _buildup {
                 #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $command_summary);
                 #$self->send_server_safe (PRIVMSG => $nickname, $command_summary);
                 undef $command_summary;
+            }
+            undef $iter;
+
+            return 1;
+        },
+        acl => $simple_acl,
+    );
+
+
+    $self->add_func(name => 'plugins',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+            my @copyplugins = @{$self->{plugin_regexes}};
+            my $iter = List::MoreUtils::natatime 2, @copyplugins;
+
+            my $si1 = String::IRC->new('Available Plugins:')->bold;
+            $self->send_server_safe (NOTICE => $nickname, $si1);
+
+            try { # Plugins can be unpredictable.
+                while( my @pinfo = $iter->() ) {
+                    my $command_summary = '';
+                    foreach my $k (@pinfo) {
+                        my $p = $self->_plugin($k->{name});
+                        my $name = $k->{name};
+                        my $comment = $p->command_comment || '';
+                        my $ver = $p->VERSION || '0.0';
+
+                        my $si = String::IRC->new($name)->bold;
+                        $command_summary .= '['.$si.'] '.$ver.' -> '.$comment." ";
+                    }
+
+                    $self->send_server_safe (NOTICE => $nickname, $command_summary);
+
+                    undef $command_summary;
+                }
+            }
+            catch($e) {
             }
 
             return 1;
