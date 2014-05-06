@@ -58,6 +58,8 @@ WriteMakefile(
         'File::Spec'            => 0,
         'FindBin'               => 0,
         'Module::Pluggable'     => 0,
+        'Data::Printer'					=> 0,
+        'MooseX::Getopt::GLD'		=> 0,
     },
     PM => {'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm'},
     # EXE_FILES => ['bin/hadouken'],

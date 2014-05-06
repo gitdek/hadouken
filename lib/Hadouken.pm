@@ -1,3 +1,18 @@
+# package Hadouken::Plugin::Trivia;
+
+# use strict;
+# use warnings;
+
+# our $VERSION = '0.1';
+# our $AUTHOR = 'dek';
+
+
+
+
+
+
+# 1;
+
 package Hadouken;
 
 use strict;
@@ -32,7 +47,7 @@ use HTML::TokeParser;
 use URI ();
 use LWP::UserAgent ();
 use Encode qw( encode ); 
-use JSON::XS qw( decode_json );
+use JSON::XS qw( encode_json decode_json );
 use POSIX qw(strftime);
 use Time::HiRes qw( time sleep );
 use Geo::IP;
@@ -121,44 +136,6 @@ sub new {
     my $class = shift;
     my $self = {@_};
     bless $self, $class;
-
-
-# { use integer;
-
-#     my $userFlags = pack('b8','00001100');
-
-#     my $adminByte = 2;
-
-
-#     #$userFlags = $self->addFlag($userFlags,2);
-#     warn "bit is set: ".$self->isSet($userFlags,0)."\n";
-
-
-#     my $isbitset = $self->isSet($userFlags,2);
-
-#     my ($carry, undef, $parity, undef, $auxcarry, undef, $zero, $sign,
-#     $trace, $interrupt, $direction, $overflow) =
-
-#     my @what = split( //, unpack( 'b16', $userFlags ) );
-
-#     print Dumper(@what);
-
-#     exit(0);
-
-#     $userFlags = $self->addFlag($userFlags,0);
-#     $isbitset = $self->isSet($userFlags,0);
-#     warn "bit is set: $isbitset\n";
-
-#     warn "$userFlags\n";
-
-#     #$adminByte = 2;
-#     #$mask = (1 << $adminByte);
-#     ##$userFlags = ($userFlags | $mask);
-#     #$isbitset = $self->isSet($userFlags,2);
-#     #warn "bit is set: $isbitset\n";
-# }
-#     exit(0);
-
     return $self;
 }
 
@@ -991,6 +968,13 @@ sub jsonify {
     return $hashref;
 }
 
+sub encode_jsonify {
+    my $self = shift;
+
+    my $json = encode_json(encode("utf8",shift));
+    return $json;
+}
+
 sub fetch_json {
     my $self = shift;
     my $url = shift;
@@ -1048,6 +1032,18 @@ sub _buildup {
             callbacks => { after_parse => $after_parse_cb } 
         } 
     } or die $!;
+
+
+    #my $tie_file = sub {
+    #    my ($array, $tieName, $filename);
+    #    return tie @$array, $tieName, $filename;
+    #}
+
+    #my $datadir = $self->{ownerdir}.'/../data';
+
+    #my $tieadminobj     =   $tie_file->($self->{adminsdb},    'Tie::Array::CSV', "$datadir/admins.txt");
+    #my $tiewhitelistobj =   $tie_file->($self->{whitelistdb}, 'Tie::Array::CSV', "$datadir/whitelist.txt");
+    #my $tieblacklistobj =   $tie_file->($self->{blacklistdb}, 'Tie::Array::CSV', "$datadir/blacklist.txt");
 
     my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', $self->{ownerdir}.'/../data/admins.txt' or die $!;
 
@@ -1183,6 +1179,38 @@ sub _buildup {
                 return 1;
             }
         }
+    );
+
+    $self->add_func(name => 'trivstart',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+            return unless defined $channel;
+
+            #$self->send_server_safe(PRIVMSG => $channel, "  Starting trivia!");
+
+            $self->_start_trivia($channel);
+
+            return 1;
+        },
+        acl => $admin_access
+    );
+
+    $self->add_func(name => 'trivstop',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+            #return unless defined $channel;
+
+            #$self->send_server_safe(PRIVMSG => $channel, "  Starting trivia!");
+
+            $self->_stop_trivia;
+
+            return 1;
+        },
+        acl => $admin_access
     );
 
     $self->add_func(name => 'powerup',
@@ -1408,8 +1436,12 @@ sub _buildup {
 
             return unless defined $arg;
 
+            my ($uri) = $arg =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/;
+
+            return 0 unless defined $uri;
+
             # Only grab title for admins.
-            my ($url,$title) = $self->_shorten($arg,$self->is_admin($who));
+            my ($url,$title) = $self->_shorten($uri,$self->is_admin($who));
 
             if(defined $url && $url ne '') {
                 if(defined $title && $title ne '') {
@@ -2233,13 +2265,13 @@ sub _buildup {
                 }
             } else {
 
-                if ( $message =~ m{($RE{URI})}gos ) {
+                my $uri = undef;
 
+                if (( ($uri) = $message =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/ ) ) { #m{($RE{URI})}gos ) {
+                    warn "* Matched a URL $uri\n";
+                
                     my $cur_channel_clean = $channel;
                     $cur_channel_clean =~ s/^\#//;
-
-                    warn "* Matched a URL\n";
-
                     my $server_hash_ref = $self->{current_server};
 
                     if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{shorten_urls} == 1 ) {
@@ -2249,7 +2281,7 @@ sub _buildup {
                         # Only get titles if admin, since we trust admins.
                         my $get_title = $self->is_admin($who);
 
-                        my ($shrt_url,$shrt_title) = $self->_shorten($message, $get_title );
+                        my ($shrt_url,$shrt_title) = $self->_shorten($uri, $get_title );
 
                         if(defined($shrt_url) && $shrt_url ne '') {
                             if(defined($shrt_title) && $shrt_title ne '') {
@@ -2258,6 +2290,8 @@ sub _buildup {
                                 $self->send_server_safe (PRIVMSG => $channel, "$shrt_url");      
                             }
                         }
+                    } else {
+                        warn "* shorten_urls disabled for this channel\n";
                     }
                 }
 
@@ -2283,7 +2317,59 @@ sub _buildup {
                     }
                 }
 
+                # Try to match to trivia!
 
+                if($self->{triviarunning} && $channel eq $self->{trivia_channel}) {
+                    my $old_mask = $self->{_masked_answer};
+                    my $new_mask = $self->check_and_reveal($clean_msg);
+
+                    if(defined $old_mask && $old_mask ne '' && defined $new_mask && $new_mask ne '') {
+                        if($old_mask ne $new_mask) {
+
+                            if($message eq $self->{_answer}) {
+
+                                my $answer_elapsed = sprintf "%.1f", time - $self->{_question_time};
+
+
+                                unless(exists $self->{streak}) {
+                                    $self->{streak} = ();
+                                }
+
+                                push(@{$self->{streak}},$nickname);
+
+                                my $in_a_row = 0;
+                                foreach my $z ( @{$self->{streak}} ) {
+                                    unless($z eq $nickname) {
+                                        $in_a_row = 0;
+                                        last;
+                                    } else {
+                                        $in_a_row++;
+                                    }
+                                }
+
+
+                                $self->{_masked_answer} = '';
+
+                                $self->send_server_safe(PRIVMSG => $self->{trivia_channel},"Yes! $nickname GOT IT! -> ".$self->{_answer}." <- in $answer_elapsed seconds and receives --> ".$self->{_current_points}." <-- points!");
+
+                                $self->{_scores}{$nickname} += $self->{_current_points};
+
+                                if($in_a_row % 10 == 0) {
+                                    $self->send_server_safe(PRIVMSG => $self->{trivia_channel}," $nickname has won $in_a_row in a row, and received a --> 500 <-- point bonus!");
+                                    $self->{_scores}{$nickname} += 500;
+                                }
+
+                                my $point_msg = $self->{_current_points}." points has been added to your score! total score for $nickname is ".$self->{_scores}{$nickname};
+
+                                $self->send_server_safe(PRIVMSG => $self->{trivia_channel},$point_msg);
+                                $self->{_clue_number} = 0;
+                            } else {
+                                $self->send_server_safe(PRIVMSG => $self->{trivia_channel},"  Answer: $new_mask");
+                            }
+                        }
+
+                    }
+                }
             }
         });
 
@@ -2364,14 +2450,50 @@ sub _buildup {
 }
 
 sub _start_trivia {
-    my $self = shift;
+    my ($self,$channel) = @_;
 
     if($self->{triviarunning}) {
         return 1;
     }
 
+    $self->{triviarunning} = 1;
+    $self->{trivia_channel} = $channel;
 
-    #my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
+    #$self->_trivia_func;
+    
+    $self->{triv_timer} = AnyEvent->timer (after => 20, interval => 20, cb => sub { $self->_trivia_func; } );
+
+    return 1;
+}
+
+sub _stop_trivia {
+    my ($self) = @_;
+
+    unless($self->{triviarunning}) {
+        return 1;
+    }
+
+    $self->{triviarunning} = 0;
+    $self->{trivia_channel} = '';
+
+    $self->{triv_timer} = undef;
+
+    delete $self->{triv_timer};
+
+    #open(FILE,"<".$self->{ownerdir}.'/../data/scores.json');
+
+    #my %scorez = %{$self->{_scores}};
+
+
+    #my $json_data = my $json = encode_json(encode("utf8",\%scorez));
+
+    #print Dumper($json_data);
+
+    return 1;
+}
+
+sub _get_new_question {
+    my $self = shift;
 
     my $questionsdir = $self->{ownerdir}.'/../data/questions';
 
@@ -2385,17 +2507,133 @@ sub _start_trivia {
     && -f "$questionsdir/$_"    # and is a file
     } readdir(DIR);
 
-    # Loop through the array printing out the filenames
-    foreach my $file (@question_files) {
-        print "$file\n";
+    closedir(DIR);
+
+    my @qf = List::Util::shuffle @question_files;
+    my $blah = $questionsdir."/".$qf[0];
+    my $line;
+    open FILE,"<$blah" or die("Cant open $!\n");
+    srand;
+    rand($.) < 1 && ($line = $_) while <FILE>;
+    close(FILE);
+
+
+    my($question,$temp_answer) = split(/`/,$line);
+
+    chomp($question);
+    chomp($temp_answer);
+
+    $self->{_question} = $question;
+    $self->{_answer} = lc($temp_answer);
+    $self->{_masked_answer} = '';
+
+    foreach my $char (split //, $self->{_answer}) {
+        if ($char =~ /[[:alnum:]]/) {
+            $self->{_masked_answer} .= '.';
+        } else {
+            $self->{_masked_answer} .= $char;
+        }
+    }
+}
+
+sub give_clue {
+    my $self = shift;
+
+    my $letter = ' ';
+    my $index;
+
+    while(!($letter =~ /[[:alnum:]]/)) {
+        $index = rand length $self->{_answer};
+        $letter = substr($self->{_answer},$index,1);
+        my $masked_letter = substr($self->{_masked_answer},$index,1);
+        if($masked_letter eq $letter) {
+            $letter = ' ';
+        }
     }
 
-    closedir(DIR);   
+    my $temp = $self->{_masked_answer};
+    substr $temp, $index, 1, $letter;
+
+    $self->{_masked_answer} = $temp;
+
+    return $self->{_masked_answer};
+}
+
+sub check_and_reveal {
+    my $self = shift;
+    my $guess = shift;
+
+    return '' unless exists $self->{_masked_answer} && $self->{_masked_answer} ne '';
+    return '' if(length($guess) > length($self->{_answer}));
+
+    my @chars = split(//,$guess);
+    my @masked_chars = split(//,$self->{_masked_answer});
+    my @real_answer = split(//,$self->{_answer});
+
+    for my $index (0 .. $#chars) {
+
+        next unless $chars[$index] =~ /[[:alnum:]]/;
+
+        my $answer_letter = $masked_chars[$index];
+        next if $masked_chars[$index] =~ /[[:alnum:]]/;
+
+        my $guess_letter = $chars[$index];
+
+        if(lc($guess_letter) eq lc($real_answer[$index])) {
+
+            my $temp = $self->{_masked_answer};
+            substr $temp, $index, 1, $chars[$index];
+
+            $self->{_masked_answer} = $temp;
+        }
+    }
+
+    return $self->{_masked_answer};
+}
 
 
+sub _trivia_func {
+    my $self = shift;
+
+    return unless $self->{triviarunning};
+
+    my %points = ( 0 => 5, 1 => 3, 2 => 2, 3 => 1 );
+
+    $self->{_clue_number} = 0 unless exists $self->{_clue_number};
 
 
-    return 0;
+    if($self->{_clue_number} == 0) {
+
+        $self->_get_new_question;
+
+        $self->{_current_points} = $points{$self->{_clue_number}};
+
+        warn $self->{_answer},"\n";
+
+        my $msg = "Question, worth ".$self->{_current_points}." points: ".$self->{_question};
+        $self->send_server_safe(PRIVMSG => $self->{trivia_channel}, $msg );
+
+        my $clue_msg = "  Answer: ".$self->{_masked_answer};
+        $self->send_server_safe(PRIVMSG => $self->{trivia_channel}, $clue_msg );
+
+        $self->{_question_time} = time();
+
+        $self->{_clue_number}++;
+    } elsif( $self->{_clue_number} < 4) {
+
+        $self->{_current_points} = $points{$self->{_clue_number}};
+        
+        my $msg = "  Down to ".$self->{_current_points}." points: ".$self->give_clue;
+        $self->send_server_safe(PRIVMSG => $self->{trivia_channel}, $msg );
+        $self->{_clue_number}++;
+    } else {
+
+        my $msg = "No one got it. The answer was: ". $self->{_answer};
+        $self->send_server_safe(PRIVMSG => $self->{trivia_channel}, $msg );
+        $self->{_clue_number} = 0;
+        $self->_get_new_question;
+    }
+
 }
 
 sub _start {
@@ -2433,6 +2671,8 @@ sub _start {
     };
 
     $self->{con}->set_nick_change_cb($nick_change);
+
+    #$self->send_server_safe(PRIVMSG => "\*status","ClearAllChannelBuffers");
 
     $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port}, { nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
 # ident,quote,channel,time
