@@ -1,17 +1,28 @@
-# package Hadouken::Plugin::Trivia;
+package Hadouken::Configuration;
 
-# use strict;
-# use warnings;
+use strict;
+use warnings;
 
-# our $VERSION = '0.1';
-# our $AUTHOR = 'dek';
+our $VERSION = '0.1';
+our $AUTHOR = 'dek';
+
+use Moose;
+
+use Redis;
 
 
+has redis => (is => 'rw', isa => 'Redis', default => sub { my $redis = Redis->new(server => '127.0.0.1:6379'); $redis; });
 
+sub new {
+    my $class = shift;
+    my $self = {@_};
+    bless $self, $class;
+    return $self;
+}
 
-
-
-# 1;
+#__PACKAGE__->meta->make_immutable;
+ 
+1;
 
 package Hadouken;
 
@@ -33,6 +44,8 @@ our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
 
+use AsyncSocket;
+
 use Scalar::Util ();
 use Cwd ();
 use List::MoreUtils ();
@@ -52,7 +65,6 @@ use POSIX qw(strftime);
 use Time::HiRes qw( time sleep );
 use Geo::IP;
 use Tie::Array::CSV;
-use Text::CSV_XS;
 use Regexp::Common;
 use String::IRC;
 use Net::Whois::IP ();
@@ -68,6 +80,12 @@ use Time::Elapsed ();
 use TryCatch;
 use Config::General;
 use Crypt::Random;
+
+use Redis;
+use Redis::List;
+
+use IRC::Utils ':ALL';
+
 use Moose;
 
 with 'MooseX::Getopt::GLD' => { getopt_conf => [ 'pass_through' ] };
@@ -77,6 +95,8 @@ use namespace::autoclean;
 use File::Spec;
 use FindBin qw($Bin);
 use Module::Pluggable search_dirs => [ "$Bin/plugins/" ], sub_name => '_plugins';
+
+#has asyncsock => (is => 'rw', isa => 'AsyncSocket', default => sub { my $as = AsyncSocket->new; return $as; });
 
 has start_time => (is => 'ro', isa => 'Str', writer => '_set_start_time');
 has connect_time => (is => 'ro', isa => 'Str', writer => '_set_connect_time');
@@ -114,7 +134,6 @@ my @commands = (
     {name => 'whois',          regex => 'whois\s.+?',              comment => 'whois lookup <ip> or <domain>' }, 
     {name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
     {name => 'calc',           regex => 'calc\s.+?',               comment => 'google calculator' },
-    {name => 'ticker',         regex => 'ticker\s.+?',             comment => 'look up coin(ltc,doge,nmc) or coin pair(ltc_usd,doge_ltc,nvc_btc)' },
     {name => 'geoip',          regex => 'geoip\s.+?',              comment => 'geo ip lookup' },
     {name => 'lq',             regex => '(lq|lastquote)$',         comment => 'get most recently added quote' },
     {name => 'aq',             regex => '(aq|addquote)\s.+?',      comment => 'add a quote' },
@@ -148,6 +167,7 @@ sub isSet {
         return ($userFlags & $mask);
     }
 }
+
 sub removeFlag {
     { use integer;
         my ($self,$userFlags,$flagPos) = @_;
@@ -272,6 +292,8 @@ sub load {
     no warnings 'redefine';
     *{"Hadouken::Plugin::$module\::send_server"} = sub { my $self = shift; $self->{Owner}->send_server_safe(@_); $self->{last_sent} = time(); };
     *{"Hadouken::Plugin\::$module\::last_sent"} = $self->_make_accessor('last_sent');
+    *{"Hadouken::Plugin::$module\::asyncsock"} = sub { my $self = shift; my $client = $self->{Owner}->_asyncsock; return $client; };
+    *{"Hadouken::Plugin::$module\::check_acl_bit"} = sub { my $self = shift; $self->{Owner}->isSet(@_); };
 
     my $m = "Hadouken::Plugin::$module"->new(
         Owner   => $self,
@@ -1045,7 +1067,25 @@ sub _buildup {
     #my $tiewhitelistobj =   $tie_file->($self->{whitelistdb}, 'Tie::Array::CSV', "$datadir/whitelist.txt");
     #my $tieblacklistobj =   $tie_file->($self->{blacklistdb}, 'Tie::Array::CSV', "$datadir/blacklist.txt");
 
+    #my $hc = Hadouken::Configuration->new;
+
+    #$self->{redis} = Redis->new;
+
+    #tie my @my_list, 'Redis::List', 'list_name3';
+
     my $tieadminobj = tie @{$self->{adminsdb}}, 'Tie::Array::CSV', $self->{ownerdir}.'/../data/admins.txt' or die $!;
+
+    #@crap = map { [@$_] } @{$self->{adminsdb}};
+    #@my_list = @{$self->{adminsdb}};
+
+    #foreach my $crap (@{$self->{adminsdb}}) {
+
+    #    push(@my_list,@{$crap});
+    #}
+
+    #print Dumper(@my_list);
+    #exit;
+
 
     my $tiewhitelistobj = tie @{$self->{whitelistdb}}, 'Tie::Array::CSV', $self->{ownerdir}.'/../data/whitelist.txt' or die $!;
 
@@ -1065,12 +1105,11 @@ sub _buildup {
 
             my $userFlags = pack('b8','00001100');
 
-            $userFlags = $self->addFlag($userFlags, BIT_ADMIN) if $self->is_admin($who);
-            $userFlags = $self->addFlag($userFlags, BIT_BLACKLIST) if $self->blacklisted($who);
-            $userFlags = $self->addFlag($userFlags, BIT_WHITELIST) if $self->whitelisted($who);
+            $userFlags = $self->addFlag($userFlags, BIT_ADMIN) if($self->is_admin($who));
+            $userFlags = $self->addFlag($userFlags, BIT_BLACKLIST) if($self->blacklisted($who));
+            $userFlags = $self->addFlag($userFlags, BIT_WHITELIST) if($self->whitelisted($who));
 
             if(defined $channel_list) {
-
                 my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
                 if(exists $channel_list->{$nickname}) {
@@ -1082,6 +1121,33 @@ sub _buildup {
             return $userFlags;
         }
     };
+
+    #
+    # menace - men·ace noun: a person or thing that is likely to cause harm; a threat or danger.
+    #
+    # redid ACL so we can avoid menace(s).
+
+    my $plugin_acl_func = _->wrap(
+        $func_flags => sub {
+            my $func = shift;
+            my ($who, $message, $channel, $channel_list) = @_;
+
+            { use integer;
+
+                my $flags = $func->(@_);
+
+                my %accessControlEntry = (
+                    "permissions" => $flags, 
+                    "who" => $who, 
+                    "channel" => $channel, 
+                    "message" => $message
+                );
+
+                return %accessControlEntry;
+            }
+        }
+    );
+
 
     my $passive_access = _->wrap(
         $func_flags => sub {
@@ -1518,40 +1584,6 @@ sub _buildup {
             return 1;
         },
         acl => $passive_access,
-    );
-
-    $self->add_func(name => 'ticker',
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-
-            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
-            my ($cmd, $arg) = split(/ /, lc($message), 2);
-
-            return unless (defined($arg) && length($arg));
-
-            my ($first_symbol, $second_symbol) = split(/_/,$arg,2);
-
-            $second_symbol ||= 'usd';
-
-            my $json = $self->fetch_json('http://www.cryptocoincharts.info/v2/api/tradingPair/'.$first_symbol.'_'.$second_symbol);
-
-            return
-            unless (
-                (defined $json) && 
-                (exists $json->{'id'}) && 
-                (exists $json->{'price'}) && 
-                (exists $json->{'volume_first'}) &&
-                (grep { defined $_ && $_ ne '' } values $json));
-
-            my $si = String::IRC->new($arg)->bold;
-            my $ret =  "[$si] Id: $json->{id} Last: $json->{price} Volume: $json->{volume_first} Most volume: $json->{best_market}";
-
-            $self->send_server_safe (PRIVMSG => $channel, $ret);
-
-            return 1;
-        },
-        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(name => 'whois',
@@ -2307,8 +2339,13 @@ sub _buildup {
                     my $plugin = $plugin_regex->{name};
                     my $regex = $plugin_regex->{regex};
                     if($clean_msg =~ /$command_prefix$regex/) {
+
+                        $clean_msg =~ s/$command_prefix//g;
+
                         my $m = $self->_plugin($plugin); # lazy load plugin :)
-                        my $plugin_acl_ret = $m->acl_check($nickname, $ident, $clean_msg, $channel || undef,$user_admin,$user_whitelisted);
+                        #my $plugin_acl_ret = $m->acl_check($nickname, $ident, $clean_msg, $channel || undef,$user_admin,$user_whitelisted);
+                        my $plugin_acl_ret = $m->acl_check( $plugin_acl_func->($who, $clean_msg, $channel || undef, $channel_list || undef) );
+
                         warn "* Plugin $plugin -> ACL returned $plugin_acl_ret\n";
                         if($plugin_acl_ret) {
                             warn "* Plugin $plugin -> Calling delegate\n";
@@ -2790,6 +2827,21 @@ sub _webclient {
 
     return $self->{wc};
 }
+
+sub _asyncsock {
+    my $self = shift;
+
+    unless(defined $self->{asyncsock} ) {
+
+        $self->{asyncsock} = AsyncSocket->new();
+
+        require HTTP::Cookies;
+        $self->{asyncsock}->cookie_jar(HTTP::Cookies->new);
+    }
+
+    return $self->{asyncsock};
+}
+
 
 sub _shorten {
     my $self = shift;

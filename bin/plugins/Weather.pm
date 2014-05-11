@@ -32,10 +32,9 @@ sub command_regex {
 # Return 1 if OK.
 # 0 if does not pass ACL.
 sub acl_check {
-    my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
+    my ($self, %aclentry) = @_;
 
-    warn "$nick $host $message $channel, is_admin:$is_admin, is_whitelisted:$is_whitelisted\n";
-
+    
     return 1;
 }
 

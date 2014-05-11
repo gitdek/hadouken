@@ -61,7 +61,10 @@ WriteMakefile(
         'Data::Printer'					=> 0,
         'MooseX::Getopt::GLD'		=> 0,
     },
-    PM => {'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm'},
+    PM => {
+        'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm'
+        'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm'
+    },
     # EXE_FILES => ['bin/hadouken'],
     PL_FILES => {'bin/createconfig.pl' => '/etc/hadouken.conf'},
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
