@@ -14,7 +14,7 @@
 #     REVISION: ---
 #===============================================================================
 
-package Hadouken::Plugin::StockTicker;
+package Hadouken::Plugin::MitchQuotes;
 
 use strict;
 use warnings;
@@ -29,19 +29,19 @@ our $AUTHOR = 'dek';
 sub command_comment {
     my $self = shift;
 
-    return "Look up stock by stock <symbol>";
+    return "Random Mitch Hedberg quote";
 }
 
 # Clean name of command.
 sub command_name {
     my $self = shift;
 
-    return "stockticker";
+    return "mitch";
 }
 
 sub command_regex {
 
-    return 'stock\s.+?';
+    return 'mitch$';
 }
 
 # Return 1 if OK.
@@ -55,18 +55,18 @@ sub acl_check {
     my $message = $aclentry{'message'};
 
     # Hadouken::BIT_ADMIN OR Hadouken::BIT_WHITELIST OR Hadouken::BIT_OP Hadouken::NOT_RIP
-    my $minimum_perms = (1 << 0) | (1 << 1) | (1 << 3);
+    #my $minimum_perms = (1 << 0) | (1 << 1) | (1 << 3);
 
     #my $acl_min = (1 << Hadouken::BIT_ADMIN) | (1 << Hadouken::BIT_WHITELIST) | (1 << Hadouken::NOT_RIP);
 
-    my $value = ($permissions & $minimum_perms);
+    #my $value = ($permissions & $minimum_perms);
 
     #warn $value;
 
-    if($value > 0) {
+    #if($value > 0) {
         # At least one of the items is set.
-        return 1;
-    }
+        #    return 1;
+        #}
 
     # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.
@@ -87,21 +87,30 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
     my ($cmd, $arg) = split(/ /, lc($message),2);
 
-    return unless defined $arg;
-
     try {
+        my $line;
+        open(FILE,'<'.$self->{Owner}->{ownerdir}.'/../data/mitch_quotes') or die $!;
+        srand;
+        rand($.) < 1 && ($line = $_) while <FILE>;
+        close(FILE);    
 
-        $arg = uc($arg);
-        my $q = Finance::Quote->new();
-        my %data = $q->fetch('nyse', $arg);
+        
+        my $wrapped;
+        ($wrapped = $line) =~ s/(.{0,300}(?:\s|$))/$1\n/g;
+        
+        warn $wrapped;
 
-        if ($data{$arg, 'success'}) {
-            my $summary = $data{$arg, 'name'} ." Price: ". $data{$arg, 'price'} ." Volume: ".$data{$arg, 'volume'}." High: ".$data{$arg, 'high'}." Low: ".$data{$arg, 'low'};
-            $self->send_server (PRIVMSG => $channel, $summary);
-        } else {
-            warn "Failure";
+        my @lines = split(/\n/,$wrapped);
+
+
+
+        my $cnt = 0;
+        foreach my $l (@lines) {
+            next unless defined $l && length $l;
+            $cnt++;
+            $self->send_server(PRIVMSG => $channel, $cnt > 1 ? $l : "Mitch Hedberg - $l");
         }
-    } 
+    }
     catch($e) {
         warn $e;
     }

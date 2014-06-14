@@ -63,7 +63,7 @@ WriteMakefile(
     },
     PM => {
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm'
-        'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm'
+        #'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm'
     },
     # EXE_FILES => ['bin/hadouken'],
     PL_FILES => {'bin/createconfig.pl' => '/etc/hadouken.conf'},

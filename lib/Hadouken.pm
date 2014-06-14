@@ -28,7 +28,10 @@ package Hadouken;
 
 use strict;
 use warnings;
-use diagnostics;
+#use diagnostics;
+
+#no strict "refs";
+
 
 use constant BIT_ADMIN => 0;
 use constant BIT_WHITELIST => 1;
@@ -39,10 +42,11 @@ use constant BIT_VOICE => 4;
 # 
 # use 5.014;
 
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 our $AUTHOR = 'dek';
 
-use Data::Printer alias => 'Dumper', colored => 1;
+#use Data::Printer alias => 'Dumper', colored => 1;
+use Data::Dumper;
 
 use AsyncSocket;
 
@@ -59,10 +63,13 @@ use AnyEvent::IRC::Util ();
 use HTML::TokeParser;
 use URI ();
 use LWP::UserAgent ();
-use Encode qw( encode ); 
-use JSON::XS qw( encode_json decode_json );
+use Encode qw( encode decode );
+use Encode::Guess;
+
+#use JSON::XS qw( encode_json decode_json );
+use JSON; # qw( encode_json decode_json );
 use POSIX qw(strftime);
-use Time::HiRes qw( time sleep );
+use Time::HiRes qw( sleep );
 use Geo::IP;
 use Tie::Array::CSV;
 use Regexp::Common;
@@ -74,6 +81,8 @@ use MIME::Base64 ();
 use Crypt::OpenSSL::RSA;
 use Crypt::Blowfish_PP;
 use Crypt::DH;
+use Crypt::CBC;
+
 use Math::BigInt;
 use Config::General;
 use Time::Elapsed ();
@@ -83,6 +92,9 @@ use Crypt::Random;
 
 use Redis;
 use Redis::List;
+
+#use IO::Compress::Gzip qw(gzip $GzipError);
+use Digest::SHA3 qw(sha3_256_hex);
 
 use IRC::Utils ':ALL';
 
@@ -355,6 +367,11 @@ sub reload_config {
     return $ret;
 }
 
+sub randstring {
+	my $length = shift || 8;
+	return join "", map { ("a".."z", 0..9)[rand 36] } 1..$length;
+}
+
 sub dh_key_exchange {
     my ($self,$user,$key) = @_;
 
@@ -539,6 +556,16 @@ before 'send_server_long_safe' => sub {
 
 sub send_server {&send_server_safe}
 
+
+sub send_server_unsafe {
+    my ($self,$command, @params) = @_;
+    return unless defined $self->{con} && defined $command;
+
+    encode ('utf8', $_  ) foreach @params;
+
+    $self->{con}->send_srv($command,@params);
+}
+
 sub send_server_safe {
     my ($self,$command, @params) = @_;
     return unless defined $self->{con} && defined $command;
@@ -562,9 +589,9 @@ sub channel_add {
     my $server_name = $self->{server_name};
 
     $channel =~ s/^\#//;
-    $conf->{server}{$server_name}{channel}{$channel}{shorten_urls} = 1;
-    $conf->{server}{$server_name}{channel}{$channel}{op_admins} = 1;
-    $conf->{server}{$server_name}{channel}{$channel}{protect_admins} = 1;
+    $conf->{server}{$server_name}{channel}{$channel}{shorten_urls} = 0;
+    $conf->{server}{$server_name}{channel}{$channel}{op_admins} = 0;
+    $conf->{server}{$server_name}{channel}{$channel}{protect_admins} = 0;
 
     $self->{conf_obj}->save_file($self->{config_filename}, $conf);
 
@@ -982,6 +1009,128 @@ sub add_func {
             last;
         }
     }
+}
+
+
+sub _has_color {
+    my $self = shift;
+    my ($string) = @_;
+    return if !defined $string;
+    return 1 if $string =~ /[\x03\x04\x1B]/;
+    return;
+}
+
+sub _has_formatting {
+    my $self = shift;
+    my ($string) = @_;
+    return if !defined $string;
+    return 1 if $string =~/[\x02\x1f\x16\x1d\x11\x06]/;
+    return;
+}
+
+sub _strip_color {
+    my $self = shift;
+    
+    my ($string) = @_;
+    return if !defined $string;
+
+    # mIRC colors
+    $string =~ s/\x03(?:,\d{1,2}|\d{1,2}(?:,\d{1,2})?)?//g;
+
+    # RGB colors supported by some clients
+    $string =~ s/\x04[0-9a-fA-F]{0,6}//g;
+
+    # see ECMA-48 + advice by urxvt author
+    $string =~ s/\x1B\[.*?[\x00-\x1F\x40-\x7E]//g;
+
+    # strip cancellation codes too if there are no formatting codes
+    $string =~ s/\x0f//g if !$self->_has_formatting($string);
+    return $string;
+}
+
+sub _filter_colors {
+    my $self = shift;
+    my ($line) = @_;
+    $line =~ s/\x1B\[.*?[\x00-\x1F\x40-\x7E]//g; # see ECMA-48 + advice by urxvt author
+    $line =~ s/\x03\d\d?(?:,\d\d?)?//g;          # see http://www.mirc.co.uk/help/color.txt
+    $line =~ s/[\x03\x16\x02\x1f\x0f]//g;        # see some undefined place :-)
+    return $line;
+}
+
+sub _strip_formatting {
+    my $self = shift;
+    my ($string) = @_;
+    return if !defined $string;
+    $string =~ s/[\x02\x1f\x16\x1d\x11\x06]//g;
+
+    # strip cancellation codes too if there are no color codes
+    $string =~ s/\x0f//g if !$self->_has_color($string);
+
+    return $string;
+}
+
+sub _decode_irc {
+    my $self = shift;
+    my ($line) = @_;
+    my $utf8 = guess_encoding($line, 'utf8');
+    return ref $utf8 ? decode('utf8', $line) : decode('cp1252', $line);
+}
+
+sub hexdump {
+	my $self = shift;
+    #return unless $self->{hexdump};
+
+	my ($label,$data);
+	if (scalar(@_) == 2) {
+		$label = shift;
+	}
+	$data = shift;
+
+    print "$label:\n" if ($label);
+
+	# Show 16 columns in a row.
+	my @bytes = split(//, $data);
+	my $col = 0;
+	my $buffer = '';
+	for (my $i = 0; $i < scalar(@bytes); $i++) {
+		my $char    = sprintf("%02x", unpack("C", $bytes[$i]));
+		my $escaped = unpack("C", $bytes[$i]);
+		if ($escaped < 20 || $escaped > 126) {
+			$escaped = ".";
+		}
+		else {
+			$escaped = chr($escaped);
+		}
+
+		$buffer .= $escaped;
+		print "$char ";
+		$col++;
+
+		if ($col == 8) {
+			print "  ";
+		}
+		if ($col == 16) {
+			$buffer .= " " until length $buffer == 16;
+			print "  |$buffer|\n";
+			$buffer = "";
+			$col    = 0;
+		}
+	}
+	while ($col < 16) {
+		print "   ";
+		$col++;
+		if ($col == 8) {
+			print "  ";
+		}
+		if ($col == 16) {
+			$buffer .= " " until length $buffer == 16;
+			print "  |$buffer|\n";
+			$buffer = "";
+		}
+	}
+	if (length $buffer) {
+		print "|$buffer|\n";
+	}
 }
 
 sub jsonify {
@@ -2183,6 +2332,23 @@ sub _buildup {
 
                 if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{op_admins} == 1) {
                     $self->send_server_safe( MODE => $channel, '+o', $nick);   
+                
+                    # who was opped, who opped them, a timestamp
+
+                    
+                    #opped opper channel
+                    
+                    my $cookie = $self->makecookie($ident,$self->{nick},$channel);
+
+                    my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
+                    $self->send_server_safe( MODE => $channel, '-b', $cookie);
+                    
+                    #warn "WEEEEE" if $test;
+                    #warn $nick;
+                    #warn $cookie;
+
+
+                    #$self->{_rsa}->e
                 }
 
                 # $self->send_server_safe( MODE => $channel, '+o', $nick);   
@@ -2354,8 +2520,35 @@ sub _buildup {
                     }
                 }
 
-                # Try to match to trivia!
 
+                if($channel eq '#trivia') {
+                    if($nickname eq 'utonium') {
+                    
+                        if($message =~ 'QUESTION' || $message =~ 'googled the answer' || $message =~ 'start giving answers like this one') {
+                            my $stripped = $self->_decode_irc($message);
+                            
+                            $stripped =~ s/\x03\x31.*?\x03/ /g;
+                            $stripped =~ s/[\x20\x39]/ /g;
+                            $stripped =~ s/[\x30\x2c\x31]//g;
+
+                            #$stripped = $self->strip_formatting($stripped);
+
+                            $stripped = $self->_strip_color($stripped);
+
+                            $stripped =~ s/\h+/ /g;                            
+                            
+                            $stripped .= "\n";
+
+                            $self->hexdump("Unstripped",$stripped);
+
+                            open(FILE,">>".$self->{ownerdir}.'/../data/new_questions_parsed');
+                            print FILE $stripped;
+                            close(FILE);
+                        }
+                    }
+                }
+
+                # Try to match to trivia!
                 if($self->{triviarunning} && $channel eq $self->{trivia_channel}) {
                     my $old_mask = $self->{_masked_answer};
                     my $new_mask = $self->check_and_reveal($clean_msg);
@@ -2389,22 +2582,68 @@ sub _buildup {
 
                                 $self->send_server_safe(PRIVMSG => $self->{trivia_channel},"Yes! $nickname GOT IT! -> ".$self->{_answer}." <- in $answer_elapsed seconds and receives --> ".$self->{_current_points}." <-- points!");
 
-                                $self->{_scores}{$nickname} += $self->{_current_points};
+                                $self->{_scores}{$nickname}{score} += $self->{_current_points};
 
-                                if($in_a_row % 10 == 0) {
-                                    $self->send_server_safe(PRIVMSG => $self->{trivia_channel}," $nickname has won $in_a_row in a row, and received a --> 500 <-- point bonus!");
-                                    $self->{_scores}{$nickname} += 500;
+                                #print Dumper($self->{_scores});
+
+                                warn $self->{_scores}{$nickname}{score};
+
+                                if($in_a_row > 0 && $in_a_row % 10 == 0) {
+                                    $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}," $nickname has won $in_a_row in a row, and received a --> 500 <-- point bonus!");
+                                    $self->{_scores}{$nickname}{score} += 500;
+                                }
+                                
+                                my $point_msg = $self->{_current_points}. " points has been added to your score! total score for ". $nickname ." is ".$self->{_scores}{$nickname}{score};
+                                $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $point_msg);
+                                $self->{_clue_number} = 0;
+                           
+                                my $z = $self->_calc_trivia_rankings();
+
+                                my $user_rank = $self->_trivia_ranking($nickname);
+
+                                #warn "user rank is $user_rank";
+
+                                #print Dumper($self->{_rankings});
+
+                                my @rankings = @{$self->{_rankings}};
+
+                                #rint Dumper(@rankings);
+
+                                #warn "WTF";
+
+                                my $pos_prev = $rankings[$user_rank - 2] || undef;
+                                my $pos_next = $rankings[$user_rank + 2] || undef;
+                                
+                                warn $pos_prev;
+                                warn $pos_next;
+
+                                if($user_rank == 1 && defined $pos_next) {
+                                    my $points_ahead = $self->{_scores}{$nickname}{score} - $self->{_scores}{$pos_next}{score};
+                                    my $first_place_msg = "  $nickname is $points_ahead points ahead for keeping 1st place!";
+                                    #warn $first_place_msg;
+
+                                    $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},$first_place_msg);
+                                
+                                } else {
+                                    if(defined $pos_prev) {
+                                        my $points_needed = $self->{_scores}{$pos_prev}{score} - $self->{_scores}{$nickname}{score};
+                                        my $position_message = "  $nickname needs $points_needed points to take over position ". $self->{_scores}{$pos_prev}{rank};
+                               
+                                        #warn $position_message;
+
+                                        $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},$position_message);
+                                    }
                                 }
 
-                                my $point_msg = $self->{_current_points}." points has been added to your score! total score for $nickname is ".$self->{_scores}{$nickname};
-
-                                $self->send_server_safe(PRIVMSG => $self->{trivia_channel},$point_msg);
-                                $self->{_clue_number} = 0;
+                            
+                                my $msg_t = "Next question in less than 15 seconds... Get Ready!";
+                                $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg_t);
+                            
                             } else {
-                                $self->send_server_safe(PRIVMSG => $self->{trivia_channel},"  Answer: $new_mask");
+                                $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},"  Answer: $new_mask"); 
+                        
                             }
                         }
-
                     }
                 }
             }
@@ -2449,30 +2688,65 @@ sub _buildup {
 
                             my @x = List::MoreUtils::after { $_ =~ '-o' } @{$msg->{params}};
 
-                            return unless(@x);
+                            if(@x) {
+                                my @admins = grep { $self->is_admin($con->nick_ident($_)) } @x;
 
-                            my @admins = grep { $self->is_admin($con->nick_ident($_)) } @x;
+                                if(@admins) {
+                                    my $it = List::MoreUtils::natatime 3, @admins;
 
-                            return unless(@admins);
+                                    while (my @vals = $it->()) {
+                                        my $mode = '+';
+                                        $mode .= 'o' x ($#vals + 1);
 
-                            my $it = List::MoreUtils::natatime 3, @admins;
+                                        warn "* Protect triggered in $chan, setting MODE $mode ".join('  ',@vals) ."\n";
 
-                            while (my @vals = $it->()) {
-                                my $mode = '+';
-                                $mode .= 'o' x ($#vals + 1);
+                                        unshift(@vals,$mode);
+                                        $self->send_server_safe( MODE => $chan, @vals);
 
-                                warn "* Protect triggered in $chan, setting MODE $mode ".join('  ',@vals) ."\n";
-
-                                unshift(@vals,$mode);
-                                $self->send_server_safe( MODE => $chan, @vals);
+                                        my $cookie = $self->makecookie($nick,$self->{nick},$chan);
+                                        my $test = $self->checkcookie($nick,$self->{nick},$chan,$cookie);
+                                        $self->send_server_safe( MODE => $chan, '-b', $cookie);
+                                    }
+                                }
                             }
+                            
+                            my @bans = List::MoreUtils::after { $_ =~ /\+b/ } @{$msg->{params}};
+                            if(@bans) {
+                               
+                                unless($self->is_admin($ident)) {
+                                    
+                                    warn "* Protect triggered in $chan, UNBANNING ".join('  ',@bans) ."\n";
+                                   foreach my $ban (@bans) {
+                                       warn "UNBANNING $ban";
+                                       $self->send_server_safe( MODE => $chan, '-b', $ban);
+                                       $self->send_server_safe( MODE => $chan, '-o', $nick);
+                                   }
+
+                                   } else {
+                                    
+                                       warn "* Admin is banning users in $chan, ".join('  ',@bans) ."\n";
+                                       foreach my $ban (@bans) {
+                                        
+                                        my $n_ban = $self->normalize_mask($ban);
+                                        if(grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{adminsdb}} ) {
+                                            
+                                            $self->send_server_safe( MODE => $chan, '-b', $ban);
+
+                                            unless ($self->is_admin($ident)) {
+                                                $self->send_server_safe( MODE => $chan, '-o', $nick);
+                                            }
+
+                                        }
+                                    }
+                                }
+                            }
+
+
 
                         }
                     }
+
                 }
-
-                #}
-
             } else {
                 warn "< " .$cmd."\t\t".$params."\n";
             }
@@ -2498,7 +2772,24 @@ sub _start_trivia {
 
     #$self->_trivia_func;
     
-    $self->{triv_timer} = AnyEvent->timer (after => 20, interval => 20, cb => sub { $self->_trivia_func; } );
+    if(-e $self->{ownerdir}.'/../data/scores.json') {
+        open(my $fh, $self->{ownerdir}.'/../data/scores.json') or die $!;
+        my $json_data;
+        read($fh,$json_data, -s $fh); # Suck in the whole file
+        close $fh;
+
+        my $temp_scores = JSON->new->allow_nonref->decode($json_data);
+        #$self->{_scores} = %{$temp_scores};
+
+        %{$self->{_scores}} = %{$temp_scores};
+
+        $self->_calc_trivia_rankings;
+
+    }
+    
+    
+    undef $self->{triv_timer};
+    $self->{triv_timer} = AnyEvent->timer (after => 0, interval => 15, cb => sub { $self->_trivia_func; } );
 
     return 1;
 }
@@ -2510,6 +2801,9 @@ sub _stop_trivia {
         return 1;
     }
 
+    $self->_save_trivia_scores;
+    
+    $self->{_clue_number} = 0;
     $self->{triviarunning} = 0;
     $self->{trivia_channel} = '';
 
@@ -2517,16 +2811,56 @@ sub _stop_trivia {
 
     delete $self->{triv_timer};
 
-    #open(FILE,"<".$self->{ownerdir}.'/../data/scores.json');
+    return 1;
+}
 
-    #my %scorez = %{$self->{_scores}};
+sub _save_trivia_scores {
+    my ($self) = @_;
 
+    return unless defined $self->{_scores};
 
-    #my $json_data = my $json = encode_json(encode("utf8",\%scorez));
-
-    #print Dumper($json_data);
+    $self->_calc_trivia_rankings;
+    
+    open(my $fh,">".$self->{ownerdir}.'/../data/scores.json');
+    my %scorez = %{$self->{_scores}};
+    my $json_data = JSON->new->allow_nonref->encode(\%scorez);
+    print $fh $json_data;
+    close($fh);
 
     return 1;
+}
+
+sub _calc_trivia_rankings {
+    my ($self) = @_;
+
+    #print Dumper($self->{_scores});
+
+    my @rankings = sort { $self->{_scores}->{$b}->{score} <=> $self->{_scores}->{$a}->{score} } keys $self->{_scores};
+
+
+    my $i = 0;
+    for my $p (@rankings) {
+        $self->{_scores}->{$p}->{rank} = ++$i;
+    }
+
+    @{$self->{_rankings}} = @rankings;
+    
+    return 1;
+}
+
+sub _trivia_ranking {
+    my $self = shift;
+    my $username = shift;
+
+    return 0 unless defined $username;
+
+    if (exists $self->{_scores}{$username}) {
+        #$self->_calc_trivia_rankings unless exists $self->{_scores}{$username}{rank};
+        my $rank = $self->{_scores}{$username}{rank};
+        return $rank;
+    } else {
+        return 0;
+    }
 }
 
 sub _get_new_question {
@@ -2634,7 +2968,7 @@ sub _trivia_func {
 
     return unless $self->{triviarunning};
 
-    my %points = ( 0 => 5, 1 => 3, 2 => 2, 3 => 1 );
+    my %points = ( 0 => 20, 1 => 17, 2 => 11, 3 => 5 );
 
     $self->{_clue_number} = 0 unless exists $self->{_clue_number};
 
@@ -2648,10 +2982,10 @@ sub _trivia_func {
         warn $self->{_answer},"\n";
 
         my $msg = "Question, worth ".$self->{_current_points}." points: ".$self->{_question};
-        $self->send_server_safe(PRIVMSG => $self->{trivia_channel}, $msg );
+        $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg );
 
         my $clue_msg = "  Answer: ".$self->{_masked_answer};
-        $self->send_server_safe(PRIVMSG => $self->{trivia_channel}, $clue_msg );
+        $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $clue_msg );
 
         $self->{_question_time} = time();
 
@@ -2661,12 +2995,15 @@ sub _trivia_func {
         $self->{_current_points} = $points{$self->{_clue_number}};
         
         my $msg = "  Down to ".$self->{_current_points}." points: ".$self->give_clue;
-        $self->send_server_safe(PRIVMSG => $self->{trivia_channel}, $msg );
+        $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg );
         $self->{_clue_number}++;
     } else {
 
         my $msg = "No one got it. The answer was: ". $self->{_answer};
-        $self->send_server_safe(PRIVMSG => $self->{trivia_channel}, $msg );
+        $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg );
+        my $msg_t = "Next question in less than 15 seconds... Get Ready!";
+        $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg_t);
+
         $self->{_clue_number} = 0;
         $self->_get_new_question;
     }
@@ -2720,6 +3057,63 @@ sub _start {
     #return 1;
 }
 
+sub normalize_mask {
+    my ($self, $arg) = @_;
+    return if !defined $arg;
+
+    $arg =~ s/\*{2,}/*/g;
+    my @mask;
+    my $remainder;
+    if ($arg !~ /!/ and $arg =~ /@/) {
+        $remainder = $arg;
+        $mask[0] = '*';
+    }
+    else {
+        ($mask[0], $remainder) = split /!/, $arg, 2;
+    }
+
+    $remainder =~ s/!//g if defined $remainder;
+    @mask[1..2] = split(/@/, $remainder, 2) if defined $remainder;
+    $mask[2] =~ s/@//g if defined $mask[2];
+
+    for my $i (1..2) {
+        $mask[$i] = '*' if !defined $mask[$i];
+    }
+    return $mask[0] . '!' . $mask[1] . '@' . $mask[2];
+}
+
+sub matches_mask {
+    my ($self, $mask, $match, $mapping) = @_;
+    return if !defined $mask || !length $mask;
+    return if !defined $match || !length $match;
+
+    my $umask = quotemeta $self->uc_irc($mask, $mapping);
+    $umask =~ s/\\\*/[\x01-\xFF]{0,}/g;
+    $umask =~ s/\\\?/[\x01-\xFF]{1,1}/g;
+    $match = $self->uc_irc($match, $mapping);
+
+    return 1 if $match =~ /^$umask$/;
+    return;
+}
+
+sub uc_irc {
+    my ($self, $value, $type) = @_;
+    return if !defined $value;
+    $type = 'rfc1459' if !defined $type;
+    $type = lc $type;
+
+    if ($type eq 'ascii') {
+        $value =~ tr/a-z/A-Z/;
+    }
+    elsif ($type eq 'strict-rfc1459') {
+        $value =~ tr/a-z{}|/A-Z[]\\/;
+    }
+    else {
+        $value =~ tr/a-z{}|^/A-Z[]\\~/;
+    }
+
+    return $value;
+}
 
 sub parse_calc_result {
     my ($self,$html) = @_;
@@ -2888,6 +3282,58 @@ sub _shorten {
     return ($shortenurl,$title);
 }
 
+sub checkcookie {
+    my ($self,$opped,$opper,$channel,$cookie) = @_;
+
+    my $iv = substr(sha3_256_hex($self->{keys}->[0]),0,8);
+
+    my $cipher = Crypt::CBC->new(-cipher => 'Blowfish', -key => $self->{keys}->[0],-iv => $iv, -header => 'none');
+
+    my ($header,$hash) = split(/\@/,$cookie);
+
+    my $ciphertext = MIME::Base64::decode_base64($hash);
+
+    my $cleartext = $cipher->decrypt($ciphertext);
+
+    my @parts = split(/\t/,$cleartext);
+
+    my $ts = substr $parts[2],-4;
+
+    my $chname = substr $parts[2],0, (length($parts[2]) - 4);
+
+    if($parts[0] eq $opped && $parts[1] eq $opper && $chname eq $channel) {
+        return 1;
+    }
+
+    return 0;
+}
+
+sub makecookie {
+    my ($self,$opped,$opper,$channel) = @_;
+
+    my $ts = substr(time(),0,4);
+
+    my $cookie_op;
+    $cookie_op .= $opped;
+    $cookie_op .= "\t";
+    $cookie_op .= $opper;
+    $cookie_op .= "\t";
+    $cookie_op .= $channel;
+    $cookie_op .= $ts;
+
+    my $iv = substr(sha3_256_hex($self->{keys}->[0]),0,8);
+
+    my $cipher = Crypt::CBC->new(-cipher => 'Blowfish', -key => $self->{keys}->[0],-iv => $iv, -header => 'none');
+
+    my $cookie_op_encrypted = $cipher->encrypt( $cookie_op );
+
+    my $cookie_op_inflated = MIME::Base64::encode_base64($cookie_op_encrypted);
+
+    my $cookie = sprintf("%s!%s@%s",randstring(2),randstring(3),$cookie_op_inflated);
+
+
+    return $cookie;
+}
 
 sub _encrypt {
     my ( $self, $text, $key ) = @_;
@@ -2898,6 +3344,7 @@ sub _encrypt {
     my $cipher = new Crypt::Blowfish_PP $key;
     foreach ( split /\n/, $text ) {
         $result .= $self->_inflate( $cipher->encrypt($_) );
+    
     }
     #} catch($e) {
     #}
@@ -2909,7 +3356,8 @@ sub _decrypt {
 
     $text =~ s/(.{12})/$1\n/g;
     my $result = '';
-    my $cipher = new Crypt::Blowfish_PP $key;
+    #my $cipher = new Crypt::Blowfish_PP $key;
+    my $cipher = Crypt::CBC->new(-key => $key, -cipher => 'Blowfish');
     foreach ( split /\n/, $text ) {
         $result .= $cipher->decrypt( $self->_deflate($_) );
     }

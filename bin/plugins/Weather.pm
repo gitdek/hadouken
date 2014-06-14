@@ -5,6 +5,7 @@ use warnings;
 
 use Yahoo::Weather;
 use TryCatch;
+use Data::Dumper;
 
 our $VERSION = '0.1';
 our $AUTHOR = 'dek';
@@ -34,8 +35,17 @@ sub command_regex {
 sub acl_check {
     my ($self, %aclentry) = @_;
 
-    
-    return 1;
+    my $permissions = $aclentry{'permissions'};
+
+    if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
+        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
+        || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+
+        return 1;
+    }
+
+
+    return 0;
 }
 
 # Return 1 if OK (and then callback can be called)
@@ -50,8 +60,9 @@ sub command_run {
     my $summary = $self->_weather($arg);
 
     if(defined $summary && $summary ne '') {
-        my $weather_msg = "$arg -> $summary";
-        $self->send_server (PRIVMSG => $channel, $weather_msg);
+        #my $weather_msg = "$arg -> $summary";
+        #warn $weather_msg;
+        $self->send_server (PRIVMSG => $channel, $summary);
     }
 
     return 1;
@@ -69,10 +80,29 @@ sub _weather {
     my $summary = '';
     try {
         my $ret = $self->{weatherclient}->getWeatherByLocation($location,'F');
-        if(exists $ret->{'CurrentObservation'} )  {
+        if(exists $ret->{'CurrentObservation'} && $ret->{'LocationDetails'} )  {
 
-            $summary = "Temp: ".$ret->{'CurrentObservation'}{'temp'};
-            $summary .= " Condition: ".$ret->{'CurrentObservation'}{'text'};
+            $summary = $ret->{'LocationDetails'}{'city'} if exists $ret->{'LocationDetails'}{'city'};
+            $summary .= " ".$ret->{'LocationDetails'}{'region'} if exists $ret->{'LocationDetails'}{'region'};
+
+            $summary .= " Now -> Temp: ".$ret->{'CurrentObservation'}{'temp'} if exists $ret->{'CurrentObservation'}{'temp'};
+            $summary .= " Condition: ".$ret->{'CurrentObservation'}{'text'} if exists $ret->{'CurrentObservation'}{'text'};
+            $summary .= " Visibility: ".$ret->{'Atmosphere'}{'visibility'} if exists $ret->{'Atmosphere'}{'visibility'};
+            $summary .= " Humidity: ".$ret->{'Atmosphere'}{'humidity'} if exists $ret->{'Atmosphere'}{'humidity'};
+
+            if (exists $ret->{'TwoDayForecast'}[1]{'high'} && exists $ret->{'TwoDayForecast'}[1]{'low'}) {
+                $summary .= " - ".$ret->{'TwoDayForecast'}[1]{'day'}." -> High/Low: ".$ret->{'TwoDayForecast'}[1]{'high'}."/".$ret->{'TwoDayForecast'}[1]{'low'};
+                $summary .= " Condition: ".$ret->{'TwoDayForecast'}[1]{'text'} if exists $ret->{'TwoDayForecast'}[1]{'text'};
+            }
+
+
+            if (exists $ret->{'TwoDayForecast'}[2]{'high'} && exists $ret->{'TwoDayForecast'}[2]{'low'}) {
+                $summary .= " - ".$ret->{'TwoDayForecast'}[2]{'day'}." -> High/Low: ".$ret->{'TwoDayForecast'}[2]{'high'}."/".$ret->{'TwoDayForecast'}[2]{'low'};
+                $summary .= " Condition: ".$ret->{'TwoDayForecast'}[2]{'text'} if exists $ret->{'TwoDayForecast'}[2]{'text'};
+            }
+
+
+            warn Dumper($ret);
         }
     }
     catch($e) {
