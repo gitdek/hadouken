@@ -13,7 +13,7 @@ our $VERSION = '0.1';
 our $AUTHOR = 'dek';
 
 
-my %iso3_codes = ('korean' => 'kor', 'italian' => 'ita', 'dutch' => 'nld', 'french' => 'fra','portuguese' => 'por', 'arabic' => 'ara','russian' => 'rus','spanish' => 'spa','german' => 'deu','japanese' => 'jpn');
+my %iso3_codes = ('english' => 'eng', 'korean' => 'kor', 'italian' => 'ita', 'dutch' => 'nld', 'french' => 'fra','portuguese' => 'por', 'arabic' => 'ara','russian' => 'rus','spanish' => 'spa','german' => 'deu','japanese' => 'jpn');
 
 # Description of this command.
 sub command_comment {
@@ -31,7 +31,6 @@ sub command_name {
 
 sub command_regex {
     my $self = shift;
-
     return 'translate\s.+?';
 }
 
@@ -70,7 +69,24 @@ sub command_run {
     chomp($dstlang);
     chomp($phrase);
 
-    warn "trying $dstlang $phrase";
+    my $srclang = 'english';
+
+    my $src_lang = 'eng';
+
+    if($dstlang =~ m/\-/) {
+        my ($src,$dst) = split(/-/,$dstlang,2);
+
+        if(defined $src && length $src && exists $iso3_codes{$src}) {
+            $srclang = $src;
+            $src_lang = $iso3_codes{$src};
+            $dstlang = $dst;
+        }
+    } else {
+        if($dstlang ne 'english') {
+            $srclang = $dstlang;
+            $dstlang = 'english';
+        }
+    }
 
     return 
         unless 
@@ -78,17 +94,27 @@ sub command_run {
 
     return 
         unless 
-            exists $iso3_codes{$dstlang};
+            exists $iso3_codes{$dstlang} && exists $iso3_codes{$srclang};
 
+
+    warn "trying $srclang $dstlang $phrase";
+    
     my $dest_lang = $iso3_codes{$dstlang};
+    $src_lang = $iso3_codes{$srclang};
 
     my $encoded_phrase = $phrase;
     
+    $encoded_phrase = 'sexy' if $encoded_phrase =~ 'luchini';
+   
+    if($encoded_phrase =~ 'dek') {
+        $encoded_phrase = 'awesome';
+    }
+
     $encoded_phrase =~ s/ /\%20/g;
 
     #warn $encoded_phrase;
 
-    my $define_url = "http://glosbe.com/gapi/translate?from=eng&dest=".$dest_lang."&format=json&phrase=".$encoded_phrase."&pretty=true";
+    my $define_url = "http://glosbe.com/gapi/translate?from=".$src_lang."&dest=".$dest_lang."&format=json&phrase=".$encoded_phrase."&pretty=true";
 
     $self->asyncsock->get($define_url, sub {
         my ($body, $header) = @_;

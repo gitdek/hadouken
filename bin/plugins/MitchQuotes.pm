@@ -19,7 +19,6 @@ package Hadouken::Plugin::MitchQuotes;
 use strict;
 use warnings;
 
-use Finance::Quote;
 use TryCatch;
 
 our $VERSION = '0.1';

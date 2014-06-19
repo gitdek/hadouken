@@ -2331,7 +2331,7 @@ sub _buildup {
                 my $server_hash_ref = $self->{current_server};
 
                 if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{op_admins} == 1) {
-                    $self->send_server_safe( MODE => $channel, '+o', $nick);   
+                    $self->send_server_unsafe( MODE => $channel, '+o', $nick);   
                 
                     # who was opped, who opped them, a timestamp
 
@@ -2341,7 +2341,7 @@ sub _buildup {
                     my $cookie = $self->makecookie($ident,$self->{nick},$channel);
 
                     my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
-                    $self->send_server_safe( MODE => $channel, '-b', $cookie);
+                    $self->send_server_unsafe( MODE => $channel, '-b', $cookie);
                     
                     #warn "WEEEEE" if $test;
                     #warn $nick;
@@ -2361,7 +2361,7 @@ sub _buildup {
             if($self->{con}->nick() eq $kicked_nick || $self->{con}->is_my_nick($kicked_nick)) {
                 if($self->{rejoin_on_kick}) {
                     warn "* Rejoining $channel automatically\n";
-                    $self->send_server_safe (JOIN => $channel);
+                    $self->send_server_unsafe (JOIN => $channel);
                 }
                 # my $si = String::IRC->new($kicker_nick)->red->bold;
                 # $self->send_server_safe (PRIVMSG => $channel,"kicked by $si, behavior logged");
@@ -2701,11 +2701,11 @@ sub _buildup {
                                         warn "* Protect triggered in $chan, setting MODE $mode ".join('  ',@vals) ."\n";
 
                                         unshift(@vals,$mode);
-                                        $self->send_server_safe( MODE => $chan, @vals);
+                                        $self->send_server_unsafe( MODE => $chan, @vals);
 
                                         my $cookie = $self->makecookie($nick,$self->{nick},$chan);
                                         my $test = $self->checkcookie($nick,$self->{nick},$chan,$cookie);
-                                        $self->send_server_safe( MODE => $chan, '-b', $cookie);
+                                        $self->send_server_unsafe( MODE => $chan, '-b', $cookie);
                                     }
                                 }
                             }
@@ -2718,8 +2718,8 @@ sub _buildup {
                                     warn "* Protect triggered in $chan, UNBANNING ".join('  ',@bans) ."\n";
                                    foreach my $ban (@bans) {
                                        warn "UNBANNING $ban";
-                                       $self->send_server_safe( MODE => $chan, '-b', $ban);
-                                       $self->send_server_safe( MODE => $chan, '-o', $nick);
+                                       $self->send_server_unsafe( MODE => $chan, '-b', $ban);
+                                       $self->send_server_unsafe( MODE => $chan, '-o', $nick);
                                    }
 
                                    } else {
@@ -2728,14 +2728,28 @@ sub _buildup {
                                        foreach my $ban (@bans) {
                                         
                                         my $n_ban = $self->normalize_mask($ban);
+                                        
+                                        # Admin can ban anyone except:
+
+
+                                        # Admin can't ban other admins
                                         if(grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{adminsdb}} ) {
                                             
-                                            $self->send_server_safe( MODE => $chan, '-b', $ban);
+                                            $self->send_server_unsafe( MODE => $chan, '-b', $ban);
 
                                             unless ($self->is_admin($ident)) {
-                                                $self->send_server_safe( MODE => $chan, '-o', $nick);
+                                                $self->send_server_unsafe( MODE => $chan, '-o', $nick);
                                             }
+                                        }
 
+                                        # Can't ban whitelisted!
+                                        if(grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{whitelistdb}} ) {
+                                            
+                                            $self->send_server_unsafe( MODE => $chan, '-b', $ban);
+
+                                            unless ($self->is_admin($ident)) {
+                                                $self->send_server_unsafe( MODE => $chan, '-o', $nick);
+                                            }
                                         }
                                     }
                                 }

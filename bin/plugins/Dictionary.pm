@@ -63,6 +63,10 @@ sub command_run {
             (defined($arg) && length($arg));
 
 
+    if(lc($arg) =~ 'dek') {
+        $arg = 'awesome';
+    }
+
     my $define_url = "http://glosbe.com/gapi/translate?from=eng&dest=eng&format=json&phrase=".$arg."&pretty=true";
 
     $self->asyncsock->get($define_url, sub {

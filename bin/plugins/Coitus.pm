@@ -14,7 +14,7 @@
 #     REVISION: ---
 #===============================================================================
 
-package Hadouken::Plugin::MagicEight;
+package Hadouken::Plugin::Coitus;
 
 use strict;
 use warnings;
@@ -24,61 +24,23 @@ use TryCatch;
 our $VERSION = '0.1';
 our $AUTHOR = 'dek';
 
-my %responses = (
-    'Yes' => [
-        'Yes!',
-        'Definitely!',
-        'Sure',
-        'I think so',
-        'Fuck yeah!',
-        'Hell yeah!',
-        'Most certainly',
-        'For sure',
-        'Abso-fucking-lutely',
-        'In-fucking-deed!',
-        'Fuck yes',
-    ],
-    'No' => [
-        'Nope',
-        'No way!',
-        'Of course not you pleb!',
-        'I think not',
-        'Negative',
-        'Not a chance!',
-        'Good God no!',
-        'Absolutely no chance!',
-        "You're kidding, right?",
-        'No fucking chance',
-    ],
-    'Maybe' => [
-        'Hmm, perhaps',
-        'I suppose',
-        'I don\'t know about that',
-        'Not sure',
-        'Ask me later',
-        'How should I know?',
-        "Haven't a fucking clue",
-    ],
-);
-
-
 # Description of this command.
 sub command_comment {
     my $self = shift;
 
-    return "Magic 8-Ball";
+    return "Get a random synonym for coitus";
 }
 
 # Clean name of command.
 sub command_name {
     my $self = shift;
 
-    return "8ball";
+    return "coitus";
 }
 
 sub command_regex {
 
-    return '8ball\s.+?';
+    return 'coitus$';
 }
 
 # Return 1 if OK.
@@ -101,9 +63,9 @@ sub acl_check {
     #warn $value;
 
     #if($value > 0) {
-    # At least one of the items is set.
-    #    return 1;
-    #}
+        # At least one of the items is set.
+        #    return 1;
+        #}
 
     # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.
@@ -114,7 +76,7 @@ sub acl_check {
         return 1;
     }
 
-    return 0; # Just let everyone use it :)
+    return 0;
 }
 
 
@@ -124,39 +86,24 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
     my ($cmd, $arg) = split(/ /, lc($message),2);
 
-    return unless defined $arg;
+    try {
+        my $line;
+        open(FILE,'<'.$self->{Owner}->{ownerdir}.'/../data/coitus') or die $!;
+        srand;
+        rand($.) < 1 && ($line = $_) while <FILE>;
+        close(FILE);    
 
-    # First, if we were asked to pick from some options:
-    if (my($option_list) = $arg =~ /(?:choose|pick) \s+ (?:from\s+)? (.+)/x) {
-        my @options = split /\s+or\s+/, $option_list;
-        my $picked = $options[ rand @options ];
         
-        $self->send_server(PRIVMSG => $channel, "8ball picked: $picked");
-        return 1;
+        $self->send_server(PRIVMSG => $channel, "[coitus] - ".lc($line));
+        
+    }
+    catch($e) {
+        warn $e;
     }
 
-
-    my $result;
-    if ($arg =~ / (?: alcohol | beer | pub | home | friday ) /xi) {
-        $result = 'Yes';
-    } elsif ($arg =~ / (?: cpai?nel | windows | exchange | work ) /xi) {
-        $result = 'No';
-    } else {
-        $result = (rand() < 0.3) ? 'Maybe' : (rand() < 0.5) ? 'Yes' : 'No';
-    }
-    if ($arg =~ / (?: suck | fail | shit | fucked ) /xi) {
-        $result = { 'Yes' => 'No', 'No' => 'Yes' }->{$result} || $result;
-    }
-
-    my $response = $responses{$result}[rand @{ $responses{$result} }];
-
-    warn $response;
-
-    $self->send_server(PRIVMSG => $channel, "8ball: $response");
 
     return 1;
 }
-
 
 1;
 
