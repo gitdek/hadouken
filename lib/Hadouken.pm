@@ -3,9 +3,6 @@ package Hadouken::Configuration;
 use strict;
 use warnings;
 
-our $VERSION = '0.1';
-our $AUTHOR = 'dek';
-
 use Moose;
 
 use Redis;
@@ -44,7 +41,7 @@ use constant BIT_VOICE => 4;
 # 
 # use 5.014;
 
-our $VERSION = '0.5';
+our $VERSION = '0.6';
 our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
@@ -88,7 +85,7 @@ use Crypt::Blowfish_PP;
 use Crypt::DH;
 use Crypt::CBC;
 
-use Math::BigInt;
+#use Math::BigInt;
 use Config::General;
 use Time::Elapsed ();
 use TryCatch;
@@ -463,6 +460,9 @@ sub randstring {
     return join "", map { ("a".."z", 0..9)[rand 36] } 1..$length;
 }
 
+
+=begin  BlockComment  # BlockCommentNo_2
+
 sub dh_key_exchange {
     my ($self,$user,$key) = @_;
 
@@ -511,6 +511,14 @@ sub dh_key_exchange {
 
 }
 
+=end    BlockComment  # BlockCommentNo_2
+
+=cut
+
+
+
+=begin  BlockComment  # BlockCommentNo_1
+
 sub generate_prime {
     my ($self) = @_;
 
@@ -554,6 +562,11 @@ sub generate_prime {
 
     return $p;
 }
+
+=end    BlockComment  # BlockCommentNo_1
+
+=cut
+
 
 
 sub readPrivateKey {
@@ -2838,7 +2851,7 @@ sub _buildup {
 
                                 warn "* Key Exchange Initialized\n";
 
-                                $self->dh_key_exchange($nick,$pubkey);
+                                # $self->dh_key_exchange($nick,$pubkey);
 
                             }
                         }
