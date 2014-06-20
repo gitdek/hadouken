@@ -96,7 +96,7 @@ use Config::General;
 use Crypt::Random;
 
 use Redis;
-use Redis::List;
+#use Redis::List;
 
 #use IO::Compress::Gzip qw(gzip $GzipError);
 use Digest::SHA3 qw(sha3_256_hex);
@@ -2860,6 +2860,9 @@ sub _buildup {
                                 my @admins = grep { $self->is_admin($con->nick_ident($_)) } @x;
 
                                 if(@admins) {
+                                    
+                                    $self->send_server_unsafe( MODE => $chan, '-o', $nick) unless $self->{con}->is_my_nick($nick) || $self->is_admin($ident);
+
                                     my $it = List::MoreUtils::natatime 3, @admins;
 
                                     while (my @vals = $it->()) {
