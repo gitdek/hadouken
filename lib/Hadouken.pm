@@ -21,7 +21,7 @@ sub new {
 }
 
 #__PACKAGE__->meta->make_immutable;
- 
+
 1;
 
 package Hadouken;
@@ -32,6 +32,8 @@ use warnings;
 
 #no strict "refs";
 
+use FindBin qw($Bin);
+use lib "$Bin/../lib";
 
 use constant BIT_ADMIN => 0;
 use constant BIT_WHITELIST => 1;
@@ -45,8 +47,8 @@ use constant BIT_VOICE => 4;
 our $VERSION = '0.5';
 our $AUTHOR = 'dek';
 
-#use Data::Printer alias => 'Dumper', colored => 1;
-use Data::Dumper;
+use Data::Printer alias => 'Dumper', colored => 1;
+#use Data::Dumper;
 
 use AsyncSocket;
 
@@ -59,6 +61,9 @@ use AnyEvent;
 use AnyEvent::IRC::Client;
 use AnyEvent::DNS;
 use AnyEvent::IRC::Util ();
+use AnyEvent::Whois::Raw;
+
+$Net::Whois::Raw::CHECK_FAIL = 1;
 
 use HTML::TokeParser;
 use URI ();
@@ -143,7 +148,6 @@ my @commands = (
     {name => 'blacklistdel',   regex => 'blacklistdel\s.+?',       comment => 'delete blacklist <nick@host>',   require_admin => 1 },
     {name => 'blacklistadd',   regex => 'blacklistadd\s.+?',       comment => 'add blacklist <nick@host>',      require_admin => 1 },
     {name => 'shorten',        regex => 'shorten\s.+?',            comment => 'shorten <url>' },
-    {name => 'whois',          regex => 'whois\s.+?',              comment => 'whois lookup <ip> or <domain>' }, 
     {name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
     {name => 'calc',           regex => 'calc\s.+?',               comment => 'google calculator' },
     {name => 'geoip',          regex => 'geoip\s.+?',              comment => 'geo ip lookup' },
@@ -159,6 +163,9 @@ my @commands = (
     {name => 'commands',       regex => '(commands|cmds)$',        comment => 'display list of available commands' },
     {name => 'plugins',        regex => 'plugins$',                comment => 'display list of available plugins' },
     {name => 'help',           regex => 'help$',                   comment => 'get help info' },
+    {name => 'availableplugins', regex => 'availableplugins$',                comment => 'list all available plugins', require_admin => 1 },
+    {name => 'loadplugin',        regex => 'loadplugin\s.+?',                comment => 'load plugin', require_admin => 1 },
+    {name => 'unloadplugin',        regex => 'unloadplugin\s.+?',                comment => 'unload plugin', require_admin => 1 },
 );
 
 # TODO: Whois command, finish up
@@ -259,15 +266,99 @@ sub _build_loaded_plugins {
     return \%loaded_plugins;
 }
 
-sub unload {
-    my $self = shift;
-    my $module = shift;
 
-    warn "Unloading $module\n";
+sub load_plugin {
+    my ($self, $plugin_name) = @_;
+    
+    for my $plugin ($self->available_modules) {
 
-    my $x = List::MoreUtils::first_index { $_->{name} eq $module } @{$self->{plugin_regexes}};
+        #next unless $plugin =~ $plugin_name;
 
-    splice @{$self->{plugin_regexes}}, $x, 1 if $x > -1;
+        # Try unloading first ?
+        # $self->unload_plugin($plugin);
+
+        my $m = undef;
+        my $command_regex = undef;
+
+        try {
+            $m = $self->load($plugin);
+
+            # Make sure not a blank regex.
+            $m = undef unless $m->can('command_regex');
+            $command_regex = $m->command_regex;
+
+            $m = undef unless defined $command_regex && $command_regex ne '';
+
+            $m = undef unless $m->can('command_name');
+            $m = undef unless $m->can('command_comment');
+            $m = undef unless $m->can('acl_check');
+            $m = undef unless $m->can('command_run');
+        }
+        catch($e) {
+            $m = undef;
+            warn "Plugin $plugin failed to load: $e";
+        }
+
+        next unless defined $m;
+
+        #$self->_plugin($plugin) = $m;
+
+        $self->loaded_plugins->{$plugin} = $m;
+
+        my $ver = $m->VERSION || '0.0';
+
+        push @{$self->{plugin_regexes}}, {name => "$plugin", regex => "$command_regex"};
+
+        warn "Plugin $plugin $ver added successfully.\n";
+    }
+
+
+    return 1;
+}
+
+sub unload_plugin {
+    my ($self, $plugin_name) = @_;
+
+    foreach my $plugin (keys %{$self->loaded_plugins}) { 
+        next unless ($plugin eq $plugin_name); # EXACT MATCH ONLY!
+
+        my $r = $self->unload_class('Hadouken::Plugin::'.$plugin);
+
+        warn "** UNLOADING PLUGIN $plugin, r is $r";
+
+        my $x = List::MoreUtils::first_index { $_->{name} eq $plugin_name } @{$self->{plugin_regexes}};
+
+        splice @{$self->{plugin_regexes}}, $x, 1 if $x > -1;
+        
+        warn Dumper @{$self->{plugin_regexes}};
+
+        delete $self->loaded_plugins->{$plugin};
+        
+    }
+
+    return 1;
+}
+
+sub unload_class {
+    my ($self, $class) = @_;
+
+    no strict 'refs';
+    # return unless Class::Inspector->loaded( $class );
+
+    # Flush inheritance caches
+    @{$class . '::ISA'} = ();
+
+    my $symtab = $class.'::';
+    # Delete all symbols except other namespaces
+    for my $symbol (keys %$symtab) {
+        next if $symbol =~ /\A[^:]+::\z/;
+        delete $symtab->{$symbol};
+    }
+
+    my $inc_file = join( '/', split /(?:'|::)/, $class ) . '.pm';
+    delete $INC{ $inc_file };
+
+    return 1;
 }
 
 sub load {
@@ -368,8 +459,8 @@ sub reload_config {
 }
 
 sub randstring {
-	my $length = shift || 8;
-	return join "", map { ("a".."z", 0..9)[rand 36] } 1..$length;
+    my $length = shift || 8;
+    return join "", map { ("a".."z", 0..9)[rand 36] } 1..$length;
 }
 
 sub dh_key_exchange {
@@ -414,7 +505,7 @@ sub dh_key_exchange {
 
     my $dhfinish = 'DH1080_FINISH '. $enc_key;
 
-    $self->send_server_safe(NOTICE => $user, $dhfinish);
+    $self->send_server_unsafe(NOTICE => $user, $dhfinish);
 
     #warn "* Shared secret $shared_secret\n";
 
@@ -529,7 +620,8 @@ sub start {
         push @{$self->{plugin_regexes}}, {name => "$plugin", regex => $rx};
     }
 
-    $self->unload('ExamplePlugin');
+
+    $self->unload_plugin('ExamplePlugin');
 
     if( $self->{private_rsa_key_filename} ne '' ) {
         my $key_string = $self->readPrivateKey($self->{private_rsa_key_filename}, $self->{private_rsa_key_password} ne '' ? $self->{private_rsa_key_password} : undef );
@@ -595,7 +687,7 @@ sub channel_add {
 
     $self->{conf_obj}->save_file($self->{config_filename}, $conf);
 
-    $self->send_server_safe (JOIN => '#'.$channel);
+    $self->send_server_unsafe (JOIN => '#'.$channel);
 
     return 1;
 }
@@ -615,7 +707,7 @@ sub channel_del {
 
     $self->{conf_obj}->save_file($self->{config_filename}, $conf);
 
-    $self->send_server_safe (PART => '#'.$channel);
+    $self->send_server_unsafe (PART => '#'.$channel);
 
     return 1;
 }
@@ -691,6 +783,29 @@ sub range {
         $start += $step;
     }
     return $new_array;
+}
+
+sub flatten {
+    my $self = shift;
+    my ($array) = $self->_prepare(@_);
+
+    my $cb;
+    $cb = sub {
+        my $result = [];
+        foreach (@{$_[0]}) {
+            if (ref $_ eq 'ARRAY') {
+                push @$result, @{$cb->($_)};
+            }
+            else {
+                push @$result, $_;
+            }
+        }
+        return $result;
+    };
+
+    my $result = $cb->($array);
+
+    return $self->_finalize($result);
 }
 
 sub detect {
@@ -1030,7 +1145,7 @@ sub _has_formatting {
 
 sub _strip_color {
     my $self = shift;
-    
+
     my ($string) = @_;
     return if !defined $string;
 
@@ -1077,60 +1192,60 @@ sub _decode_irc {
 }
 
 sub hexdump {
-	my $self = shift;
+    my $self = shift;
     #return unless $self->{hexdump};
 
-	my ($label,$data);
-	if (scalar(@_) == 2) {
-		$label = shift;
-	}
-	$data = shift;
+    my ($label,$data);
+    if (scalar(@_) == 2) {
+        $label = shift;
+    }
+    $data = shift;
 
     print "$label:\n" if ($label);
 
-	# Show 16 columns in a row.
-	my @bytes = split(//, $data);
-	my $col = 0;
-	my $buffer = '';
-	for (my $i = 0; $i < scalar(@bytes); $i++) {
-		my $char    = sprintf("%02x", unpack("C", $bytes[$i]));
-		my $escaped = unpack("C", $bytes[$i]);
-		if ($escaped < 20 || $escaped > 126) {
-			$escaped = ".";
-		}
-		else {
-			$escaped = chr($escaped);
-		}
+    # Show 16 columns in a row.
+    my @bytes = split(//, $data);
+    my $col = 0;
+    my $buffer = '';
+    for (my $i = 0; $i < scalar(@bytes); $i++) {
+        my $char    = sprintf("%02x", unpack("C", $bytes[$i]));
+        my $escaped = unpack("C", $bytes[$i]);
+        if ($escaped < 20 || $escaped > 126) {
+            $escaped = ".";
+        }
+        else {
+            $escaped = chr($escaped);
+        }
 
-		$buffer .= $escaped;
-		print "$char ";
-		$col++;
+        $buffer .= $escaped;
+        print "$char ";
+        $col++;
 
-		if ($col == 8) {
-			print "  ";
-		}
-		if ($col == 16) {
-			$buffer .= " " until length $buffer == 16;
-			print "  |$buffer|\n";
-			$buffer = "";
-			$col    = 0;
-		}
-	}
-	while ($col < 16) {
-		print "   ";
-		$col++;
-		if ($col == 8) {
-			print "  ";
-		}
-		if ($col == 16) {
-			$buffer .= " " until length $buffer == 16;
-			print "  |$buffer|\n";
-			$buffer = "";
-		}
-	}
-	if (length $buffer) {
-		print "|$buffer|\n";
-	}
+        if ($col == 8) {
+            print "  ";
+        }
+        if ($col == 16) {
+            $buffer .= " " until length $buffer == 16;
+            print "  |$buffer|\n";
+            $buffer = "";
+            $col    = 0;
+        }
+    }
+    while ($col < 16) {
+        print "   ";
+        $col++;
+        if ($col == 8) {
+            print "  ";
+        }
+        if ($col == 16) {
+            $buffer .= " " until length $buffer == 16;
+            print "  |$buffer|\n";
+            $buffer = "";
+        }
+    }
+    if (length $buffer) {
+        print "|$buffer|\n";
+    }
 }
 
 sub jsonify {
@@ -1403,7 +1518,7 @@ sub _buildup {
 
             return unless defined $channel;
 
-            #$self->send_server_safe(PRIVMSG => $channel, "  Starting trivia!");
+            #$self->send_server_unsafe(PRIVMSG => $channel, "  Starting trivia!");
 
             $self->_start_trivia($channel);
 
@@ -1419,7 +1534,7 @@ sub _buildup {
 
             #return unless defined $channel;
 
-            #$self->send_server_safe(PRIVMSG => $channel, "  Starting trivia!");
+            #$self->send_server_unsafe(PRIVMSG => $channel, "  Starting trivia!");
 
             $self->_stop_trivia;
 
@@ -1437,7 +1552,7 @@ sub _buildup {
             return unless defined $ref_modes;
 
             unless($ref_modes->{'o'}) {
-                $self->send_server_safe( MODE => $channel, '+o', $nickname);
+                $self->send_server_unsafe( MODE => $channel, '+o', $nickname);
             }
 
             return 1;
@@ -1490,7 +1605,7 @@ sub _buildup {
 
                 my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-                $self->send_server_safe (PRIVMSG => $nickname, $msg);
+                $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
             }
 
             return 1;
@@ -1513,7 +1628,7 @@ sub _buildup {
 
                 my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-                $self->send_server_safe (PRIVMSG => $nickname, $msg);
+                $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
             }
 
             return 1;
@@ -1535,7 +1650,7 @@ sub _buildup {
                 my $out_msg = "[whitelistadd] added whitelist $arg -> by $nickname";
                 my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-                $self->send_server_safe (PRIVMSG => $nickname, $msg);
+                $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
             }
 
             return 1;
@@ -1561,7 +1676,7 @@ sub _buildup {
 
                 my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-                $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+                $self->send_server_unsafe (PRIVMSG => $nickname, $out_msg);
 
             }
 
@@ -1585,7 +1700,7 @@ sub _buildup {
 
                 my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-                $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+                $self->send_server_unsafe (PRIVMSG => $nickname, $out_msg);
 
             }
 
@@ -1612,7 +1727,7 @@ sub _buildup {
 
                 my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-                $self->send_server_safe (PRIVMSG => $nickname, $out_msg);
+                $self->send_server_unsafe (PRIVMSG => $nickname, $out_msg);
             }
 
             return 1;
@@ -1635,7 +1750,7 @@ sub _buildup {
             warn "Send command $send_command\n";
             warn "Params: ".join("\t",@send_params)."\n";
 
-            $self->send_server_safe ($send_command, @send_params);
+            $self->send_server_unsafe ($send_command, @send_params);
 
             return 1;
         },
@@ -1660,9 +1775,9 @@ sub _buildup {
 
             if(defined $url && $url ne '') {
                 if(defined $title && $title ne '') {
-                    $self->send_server_safe (PRIVMSG => $channel, "$url ($title)");
+                    $self->send_server_unsafe (PRIVMSG => $channel, "$url ($title)");
                 } else {
-                    $self->send_server_safe (PRIVMSG => $channel, "$url");   
+                    $self->send_server_unsafe (PRIVMSG => $channel, "$url");   
                 }
             }
 
@@ -1699,14 +1814,14 @@ sub _buildup {
 
                 my $out_msg = "[ipcalc] $arg -> netmask: $res_calc - usable addresses: $res_usable";
 
-                $self->send_server_safe (PRIVMSG => $channel, $out_msg);
+                $self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
             } elsif($netbit =~ /$RE{net}{IPv4}/) {
 
                 my $cidr = $self->netmask2cidr($netbit,$network);
 
                 my $poop = "[ipcalc] $arg -> cidr $cidr";
 
-                $self->send_server_safe (PRIVMSG => $channel, $poop);
+                $self->send_server_unsafe (PRIVMSG => $channel, $poop);
             }
 
             return 1;
@@ -1728,39 +1843,11 @@ sub _buildup {
 
             return unless defined $res_calc;
 
-            $self->send_server_safe (PRIVMSG => $channel, "[calc] $res_calc");
+            $self->send_server_unsafe (PRIVMSG => $channel, "[calc] $res_calc");
 
             return 1;
         },
         acl => $passive_access,
-    );
-
-    $self->add_func(name => 'whois',
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-            my ($cmd, $arg) = split(/ /, lc($message), 2);
-
-            return unless (defined($arg) && length($arg));
-
-            if( $arg =~ /$RE{net}{IPv4}/ ) {
-                my $record = Net::Whois::IP::whoisip_query($arg);
-                #print Dumper($record);
-
-
-            } elsif ( $arg =~ m{($RE{URI})}gos ) {
-
-                my $uri = URI->new($arg);
-                my $host_only = $uri->host;
-
-            } else {
-
-
-            }  
-
-            return 1;
-        },
-        acl => $restrictive_access,
     );
 
     $self->add_func(name => 'geoip',
@@ -1784,7 +1871,7 @@ sub _buildup {
                 $ip_result .= " Region:".$record->region if defined $record->region && $record->region ne '';
                 $ip_result .= " Country:".$record->country_code if defined $record->country_code && $record->country_code ne '';
 
-                $self->send_server_safe (PRIVMSG => $channel, $ip_result);           
+                $self->send_server_unsafe (PRIVMSG => $channel, $ip_result);           
 
             } elsif ( $arg =~ m{($RE{URI})}gos ) {
 
@@ -1806,7 +1893,7 @@ sub _buildup {
                         my $record = $self->{geoip}->record_by_addr($ip_addr);   
 
                         unless(defined $record) {
-                            $self->send_server_safe (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
+                            $self->send_server_unsafe (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
                             return;
                         }
 
@@ -1815,7 +1902,7 @@ sub _buildup {
                         $dom_result .= " Region:".$record->region if defined $record->region && $record->region ne '';
                         $dom_result .= " Country:".$record->country_code if defined $record->country_code && $record->country_code ne '';
 
-                        $self->send_server_safe (PRIVMSG => $channel, $dom_result);           
+                        $self->send_server_unsafe (PRIVMSG => $channel, $dom_result);           
                     } 
                 );
             } else {
@@ -1837,7 +1924,7 @@ sub _buildup {
                             my $record = $self->{geoip}->record_by_addr($ip_addr);   
 
                             unless(defined $record) {
-                                $self->send_server_safe (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
+                                $self->send_server_unsafe (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
                                 return;
                             }
 
@@ -1846,7 +1933,7 @@ sub _buildup {
                             $dom_result .= " Region:".$record->region if defined $record->region && $record->region ne '';
                             $dom_result .= " Country:".$record->country_code if defined $record->country_code && $record->country_code ne '';
 
-                            $self->send_server_safe (PRIVMSG => $channel, $dom_result);
+                            $self->send_server_unsafe (PRIVMSG => $channel, $dom_result);
                         });
                 }
                 catch($e) {
@@ -1918,20 +2005,20 @@ sub _buildup {
             }
 
             unless(@found) {
-                $self->send_server_safe (PRIVMSG => $channel, 'nothing found in quotes!');
+                $self->send_server_unsafe (PRIVMSG => $channel, 'nothing found in quotes!');
                 return;
             }
 
             my $found_count = scalar @found;
 
             unless($found_count > 0) {
-                $self->send_server_safe (PRIVMSG => $channel, 'nothing found in quotes!');
+                $self->send_server_unsafe (PRIVMSG => $channel, 'nothing found in quotes!');
                 return;
             }
 
             my $si = String::IRC->new($found_count)->bold;
 
-            $self->send_server_safe (PRIVMSG => $channel, 'found '.$si.' quotes!');
+            $self->send_server_unsafe (PRIVMSG => $channel, 'found '.$si.' quotes!');
 
             my $limit = 0;
             foreach my $z (@found) {
@@ -1951,7 +2038,7 @@ sub _buildup {
                 };
 
                 $hightlighted =~ s/($arg)/$highlight_sub->($1)/ge;
-                $self->send_server_safe (PRIVMSG => $channel, '['.int($z + 1).'] '.$hightlighted); # - added by '.$q_nickname.' on '.$epoch_string);
+                $self->send_server_unsafe (PRIVMSG => $channel, '['.int($z + 1).'] '.$hightlighted); # - added by '.$q_nickname.' on '.$epoch_string);
             }
 
             return 1;
@@ -1973,7 +2060,7 @@ sub _buildup {
 
             my $rand_idx = int(rand($quote_count));
             my @rand_quote = $self->{quotesdb}[$this_channel_only[$rand_idx]];
-            $self->send_server_safe (PRIVMSG => $channel, '['.int($this_channel_only[$rand_idx] + 1).'] '.$rand_quote[0][1]);
+            $self->send_server_unsafe (PRIVMSG => $channel, '['.int($this_channel_only[$rand_idx] + 1).'] '.$rand_quote[0][1]);
 
             return 1;
         },
@@ -2000,7 +2087,7 @@ sub _buildup {
 
             #my $si = String::IRC->new($arg)->bold;
 
-            $self->send_server_safe (PRIVMSG => $channel, 'Quote #'.$arg.' has been deleted.');
+            $self->send_server_unsafe (PRIVMSG => $channel, 'Quote #'.$arg.' has been deleted.');
 
             return 1;
         },
@@ -2064,7 +2151,7 @@ sub _buildup {
                 my $msg = "$si1$si2$si3$si4";
                 my $no_color = "[".int($j+1)."/".$quote_count."] $col_quote - added by $q_nickname on $epoch_string";
 
-                $self->send_server_safe (PRIVMSG => $channel, $no_color); #$si1.''.$si2.''.$si3.''.$si4
+                $self->send_server_unsafe (PRIVMSG => $channel, $no_color); #$si1.''.$si2.''.$si3.''.$si4
             }
 
             return 1;
@@ -2090,7 +2177,7 @@ sub _buildup {
                 my ($q_mode_map,$q_nickname,$q_ident) = $self->{con}->split_nick_mode($last_quote[0][0]);
                 my $epoch_string = strftime "%a %b%e %H:%M:%S %Y", localtime($last_quote[0][3]);
 
-                $self->send_server_safe (PRIVMSG => $channel, '['.int($quote_indexes[$channel_quote_count - 1] + 1).'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
+                $self->send_server_unsafe (PRIVMSG => $channel, '['.int($quote_indexes[$channel_quote_count - 1] + 1).'] '.$last_quote[0][1].' - added by '.$q_nickname.' on '.$epoch_string);
             }
 
             return 1;
@@ -2131,10 +2218,10 @@ sub _buildup {
             my $si1 = String::IRC->new('Available Commands:')->bold;
 
 
-            $self->send_server_safe (NOTICE => $nickname, $si1);
+            $self->send_server_unsafe (NOTICE => $nickname, $si1);
             #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $si1);
 
-            # $self->send_server_safe (PRIVMSG => $nickname, $si1);
+            # $self->send_server_unsafe (PRIVMSG => $nickname, $si1);
 
             while( my @tmp = $iter->() ) {
                 my $command_summary = '';
@@ -2152,7 +2239,7 @@ sub _buildup {
 
                     # Only list the commands this user passes for that commands ACL definition.
                     my $acl_ret = $c->{acl}->($who, $message, $channel || undef, $channel_list || undef);
-                    
+
                     next unless $acl_ret;
 
                     my $si = String::IRC->new($c->{name})->bold;
@@ -2160,9 +2247,9 @@ sub _buildup {
                 }
 
 
-                $self->send_server_safe (NOTICE => $nickname, $command_summary);
+                $self->send_server_unsafe (NOTICE => $nickname, $command_summary);
                 #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $command_summary);
-                #$self->send_server_safe (PRIVMSG => $nickname, $command_summary);
+                #$self->send_server_unsafe (PRIVMSG => $nickname, $command_summary);
                 undef $command_summary;
             }
             undef $iter;
@@ -2178,29 +2265,24 @@ sub _buildup {
             my ($who, $message, $channel, $channel_list) = @_;
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
-            my @copyplugins = @{$self->{plugin_regexes}};
-            my $iter = List::MoreUtils::natatime 2, @copyplugins;
-
             my $si1 = String::IRC->new('Available Plugins:')->bold;
-            $self->send_server_safe (NOTICE => $nickname, $si1);
+            $self->send_server_unsafe (NOTICE => $nickname, $si1);
 
             try { # Plugins can be unpredictable.
-                while( my @pinfo = $iter->() ) {
+                foreach my $plugin (keys %{$self->loaded_plugins}) { 
                     my $command_summary = '';
-                    foreach my $k (@pinfo) {
-                        my $p = $self->_plugin($k->{name});
+                    my $p = $self->_plugin($plugin);
 
-                        my $name = $p->command_name;
-                        my $comment = $p->command_comment || '';
-                        my $ver = $p->VERSION || '0.0';
+                    my $name = $p->command_name;
+                    my $comment = $p->command_comment || '';
+                    my $ver = $p->VERSION || '0.0';
 
-                        my $si = String::IRC->new($name)->bold;
-                        $command_summary .= '['.$si.'] '.$ver.' -> '.$comment." ";
-                    }
-
-                    $self->send_server_safe (NOTICE => $nickname, $command_summary);
-
-                    undef $command_summary;
+                    my $si = String::IRC->new($name)->bold;
+                    $command_summary .= '['.$si.'] '.$ver.' -> '.$comment." ";
+                   
+                   
+                    $self->send_server_unsafe (NOTICE => $nickname, $command_summary);
+                
                 }
             }
             catch($e) {
@@ -2211,6 +2293,92 @@ sub _buildup {
         acl => $all_access_except_blacklist,
     );
 
+    $self->add_func(name => 'availableplugins',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+
+            my $si1 = String::IRC->new('All Available Plugins:')->bold;
+            $self->send_server_unsafe (NOTICE => $nickname, $si1);
+
+
+            # We do this because of central installed and locally installed modules.
+            my @avail = $self->available_modules();
+            my $x = _->unique(\@avail,0);
+
+            try { # Plugins can be unpredictable.
+                for my $plugin (@$x) {
+                    my $command_summary = '';
+                    my $is_loaded = exists $self->loaded_plugins->{$plugin} ? "yes" : "no";
+                    $command_summary .= "[$plugin] Loaded: $is_loaded ";
+
+                    $self->send_server_unsafe (NOTICE => $nickname, $command_summary);
+                }
+            }
+            catch($e) {
+            }
+
+            return 1;
+        },
+        acl => $admin_access,
+    );
+
+    $self->add_func(name => 'loadplugin',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            my ($cmd, $arg) = split(/ /, $message, 2);
+
+            return unless defined $arg;
+
+            my $plugin_name = '';
+            if ( defined($plugin_name = List::MoreUtils::first_value { $arg eq $_ } $self->available_modules) ) {
+
+                return if exists $self->loaded_plugins->{$plugin_name};
+                
+                my $added_ok = $self->load_plugin($plugin_name);
+    
+                return unless ($added_ok);
+                my $out_msg = '[loadplugin] loaded plugin '.$arg.' - > by '.$nickname;
+
+                my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+            }
+
+            return 1;
+        },
+        acl => $admin_access,
+    );
+    
+    $self->add_func(name => 'unloadplugin',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            my ($cmd, $arg) = split(/ /, $message, 2);
+
+            return unless defined $arg;
+
+            my $plugin_name = '';
+            if ( defined($plugin_name = List::MoreUtils::first_value { $arg eq $_ } $self->available_modules) ) {
+
+                #return if exists $self->loaded_plugins->{$plugin_name};
+
+                my $unloaded_ok = $self->unload_plugin($plugin_name);
+
+                return unless ($unloaded_ok);
+                my $out_msg = '[unloadplugin] unloaded plugin '.$arg.' - > by '.$nickname;
+
+                my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+            }
+
+            return 1;
+        },
+        acl => $admin_access,
+    );
+
     $self->add_func(name => 'help',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
@@ -2218,7 +2386,7 @@ sub _buildup {
             #my $cmd_names = _->pluck(\@commands, 'name');
             my $si = String::IRC->new('Hi '.$nickname.', type .commands in the channel.')->bold;
             $self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $si);
-            # $self->send_server_safe (PRIVMSG => $nickname, $si);
+            # $self->send_server_unsafe (PRIVMSG => $nickname, $si);
 
             return 1;
         },
@@ -2234,7 +2402,7 @@ sub _buildup {
                 String::IRC->new($VERSION)->bold, 
                 String::IRC->new($running_elapsed)->bold );
             my $msg = sprintf '+OK %s', $self->_encrypt( $basic_info, $self->{keys}->[0] );
-            $self->send_server_safe (PRIVMSG => $nickname, $msg);
+            $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
 
             return 1;
         },
@@ -2249,8 +2417,8 @@ sub _buildup {
             my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/btc_usd');
             my $ret =  "[btc_usd\@btce] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
             my $ret2 = "[btc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
-            $self->send_server_safe (PRIVMSG => $channel, $ret);
-            $self->send_server_safe (PRIVMSG => $channel, $ret2);
+            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
+            $self->send_server_unsafe (PRIVMSG => $channel, $ret2);
 
             return 1;
         },
@@ -2265,8 +2433,8 @@ sub _buildup {
             my $ret =  "[ltc_usd\@btce] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
             my $ret2 = "[ltc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
 
-            $self->send_server_safe (PRIVMSG => $channel, $ret);
-            $self->send_server_safe (PRIVMSG => $channel, $ret2);
+            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
+            $self->send_server_unsafe (PRIVMSG => $channel, $ret2);
 
             return 1;
         },
@@ -2278,7 +2446,7 @@ sub _buildup {
             my ($who, $message, $channel, $channel_list) = @_;
             my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/eur_usd');
             my $ret = "[eur_usd] Last: $json->{eur_usd}->{last} Low: $json->{eur_usd}->{low} High: $json->{eur_usd}->{high} Avg: $json->{eur_usd}->{avg} Vol: $json->{eur_usd}->{vol}";
-            $self->send_server_safe (PRIVMSG => $channel, $ret);
+            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
 
             return 1;
         },
@@ -2332,17 +2500,17 @@ sub _buildup {
 
                 if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{op_admins} == 1) {
                     $self->send_server_unsafe( MODE => $channel, '+o', $nick);   
-                
+
                     # who was opped, who opped them, a timestamp
 
-                    
+
                     #opped opper channel
-                    
+
                     my $cookie = $self->makecookie($ident,$self->{nick},$channel);
 
                     my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
                     $self->send_server_unsafe( MODE => $channel, '-b', $cookie);
-                    
+
                     #warn "WEEEEE" if $test;
                     #warn $nick;
                     #warn $cookie;
@@ -2351,7 +2519,7 @@ sub _buildup {
                     #$self->{_rsa}->e
                 }
 
-                # $self->send_server_safe( MODE => $channel, '+o', $nick);   
+                # $self->send_server_unsafe( MODE => $channel, '+o', $nick);   
             }
         },
         kick => sub {
@@ -2364,7 +2532,7 @@ sub _buildup {
                     $self->send_server_unsafe (JOIN => $channel);
                 }
                 # my $si = String::IRC->new($kicker_nick)->red->bold;
-                # $self->send_server_safe (PRIVMSG => $channel,"kicked by $si, behavior logged");
+                # $self->send_server_unsafe (PRIVMSG => $channel,"kicked by $si, behavior logged");
             }
         },
         dcc_request => sub {
@@ -2423,7 +2591,7 @@ sub _buildup {
                         #my $init_msg = 'Hello there how are you';
 
                         #my $msg = sprintf '+OK %s', $self->_encrypt( $init_msg, $self->{keys}->[0] );
-                        #$self->send_server_safe(PRIVMSG => $nickname, $msg);
+                        #$self->send_server_unsafe(PRIVMSG => $nickname, $msg);
                     }
                 } catch($e) {
                     $message = $ircmsg->{params}[1];
@@ -2467,7 +2635,7 @@ sub _buildup {
 
                 if (( ($uri) = $message =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/ ) ) { #m{($RE{URI})}gos ) {
                     warn "* Matched a URL $uri\n";
-                
+
                     my $cur_channel_clean = $channel;
                     $cur_channel_clean =~ s/^\#//;
                     my $server_hash_ref = $self->{current_server};
@@ -2483,9 +2651,9 @@ sub _buildup {
 
                         if(defined($shrt_url) && $shrt_url ne '') {
                             if(defined($shrt_title) && $shrt_title ne '') {
-                                $self->send_server_safe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
+                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
                             } else {
-                                $self->send_server_safe (PRIVMSG => $channel, "$shrt_url");      
+                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url");      
                             }
                         }
                     } else {
@@ -2523,10 +2691,10 @@ sub _buildup {
 
                 if($channel eq '#trivia') {
                     if($nickname eq 'utonium') {
-                    
+
                         if($message =~ 'QUESTION' || $message =~ 'googled the answer' || $message =~ 'start giving answers like this one') {
                             my $stripped = $self->_decode_irc($message);
-                            
+
                             $stripped =~ s/\x03\x31.*?\x03/ /g;
                             $stripped =~ s/[\x20\x39]/ /g;
                             $stripped =~ s/[\x30\x2c\x31]//g;
@@ -2536,7 +2704,7 @@ sub _buildup {
                             $stripped = $self->_strip_color($stripped);
 
                             $stripped =~ s/\h+/ /g;                            
-                            
+
                             $stripped .= "\n";
 
                             $self->hexdump("Unstripped",$stripped);
@@ -2580,7 +2748,7 @@ sub _buildup {
 
                                 $self->{_masked_answer} = '';
 
-                                $self->send_server_safe(PRIVMSG => $self->{trivia_channel},"Yes! $nickname GOT IT! -> ".$self->{_answer}." <- in $answer_elapsed seconds and receives --> ".$self->{_current_points}." <-- points!");
+                                $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},"Yes! $nickname GOT IT! -> ".$self->{_answer}." <- in $answer_elapsed seconds and receives --> ".$self->{_current_points}." <-- points!");
 
                                 $self->{_scores}{$nickname}{score} += $self->{_current_points};
 
@@ -2592,11 +2760,11 @@ sub _buildup {
                                     $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}," $nickname has won $in_a_row in a row, and received a --> 500 <-- point bonus!");
                                     $self->{_scores}{$nickname}{score} += 500;
                                 }
-                                
+
                                 my $point_msg = $self->{_current_points}. " points has been added to your score! total score for ". $nickname ." is ".$self->{_scores}{$nickname}{score};
                                 $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $point_msg);
                                 $self->{_clue_number} = 0;
-                           
+
                                 my $z = $self->_calc_trivia_rankings();
 
                                 my $user_rank = $self->_trivia_ranking($nickname);
@@ -2613,7 +2781,7 @@ sub _buildup {
 
                                 my $pos_prev = $rankings[$user_rank - 2] || undef;
                                 my $pos_next = $rankings[$user_rank + 2] || undef;
-                                
+
                                 warn $pos_prev;
                                 warn $pos_next;
 
@@ -2623,25 +2791,25 @@ sub _buildup {
                                     #warn $first_place_msg;
 
                                     $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},$first_place_msg);
-                                
+
                                 } else {
                                     if(defined $pos_prev) {
                                         my $points_needed = $self->{_scores}{$pos_prev}{score} - $self->{_scores}{$nickname}{score};
                                         my $position_message = "  $nickname needs $points_needed points to take over position ". $self->{_scores}{$pos_prev}{rank};
-                               
+
                                         #warn $position_message;
 
                                         $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},$position_message);
                                     }
                                 }
 
-                            
+
                                 my $msg_t = "Next question in less than 15 seconds... Get Ready!";
                                 $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg_t);
-                            
+
                             } else {
                                 $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},"  Answer: $new_mask"); 
-                        
+
                             }
                         }
                     }
@@ -2709,32 +2877,32 @@ sub _buildup {
                                     }
                                 }
                             }
-                            
+
                             my @bans = List::MoreUtils::after { $_ =~ /\+b/ } @{$msg->{params}};
                             if(@bans) {
-                               
-                                unless($self->is_admin($ident)) {
-                                    
-                                    warn "* Protect triggered in $chan, UNBANNING ".join('  ',@bans) ."\n";
-                                   foreach my $ban (@bans) {
-                                       warn "UNBANNING $ban";
-                                       $self->send_server_unsafe( MODE => $chan, '-b', $ban);
-                                       $self->send_server_unsafe( MODE => $chan, '-o', $nick);
-                                   }
 
-                                   } else {
-                                    
-                                       warn "* Admin is banning users in $chan, ".join('  ',@bans) ."\n";
-                                       foreach my $ban (@bans) {
-                                        
+                                unless($self->is_admin($ident)) {
+
+                                    warn "* Protect triggered in $chan, UNBANNING ".join('  ',@bans) ."\n";
+                                    foreach my $ban (@bans) {
+                                        warn "UNBANNING $ban";
+                                        $self->send_server_unsafe( MODE => $chan, '-b', $ban);
+                                        $self->send_server_unsafe( MODE => $chan, '-o', $nick);
+                                    }
+
+                                } else {
+
+                                    warn "* Admin is banning users in $chan, ".join('  ',@bans) ."\n";
+                                    foreach my $ban (@bans) {
+
                                         my $n_ban = $self->normalize_mask($ban);
-                                        
+
                                         # Admin can ban anyone except:
 
 
                                         # Admin can't ban other admins
                                         if(grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{adminsdb}} ) {
-                                            
+
                                             $self->send_server_unsafe( MODE => $chan, '-b', $ban);
 
                                             unless ($self->is_admin($ident)) {
@@ -2744,7 +2912,7 @@ sub _buildup {
 
                                         # Can't ban whitelisted!
                                         if(grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{whitelistdb}} ) {
-                                            
+
                                             $self->send_server_unsafe( MODE => $chan, '-b', $ban);
 
                                             unless ($self->is_admin($ident)) {
@@ -2785,7 +2953,7 @@ sub _start_trivia {
     $self->{trivia_channel} = $channel;
 
     #$self->_trivia_func;
-    
+
     if(-e $self->{ownerdir}.'/../data/scores.json') {
         open(my $fh, $self->{ownerdir}.'/../data/scores.json') or die $!;
         my $json_data;
@@ -2800,8 +2968,8 @@ sub _start_trivia {
         $self->_calc_trivia_rankings;
 
     }
-    
-    
+
+
     undef $self->{triv_timer};
     $self->{triv_timer} = AnyEvent->timer (after => 0, interval => 15, cb => sub { $self->_trivia_func; } );
 
@@ -2816,7 +2984,7 @@ sub _stop_trivia {
     }
 
     $self->_save_trivia_scores;
-    
+
     $self->{_clue_number} = 0;
     $self->{triviarunning} = 0;
     $self->{trivia_channel} = '';
@@ -2834,7 +3002,7 @@ sub _save_trivia_scores {
     return unless defined $self->{_scores};
 
     $self->_calc_trivia_rankings;
-    
+
     open(my $fh,">".$self->{ownerdir}.'/../data/scores.json');
     my %scorez = %{$self->{_scores}};
     my $json_data = JSON->new->allow_nonref->encode(\%scorez);
@@ -2858,7 +3026,7 @@ sub _calc_trivia_rankings {
     }
 
     @{$self->{_rankings}} = @rankings;
-    
+
     return 1;
 }
 
@@ -3007,7 +3175,7 @@ sub _trivia_func {
     } elsif( $self->{_clue_number} < 4) {
 
         $self->{_current_points} = $points{$self->{_clue_number}};
-        
+
         my $msg = "  Down to ".$self->{_current_points}." points: ".$self->give_clue;
         $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg );
         $self->{_clue_number}++;
@@ -3048,7 +3216,7 @@ sub _start {
 
         warn "* Joining $chan\n";
 
-        $self->send_server_safe (JOIN => $chan);
+        $self->send_server_unsafe (JOIN => $chan);
     }
 
     # When connecting, sometimes if a nick is in use it requires an alternative.
@@ -3060,15 +3228,32 @@ sub _start {
 
     $self->{con}->set_nick_change_cb($nick_change);
 
-    #$self->send_server_safe(PRIVMSG => "\*status","ClearAllChannelBuffers");
+    #$self->send_server_unsafe(PRIVMSG => "\*status","ClearAllChannelBuffers");
 
-    $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port}, { nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
+    $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port},
+        { localaddr => 'he-ipv6', real => 'bitch',nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
+
+    #     sub {
+    #        my ($fh) = @_;
+        
+    #        exit(0);
+    #        warn "BINDING TO LOCALHOST";
+    #        $fh->bind("localhost");
+    #},
+    #);
 # ident,quote,channel,time
 
 
     $self->{c}->wait unless $self->{reconnecting};
 
     #return 1;
+}
+
+sub prep {
+    my ($fh) = @_;
+    warn "**** BINDING TO LOCALHOST";
+    $fh->bind("localhost");
+    $fh;
 }
 
 sub normalize_mask {
@@ -3358,7 +3543,7 @@ sub _encrypt {
     my $cipher = new Crypt::Blowfish_PP $key;
     foreach ( split /\n/, $text ) {
         $result .= $self->_inflate( $cipher->encrypt($_) );
-    
+
     }
     #} catch($e) {
     #}

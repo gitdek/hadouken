@@ -63,9 +63,11 @@ sub command_run {
             (defined($arg) && length($arg));
 
 
-    if(lc($arg) =~ 'dek') {
-        $arg = 'awesome';
-    }
+    my $origin_arg = $arg;
+    $arg = 'awesome' if (lc($arg) =~ 'dek');
+    $arg = 'penis' if (lc($arg) =~ 'luchini');
+    $arg = 'elite' if (lc($arg) =~ 'marin');
+    $arg = 'elite' if (lc($arg) =~ 'menace');
 
     my $define_url = "http://glosbe.com/gapi/translate?from=eng&dest=eng&format=json&phrase=".$arg."&pretty=true";
 
@@ -80,7 +82,7 @@ sub command_run {
                 #(exists $json->{'tuc'}->[0]->{meanings}); 
 
                 
-        my $arg_pretty = String::IRC->new($json->{phrase})->bold;
+        my $arg_pretty = String::IRC->new($origin_arg)->bold; #$json->{phrase})->bold;
         
         my $meaning = $json->{tuc}->[0]->{meanings}->[0]->{text};
         #warn $meaning;

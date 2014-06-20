@@ -83,8 +83,8 @@ sub command_run {
         }
     } else {
         if($dstlang ne 'english') {
-            $srclang = $dstlang;
-            $dstlang = 'english';
+            $srclang = 'english';
+            #$dstlang = 'english';
         }
     }
 
@@ -104,11 +104,8 @@ sub command_run {
 
     my $encoded_phrase = $phrase;
     
-    $encoded_phrase = 'sexy' if $encoded_phrase =~ 'luchini';
-   
-    if($encoded_phrase =~ 'dek') {
-        $encoded_phrase = 'awesome';
-    }
+    $encoded_phrase = 'penis' if $encoded_phrase =~ 'luchini';
+    $encoded_phrase = 'awesome' if $encoded_phrase =~ 'dek';
 
     $encoded_phrase =~ s/ /\%20/g;
 
@@ -129,7 +126,7 @@ sub command_run {
                 #(exists $json->{'tuc'}->[0]->{meanings}); 
 
                 
-        my $arg_pretty = String::IRC->new($json->{phrase})->bold;       
+        my $arg_pretty = String::IRC->new($phrase)->bold; #$json->{phrase})->bold;       
         my $translation = $json->{tuc}->[0]->{phrase}->{text};
         #warn $translation;
 
