@@ -83,7 +83,9 @@ my $cb = Hadouken->new_with_options(
     ownerdir => $filedirname,
     reconnect => $config{reconnect} || 1,
     reconnect_delay => $config{reconnect_delay} || 30,
+    iface => $config{iface} || 'eth0',
 );
+
 
 my %daemon_args = ( 
     name        => "Hadouken",

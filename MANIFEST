@@ -105,5 +105,5 @@ t/Hadouken.t
 t/AsyncSocket.t
 Makefile.PL
 MANIFEST
-README
+README.md
 

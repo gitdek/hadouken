@@ -59,8 +59,10 @@ WriteMakefile(
         'Module::Pluggable'     => 0,
         'Data::Printer'			=> 0,
         'Data::Dumper'          => 0,
-        'MooseX::Getopt::GLD'	=> 0,
-        'Redis'                 => 0,
+        'Any::Moose'            => 0,
+        'MooseX::Getopt::GLD'   => 0,
+        'Object::Event'         => 0,
+        'Digest::SHA3'          => 0,
     },
     PM => {
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',

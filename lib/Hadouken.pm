@@ -5,10 +5,10 @@ use warnings;
 
 use Moose;
 
-use Redis;
+#use Redis;
 
 
-has redis => (is => 'rw', isa => 'Redis', default => sub { my $redis = Redis->new(server => '127.0.0.1:6379'); $redis; });
+#has redis => (is => 'rw', isa => 'Redis', default => sub { my $redis = Redis->new(server => '127.0.0.1:6379'); $redis; });
 
 sub new {
     my $class = shift;
@@ -41,7 +41,7 @@ use constant BIT_VOICE => 4;
 # 
 # use 5.014;
 
-our $VERSION = '0.6';
+our $VERSION = '0.7';
 our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
@@ -92,13 +92,13 @@ use TryCatch;
 use Config::General;
 use Crypt::Random;
 
-use Redis;
+#use Redis;
 #use Redis::List;
 
 #use IO::Compress::Gzip qw(gzip $GzipError);
 use Digest::SHA3 qw(sha3_256_hex);
 
-use IRC::Utils ':ALL';
+#use IRC::Utils ':ALL';
 
 use Moose;
 
@@ -3247,7 +3247,7 @@ sub _start {
     #$self->send_server_unsafe(PRIVMSG => "\*status","ClearAllChannelBuffers");
 
     $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port},
-        { localaddr => 'he-ipv6', real => 'bitch',nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
+        { localaddr => $self->{iface}, real => 'bitch',nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
 
     #     sub {
     #        my ($fh) = @_;
