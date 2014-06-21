@@ -32,6 +32,7 @@ WriteMakefile(
         'HTTP::Cookies'         => 0,
         'Encode'                => 0,
         'JSON::XS'              => 0,
+        'JSON'                  => 0,
         'POSIX'                 => 0,
         'Time::HiRes'           => 0,
         'Geo::IP'               => 0,
@@ -74,3 +75,4 @@ WriteMakefile(
 );
 
 auto_install();
+

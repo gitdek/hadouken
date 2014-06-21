@@ -66,7 +66,7 @@ sub on_config_update {
 }
 
 my $cb = Hadouken->new_with_options(
-    nick => 'hadouken',
+    nick => $config{nickname} || 'hadouken',
     servers => [ $config{server} ],
     admin => $config{admin},
     config_hash => \%config,
@@ -83,7 +83,7 @@ my $cb = Hadouken->new_with_options(
     ownerdir => $filedirname,
     reconnect => $config{reconnect} || 1,
     reconnect_delay => $config{reconnect_delay} || 30,
-    iface => $config{iface} || 'eth0',
+    iface => $config{iface} || '', # blank will use any.
 );
 
 

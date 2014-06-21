@@ -162,9 +162,10 @@ sub connect {
           setsockopt($sock, SOL_SOCKET, SO_REUSEPORT, 1)
               or die "Crap: $!";
 
-          setsockopt($sock, SOL_SOCKET, 25, pack("Z*", $localaddr)) 
-              or die "Cannot bind to interface: $!";
-          
+          if(defined $localaddr && $localaddr ne '') {
+            setsockopt($sock, SOL_SOCKET, 25, pack("Z*", $localaddr)) 
+                or die "Cannot bind to interface: $!";
+            }
           return undef;
     }; #(defined $prep ? (ref $prep ? $prep : sub { $prep }) : ());
 }

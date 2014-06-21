@@ -38,3 +38,7 @@ data/blacklist.txt
 data/whitelist.txt
 data/quotes.txt
 Hadouken-*.tar.gz
+localserver.conf
+test-*.pl
+data/new_questions_parsed
+data/scores.json
