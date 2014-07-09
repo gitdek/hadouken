@@ -320,12 +320,14 @@ sub load_plugin {
 sub unload_plugin {
     my ($self, $plugin_name) = @_;
 
+    my $ret = 0;
+
     foreach my $plugin (keys %{$self->loaded_plugins}) { 
         next unless ($plugin eq $plugin_name); # EXACT MATCH ONLY!
 
-        my $r = $self->unload_class('Hadouken::Plugin::'.$plugin);
+        $ret = $self->unload_class('Hadouken::Plugin::'.$plugin);
 
-        warn "** UNLOADING PLUGIN $plugin - ". ($r ? 'Success' : 'Fail'); # r is $r";
+        warn "** UNLOADING PLUGIN $plugin - ". ($ret ? 'Success' : 'Fail'); # r is $r";
 
         my $x = List::MoreUtils::first_index { $_->{name} eq $plugin_name } @{$self->{plugin_regexes}};
 
@@ -337,7 +339,7 @@ sub unload_plugin {
         
     }
 
-    return 1;
+    return $ret;
 }
 
 sub unload_class {
@@ -2360,21 +2362,33 @@ sub _buildup {
 
             return unless defined $arg;
 
-            my $plugin_name = '';
-            if ( defined($plugin_name = List::MoreUtils::first_value { $arg eq $_ } $self->available_modules) ) {
-
-                return if exists $self->loaded_plugins->{$plugin_name};
-                
-                my $added_ok = $self->load_plugin($plugin_name);
+            if($arg eq '_ALL_') {
+                for my $p ($self->available_modules) {
+                    my $added_ok = $self->load_plugin($p);
     
-                return unless ($added_ok);
-                my $out_msg = '[loadplugin] loaded plugin '.$arg.' - > by '.$nickname;
+                    next unless ($added_ok);
+                    my $out_msg = '[loadplugin] loaded plugin '.$p.' - > by '.$nickname;
 
-                my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-                $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                }
+            } else {
+                my $plugin_name = '';
+                if ( defined($plugin_name = List::MoreUtils::first_value { $arg eq $_ } $self->available_modules) ) {
+
+                    return if exists $self->loaded_plugins->{$plugin_name};
+                
+                    my $added_ok = $self->load_plugin($plugin_name);
+    
+                    return unless ($added_ok);
+                    my $out_msg = '[loadplugin] loaded plugin '.$arg.' - > by '.$nickname;
+
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                }
             }
-
             return 1;
         },
         acl => $admin_access,
@@ -2387,22 +2401,38 @@ sub _buildup {
             my ($cmd, $arg) = split(/ /, $message, 2);
 
             return unless defined $arg;
+            
+            if($arg eq '_ALL_') {
+                # We do this because of central installed and locally installed modules.
+                my @avail = $self->available_modules();
+                my $x = _->unique(\@avail,0);
+                
+                for my $p (@avail) {
+                    my $unload_ok = $self->unload_plugin($p);
 
-            my $plugin_name = '';
-            if ( defined($plugin_name = List::MoreUtils::first_value { $arg eq $_ } $self->available_modules) ) {
+                    next unless ($unload_ok);
+                    my $out_msg = '[unloadplugin] unloaded plugin '.$p.' - > by '.$nickname;
 
-                #return if exists $self->loaded_plugins->{$plugin_name};
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
 
-                my $unloaded_ok = $self->unload_plugin($plugin_name);
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                }
+            } else {
+                my $plugin_name = '';
+                if ( defined($plugin_name = List::MoreUtils::first_value { $arg eq $_ } $self->available_modules) ) {
 
-                return unless ($unloaded_ok);
-                my $out_msg = '[unloadplugin] unloaded plugin '.$arg.' - > by '.$nickname;
+                    #return if exists $self->loaded_plugins->{$plugin_name};
 
-                my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                    my $unloaded_ok = $self->unload_plugin($plugin_name);
 
-                $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    return unless ($unloaded_ok);
+                    my $out_msg = '[unloadplugin] unloaded plugin '.$arg.' - > by '.$nickname;
+
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                }
             }
-
             return 1;
         },
         acl => $admin_access,
@@ -3250,6 +3280,8 @@ sub _start {
         $self->send_server_unsafe (JOIN => $chan);
     }
 
+    
+    
     # When connecting, sometimes if a nick is in use it requires an alternative.
     my $nick_change = sub {
         my ($badnick) = @_;
@@ -3261,8 +3293,16 @@ sub _start {
 
     #$self->send_server_unsafe(PRIVMSG => "\*status","ClearAllChannelBuffers");
 
+    #warn $self->{nick};
+    #warn $server_hashref->{$server_name}{nickname};
+
+    if($self->{nick} ne $server_hashref->{$server_name}{nickname} ) {
+        $self->send_server_unsafe (NICK => $self->{nick});
+        #exit(0);
+    }
+
     $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port},
-        { localaddr => $self->{iface}, real => 'hadouken',nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
+        { localaddr => $self->{iface}, real => 'hadouken',nick => $server_hashref->{$server_name}{nickname}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
 
     #     sub {
     #        my ($fh) = @_;
