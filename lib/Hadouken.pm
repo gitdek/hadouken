@@ -3302,9 +3302,7 @@ sub _buildup {
 
                     if(defined $old_mask && $old_mask ne '' && defined $new_mask && $new_mask ne '') {
                         if($old_mask ne $new_mask) {
-
                             if($message eq $self->{_answer}) {
-
                                 my $answer_elapsed = sprintf "%.1f", time - $self->{_question_time};
 
                                 unless(exists $self->{streak}) {
@@ -3440,6 +3438,17 @@ sub _buildup {
                                 if(@admins) {
                                     
                                     $self->send_server_unsafe( MODE => $chan, '-o', $nick) unless $self->{con}->is_my_nick($nick) || $self->is_admin($ident);
+
+                                    my $owner = _->detect(\@admins, sub { 
+                                            my $k = $con->nick_ident($_);
+                                            warn "NICK_IDENT $k";
+                                            if($self->matches_mask($self->{admin},$k)) {
+                                                return $_;
+                                            } else {
+                                            }
+                                        });
+                                    
+                                    $self->send_server_unsafe(KICK => $chan, $nick,"don't do that") if defined $owner && length $owner;
 
                                     my $it = List::MoreUtils::natatime 3, @admins;
 
