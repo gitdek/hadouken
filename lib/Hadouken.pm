@@ -46,7 +46,7 @@ use constant BIT_VOICE => 4;
 # 
 # use 5.014;
 
-our $VERSION = '0.8.1';
+our $VERSION = '0.8.2';
 our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
@@ -140,34 +140,21 @@ my @commands = (
     {name => 'trivstart',           regex => 'trivstart$',              comment => 'start trivia bot',               require_admin => 1 }, 
     {name => 'raw',                 regex => 'raw\s.+?',                comment => 'send raw command',               require_admin => 1 }, 
     {name => 'statistics',          regex => '(stats|statistics)$',     comment => 'get statistics about bot',       require_admin => 1 },   
-    {name => 'channeladd',          regex => 'channeladd\s.+?',         comment => 'add channel',                    require_admin => 1 },
-    {name => 'channeldel',          regex => 'channeldel\s.+?',         comment => 'delete channel',                 require_admin => 1 },
     {name => 'powerup',             regex => '(powerup|power\^)$',      comment => 'power up +o',                    require_admin => 1 },
-    {name => 'admindel',            regex => 'admindel\s.+?',           comment => 'delete admin <nick@host>',       require_admin => 1 },
-    {name => 'adminadd',            regex => 'adminadd\s.+?',           comment => 'add admin <nick@host>',          require_admin => 1 },
-    {name => 'whitelistdel',        regex => 'whitelistdel\s.+?',       comment => 'delete whitelist <nick@host>',   require_admin => 1 },
-    {name => 'whitelistadd',        regex => 'whitelistadd\s.+?',       comment => 'add whitelist <nick@host>',      require_admin => 1 },
-    {name => 'blacklistdel',        regex => 'blacklistdel\s.+?',       comment => 'delete blacklist <nick@host>',   require_admin => 1 },
-    {name => 'blacklistadd',        regex => 'blacklistadd\s.+?',       comment => 'add blacklist <nick@host>',      require_admin => 1 },
-    #{name => 'shorten',        regex => 'shorten\s.+?',            comment => 'shorten <url>' },
-    #{name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
-    #{name => 'calc',           regex => 'calc\s.+?',               comment => 'google calculator' },
-    #{name => 'geoip',          regex => 'geoip\s.+?',              comment => 'geo ip lookup' },
     {name => 'lq',                  regex => '(lq|lastquote)$',         comment => 'get most recently added quote' },
     {name => 'aq',                  regex => '(aq|addquote)\s.+?',      comment => 'add a quote' },
     {name => 'dq',                  regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote' },
     {name => 'fq',                  regex => '(fq|findquote)\s.+?',     comment => 'find a quote' },
     {name => 'rq',                  regex => '(rq|randquote)$',         comment => 'get a random quote' },
     {name => 'q',                   regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)' },
-    #{name => 'btc',            regex => 'btc$',                    comment => 'display btc ticker' },
-    #{name => 'ltc',            regex => 'ltc$',                    comment => 'display ltc ticker' },
-    #{name => 'eur2usd',        regex => '(e2u|eur2usd)$',          comment => 'display euro to usd ticker' },
     {name => 'commands',            regex => '(commands|cmds)$',        comment => 'display list of available commands' },
     {name => 'plugins',             regex => 'plugins$',                comment => 'display list of available plugins' },
-    {name => 'help',                regex => 'help$',                   comment => 'get help info' },
-    {name => 'availableplugins',    regex => 'availableplugins$',       comment => 'list all available plugins', require_admin => 1 },
-    {name => 'loadplugin',          regex => 'loadplugin\s.+?',         comment => 'load plugin', require_admin => 1 },
-    {name => 'unloadplugin',        regex => 'unloadplugin\s.+?',       comment => 'unload plugin', require_admin => 1 },
+    {name => 'help',                regex => 'help.*?',                 comment => 'get help info' },
+    {name => 'plugin',              regex => 'plugin\s.+?',             comment => 'plugin <name> <command>',       require_admin => 1 },
+    {name => 'admin',               regex => 'admin\s.+?',              comment => 'admin <command> <args>',        require_admin => 1 },
+    {name => 'whitelist',           regex => 'whitelist\s.+?',          comment => 'whitelist <command> <args>',    require_admin => 1 },
+    {name => 'blacklist',           regex => 'blacklist\s.+?',          comment => 'blacklist <command> <args>',    require_admin => 1 },
+    {name => 'channel',             regex => 'channel\s.+?',            comment => 'channel <command> <args>',      require_admin => 1 },
 );
 
 # TODO: Whois command, finish up
@@ -624,12 +611,9 @@ sub start {
     $self->{connected} = 0;
     $self->{trivia_running} = 0;
 
-
     if(exists $self->{blowfish_key} && $self->{blowfish_key} ne '') {
         $self->_set_key( 'all', $self->{blowfish_key} );
     }
-
-    #my $wee = $self->_plugin("StockTicker") if(defined $self->_plugin("StockTicker"));
 
     $self->{plugin_regexes} = ();
 
@@ -640,13 +624,6 @@ sub start {
         $self->unload_plugin($plugin);
     }
 
-    #foreach my $p (@{$self->{plugin_regexes}}) {
-    #    my $mod = $self->_plugin($p);
-    #    my $pname = $p->{name};
-    #    warn "* Trying unload $pname";
-    #    $self->unload_plugin($pname);
-    #}
-    
     if( $self->{private_rsa_key_filename} ne '' ) {
         my $key_string = $self->readPrivateKey($self->{private_rsa_key_filename}, $self->{private_rsa_key_password} ne '' ? $self->{private_rsa_key_password} : undef );
         $self->{_rsa} = Crypt::OpenSSL::RSA->new_private_key($key_string);
@@ -661,14 +638,15 @@ sub start {
 before 'send_server_safe' => sub {
     my $self = shift;
 
-    Time::HiRes::sleep($self->safe_delay);
+    #Time::HiRes::sleep($self->safe_delay);
 };
 
 before 'send_server_long_safe' => sub {
     my $self = shift;
 
-    Time::HiRes::sleep($self->safe_delay);
+    #Time::HiRes::sleep($self->safe_delay);
 };
+
 
 sub send_server {&send_server_safe}
 
@@ -963,28 +941,60 @@ sub unique {
 
 sub blacklisted {
     my ($self, $who) = @_;
-    my ($nick,$host) = $self->get_nick_and_host($who);
+    #my ($nick,$host) = $self->get_nick_and_host($who);
 
-    $nick = lc($nick);
-    $host = lc($host);
+    #$nick = lc($nick);
+    #$host = lc($host);
 
-    if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host: lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{blacklistdb}}) {
+    my $bl = _->detect(\@{$self->{blacklistdb}}, sub { 
+            #my ($ident,$host,$chan,$time) = @_;
+            my $entry = '';
+            $entry = $_->[0] eq '*!*' ? '' : '*!*'; # : ''; #.$_->[0].'@'.$_->[1] : ;
+            $entry .= $_->[0].'@'.$_->[1];
+
+            if($self->matches_mask($entry, $who)) {
+                return $who;
+            } else {
+            }
+        });
+
+    if(defined $bl && length $bl) {
         return 1;
     }
+
+    #if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host: lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{blacklistdb}}) {
+    #    return 1;
+    #}
 
     return 0;
 }
 
 sub whitelisted {
     my ($self, $who) = @_;
-    my ($nick,$host) = $self->get_nick_and_host($who);
+    #my ($nick,$host) = $self->get_nick_and_host($who);
 
-    $nick = lc($nick);
-    $host = lc($host);
+    #$nick = lc($nick);
+    #$host = lc($host);
 
-    if(grep {lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{whitelistdb}}) {
+    my $wl = _->detect(\@{$self->{whitelistdb}}, sub { 
+            #my ($ident,$host,$chan,$time) = @_;
+            my $entry = '';
+            $entry = $_->[0] eq '*!*' ? '' : '*!*'; # : ''; #.$_->[0].'@'.$_->[1] : ;
+            $entry .= $_->[0].'@'.$_->[1];
+
+            if($self->matches_mask($entry, $who)) {
+                return $who;
+            } else {
+            }
+        });
+
+    if(defined $wl && length $wl) {
         return 1;
     }
+
+    #if(grep {lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{whitelistdb}}) {
+    #    return 1;
+    #}
 
     return 0;
 }
@@ -1006,15 +1016,33 @@ sub get_nick_and_host {
 
 sub is_admin {
     my ($self, $who) = @_;
-    my ($nick,$host) = $self->get_nick_and_host($who);
+    #my ($nick,$host) = $self->get_nick_and_host($who);
 
-    $nick = lc($nick);
-    $host = lc($host);
+    #$nick = lc($nick);
+    #$host = lc($host);
 
-    if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host : lc($_->[1]) eq $host && lc($_->[0]) eq $nick } @{$self->{adminsdb}}) {
-        # warn "* Wildcard matching !\n";
+    #warn $who;
+    my $admin = _->detect(\@{$self->{adminsdb}}, sub { 
+            #my ($ident,$host,$chan,$time) = @_;
+            my $entry = '';
+            $entry = $_->[0] eq '*!*' ? '' : '*!*'; # : ''; #.$_->[0].'@'.$_->[1] : ;
+            $entry .= $_->[0].'@'.$_->[1];
+
+
+            if($self->matches_mask($entry, $who)) {
+                return $who;
+            } else {
+            }
+    });
+
+    if(defined $admin && length $admin) {
         return 1;
     }
+    
+    #if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host : lc($_->[1]) eq $host && lc($_->[0]) eq $nick } @{$self->{adminsdb}}) {
+        # warn "* Wildcard matching !\n";
+        #    return 1;
+        #}
     return 0;
 }
 
@@ -2438,15 +2466,507 @@ sub _buildup {
         acl => $admin_access,
     );
 
+
+    $self->add_func(name => 'reloadplugin',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            my ($cmd, $arg) = split(/ /, $message, 2);
+
+            return unless defined $arg;
+
+            my $plugin_name = '';
+            if ( defined($plugin_name = List::MoreUtils::first_value { $arg eq $_ } $self->available_modules) ) {
+
+                #return if exists $self->loaded_plugins->{$plugin_name};
+
+                my $unloaded_ok = $self->unload_plugin($plugin_name);
+                return unless ($unloaded_ok);
+                
+                my $added_ok = $self->load_plugin($plugin_name);
+                return unless ($added_ok);
+                
+                my $out_msg = '[reloadplugin] reloaded plugin '.$arg.' - > by '.$nickname;
+                my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+            }
+            return 1;
+        },
+        acl => $admin_access,
+    );
+    
+    $self->add_func(name => 'admin',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            
+            my (undef,$cmd, $arg) = split(/ /, $message, 3);
+
+            return unless defined $cmd && length $cmd;
+            
+            #return unless defined $arg && defined $cmd && length $cmd && length $arg;
+
+            $cmd = lc($cmd);
+
+            if($cmd eq 'add') {
+                return unless defined $arg;
+                my $add_ret = $self->admin_add($who, $arg);
+
+                if($add_ret) {
+                    my $out_msg = "[admin] $arg added - > by $nickname";
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                }
+            } 
+            elsif($cmd eq 'delete' || $cmd eq 'del' || $cmd eq 'remove' || $cmd eq 'rem' || $cmd eq 'rm') {
+                return unless defined $arg;
+                my $del_ret = $self->admin_delete($who, $arg);
+
+                if($del_ret) {
+                    my $out_msg = "[admin] $arg deleted - > by $nickname";
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                } 
+            }
+            elsif($cmd eq 'list' || $cmd eq 'ls') {
+                #my $owner = '*!*dek@butche.red';
+                my $owner = $self->normalize_mask($self->{admin});
+                warn "* ADMIN LIST $owner";
+                warn "* ADMIN LIST $who";
+                if($self->matches_mask($owner,$who)) {
+                    for my $admin_row (@{$self->{adminsdb}}) {
+                        my $entry = $admin_row->[0];
+                        $entry .= " ".$admin_row->[1];
+                        $entry .= " created ";
+                        $entry .= scalar(gmtime($admin_row->[3]));
+                        $entry .= " added by ".$admin_row->[4] if defined $admin_row->[4];
+                        my $out_msg = "[admin] $entry";
+
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                        #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
+                    }
+                }
+            }
+
+            return 1;
+        },
+        acl => $admin_access,
+    );
+
+    $self->add_func(name => 'whitelist',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            
+            my (undef,$cmd, $arg) = split(/ /, $message, 3);
+
+            return unless defined $cmd && length $cmd;
+            
+            #return unless defined $arg && defined $cmd && length $cmd && length $arg;
+
+            $cmd = lc($cmd);
+
+            if($cmd eq 'add') {
+                return unless defined $arg;
+                my $add_ret = $self->whitelist_add($who, $arg);
+
+                if($add_ret) {
+                    my $out_msg = "[whitelist] $arg added - > by $nickname";
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                }
+            } 
+            elsif($cmd eq 'delete' || $cmd eq 'del' || $cmd eq 'remove' || $cmd eq 'rem' || $cmd eq 'rm') {
+                return unless defined $arg;
+                my $del_ret = $self->whitelist_delete($who, $arg);
+
+                if($del_ret) {
+                    my $out_msg = "[whitelist] $arg deleted - > by $nickname";
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                } 
+            }
+            elsif($cmd eq 'list' || $cmd eq 'ls') {
+                #my $owner = '*!*dek@butche.red';
+                my $owner = $self->normalize_mask($self->{admin});
+                warn "* WHITELIST LIST $owner";
+                warn "* WHITELIST LIST $who";
+                if($self->matches_mask($owner,$who)) {
+                    for my $wl_row (@{$self->{whitelistdb}}) {
+                        my $entry = $wl_row->[0];
+                        $entry .= " ".$wl_row->[1];
+                        $entry .= " created ";
+                        $entry .= scalar(gmtime($wl_row->[3]));
+                        $entry .= " added by ".$wl_row->[4] if defined $wl_row->[4];
+                        my $out_msg = "[whitelist] $entry";
+
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                        #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
+                    }
+                }
+            }
+
+            return 1;
+        },
+        acl => $admin_access,
+    );
+
+    $self->add_func(name => 'blacklist',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            
+            my (undef,$cmd, $arg) = split(/ /, $message, 3);
+
+            return unless defined $cmd && length $cmd;
+            
+            #return unless defined $arg && defined $cmd && length $cmd && length $arg;
+
+            $cmd = lc($cmd);
+
+            if($cmd eq 'add') {
+                return unless defined $arg;
+                my $add_ret = $self->blacklist_add($who, $arg);
+
+                if($add_ret) {
+                    my $out_msg = "[blacklist] $arg added - > by $nickname";
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                }
+            } 
+            elsif($cmd eq 'delete' || $cmd eq 'del' || $cmd eq 'remove' || $cmd eq 'rem' || $cmd eq 'rm') {
+                return unless defined $arg;
+                my $del_ret = $self->blacklist_delete($who, $arg);
+
+                if($del_ret) {
+                    my $out_msg = "[blacklist] $arg deleted - > by $nickname";
+                    my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                } 
+            }
+            elsif($cmd eq 'list' || $cmd eq 'ls') {
+                #my $owner = '*!*dek@butche.red';
+                my $owner = $self->normalize_mask($self->{admin});
+                warn "* BLACKLIST LIST $owner";
+                warn "* BLACKLIST LIST $who";
+                if($self->matches_mask($owner,$who)) {
+                    for my $wl_row (@{$self->{blacklistdb}}) {
+                        my $entry = $wl_row->[0];
+                        $entry .= " ".$wl_row->[1];
+                        $entry .= " created ";
+                        $entry .= scalar(gmtime($wl_row->[3]));
+                        $entry .= " added by ".$wl_row->[4] if defined $wl_row->[4];
+                        my $out_msg = "[blacklist] $entry";
+
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                        #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
+                    }
+                }
+            }
+
+            return 1;
+        },
+        acl => $admin_access,
+    );
+
+
+
+   $self->add_func(name => 'channel',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            
+            my (undef,$cmd, $arg) = split(/ /, $message, 3);
+
+            return unless defined $cmd && length $cmd;
+            
+            $cmd = lc($cmd);
+
+            if($cmd eq 'add') {
+                return unless ((defined $arg) && ($self->{con}->is_channel_name($arg)));
+
+                $self->channel_add($arg);
+                
+                return 1;
+            } 
+            elsif($cmd eq 'delete' || $cmd eq 'del' || $cmd eq 'remove' || $cmd eq 'rem' || $cmd eq 'rm') {
+                return unless ((defined $arg) && ($self->{con}->is_channel_name($arg)));
+
+                $self->channel_del($arg);
+                
+                return 1;
+            }
+            elsif($cmd eq 'list' || $cmd eq 'ls') {
+                #my $owner = '*!*dek@butche.red';
+                my $owner = $self->normalize_mask($self->{admin});
+                warn "* CHANNEL LIST $owner";
+                warn "* CHANNEL LIST $who";
+                if($self->matches_mask($owner,$who)) {
+#                    for my $admin_row (@{$self->{adminsdb}}) {
+#                        my $entry = $admin_row->[0];
+#                        $entry .= " ".$admin_row->[1];
+#                        $entry .= " created ";
+#                        $entry .= scalar(gmtime($admin_row->[3]));
+#                        $entry .= " added by ".$admin_row->[4] if defined $admin_row->[4];
+#                        my $out_msg = "[admin] $entry";
+#
+#                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+#                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+#                        #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
+#                    }
+                }
+            }
+
+            return 1;
+        },
+        acl => $admin_access,
+    );
+
+
+    $self->add_func(name => 'plugin',
+        delegate => sub {
+            my ($who, $message, $channel, $channel_list) = @_;
+            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+            
+            my ($cmd,$name, $arg) = split(/ /, $message, 3);
+
+            return unless defined $arg && defined $name && length $arg && length $name;
+
+            $arg = lc($arg);
+
+            if($arg eq 'load') {
+                if($name eq '*' || $name eq 'all') {
+                    for my $p ($self->available_modules) {
+                        my $added_ok = $self->load_plugin($p);
+
+                        next unless ($added_ok);
+                        my $out_msg = "[plugin] $p loaded - > by $nickname";
+
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    }
+                } else {
+                    my $plugin_name = '';
+                    if ( defined($plugin_name = List::MoreUtils::first_value { $name eq $_ } $self->available_modules) ) {
+
+                        return if exists $self->loaded_plugins->{$plugin_name};
+
+                        my $added_ok = $self->load_plugin($plugin_name);
+
+                        return unless ($added_ok);
+                        my $out_msg = "[plugin] $name loaded - > by $nickname";
+
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    }
+                }
+            } elsif($arg eq 'unload') {
+                if($name eq '*' || $name eq 'all') {
+                    # We do this because of central installed and locally installed modules.
+                    my @avail = $self->available_modules();
+                    my $x = _->unique(\@avail,0);
+
+                    for my $p (@avail) {
+                        my $unload_ok = $self->unload_plugin($p);
+
+                        next unless ($unload_ok);
+
+                        my $out_msg = "[plugin] $p unloaded - > by $nickname";
+
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    }
+                } else {
+                    my $plugin_name = '';
+                    if ( defined($plugin_name = List::MoreUtils::first_value { $name eq $_ } $self->available_modules) ) {
+
+                        my $unloaded_ok = $self->unload_plugin($plugin_name);
+
+                        return unless ($unloaded_ok);
+                        my $out_msg = "[plugin] $name unloaded - > by $nickname";
+
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    }
+                }
+            } elsif($arg eq 'status') {
+                if($name eq '*' || $name eq 'all') {
+                    #my $si1 = String::IRC->new('All Available Plugins:')->bold;
+                    #$self->send_server_unsafe (NOTICE => $nickname, $si1);
+
+                    # We do this because of central installed and locally installed modules.
+                    my @avail = $self->available_modules();
+                    my $x = _->unique(\@avail,0);
+
+                    try { # Plugins can be unpredictable.
+                        for my $plugin (@$x) {
+                            
+                            my $is_loaded = exists $self->loaded_plugins->{$plugin} ? "active" : "inactive";
+                            
+                            my $command_summary = "[plugin] $plugin $is_loaded";
+
+                            #$self->send_server_unsafe (PRIVMSG => $channel, $command_summary);
+                            $self->send_server_unsafe (NOTICE => $nickname, $command_summary);
+                        }
+                    }
+                    catch($e) {
+                    }
+                } else {
+                    my $plugin_name = '';
+                    my $plugin_status = '';
+
+                    if ( defined($plugin_name = List::MoreUtils::first_value { $name eq $_ } $self->available_modules) ) { 
+                        $plugin_status = exists $self->loaded_plugins->{$name} ? "active" : "inactive";
+                    } else {
+                        $plugin_status = "not found";
+                    }
+
+                    my $status_msg = "[plugin] $name $plugin_status";
+
+                    $self->send_server_unsafe (NOTICE => $nickname, $status_msg);
+                    #$self->send_server_unsafe (PRIVMSG => $channel, $status_msg);
+                }
+
+            } elsif($arg eq 'reload') {
+                if($name eq '*' || $name eq 'all') {
+                    # We do this because of central installed and locally installed modules.
+                    my @avail = $self->available_modules();
+                    my $x = _->unique(\@avail,0);
+
+                    for my $p (@avail) {
+                        
+                        #return if exists $self->loaded_plugins->{$plugin_name};
+                        my $unloaded_ok = $self->unload_plugin($p);
+                        # return unless ($unloaded_ok);
+                        my $added_ok = $self->load_plugin($p);
+
+                        return unless ($added_ok);
+                        # next unless ($unload_ok);
+
+                        my $out_msg = "[plugin] $p reloaded - > by $nickname";
+
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+
+                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    }
+                } else {
+                    my $plugin_name = '';
+                    if ( defined($plugin_name = List::MoreUtils::first_value { $name eq $_ } $self->available_modules) ) {
+
+                        #return if exists $self->loaded_plugins->{$plugin_name};
+                        my $unloaded_ok = $self->unload_plugin($plugin_name);
+                        # return unless ($unloaded_ok);
+                        my $added_ok = $self->load_plugin($plugin_name);
+
+                        return unless ($added_ok);
+
+                        my $out_msg = "[plugin] $name reloaded - > by $nickname";
+                        my $msg = sprintf '+OK %s', $self->_encrypt( $out_msg, $self->{keys}->[0] );
+                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
+                    }
+                }
+            }
+
+
+            return 1;
+        },
+        acl => $admin_access,
+    );
     $self->add_func(name => 'help',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
             #my $cmd_names = _->pluck(\@commands, 'name');
-            my $si = String::IRC->new('Hi '.$nickname.', type .commands in the channel.')->bold;
-            $self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $si);
-            # $self->send_server_unsafe (PRIVMSG => $nickname, $si);
+            
+            my ($cmd, $arg) = split(/ /, $message, 2);
 
+            unless(defined $arg || length $arg) {
+                my $h = "general help\n";
+                $h .= "type .commands in the channel for available commands.\n";
+                $h .= "use .help <command> for help on a specific command.";
+                
+                for my $line (split /\n/, $h) { 
+                    $self->send_server_unsafe (NOTICE => $nickname, $line);
+                    #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
+                }
+                
+                return 1;
+            }
+
+            if(lc $arg eq 'plugin' && $self->is_admin($who)) {
+                my $h = "plugin <name> <command>\n";
+                $h .= "name - name of plugin. optionally specify \'*\' or \'all\' for every available plugin.\n";
+                $h .= "command - available commands are \'load\',\'unload\',\'reload\', and \'status\'.";
+
+                for my $line (split /\n/, $h) { 
+                    $self->send_server_unsafe (NOTICE => $nickname, $line);
+                }
+
+                return 1;
+            }
+
+            if(lc $arg eq 'admin' && $self->is_admin($who)) {
+                my $h = "admin <command> <args>\n";
+                $h .= "command - available commands are \'add\',\'remove\',\'list\' or \'ls\'.\n";
+                $h .= "args - optional arguments for command.";
+                
+                for my $line (split /\n/, $h) { 
+                    #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
+                    $self->send_server_unsafe (NOTICE => $nickname, $line);
+                }
+
+                return 1;
+            }
+            
+            if(lc $arg eq 'whitelist' && $self->is_admin($who)) {
+                my $h = "whitelist <command> <args>\n";
+                $h .= "command - available commands are \'add\',\'remove\',\'list\' or \'ls\'.\n";
+                $h .= "args - optional arguments for command.";
+
+                for my $line (split /\n/, $h) { 
+                    #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
+                    $self->send_server_unsafe (NOTICE => $nickname, $line);
+                }
+
+                return 1;
+            }
+            if(lc $arg eq 'blacklist' && $self->is_admin($who)) {
+                my $h = "blacklist <command> <args>\n";
+                $h .= "command - available commands are \'add\',\'remove\',\'list\' or \'ls\'.\n";
+                $h .= "args - optional arguments for command.";
+
+                for my $line (split /\n/, $h) { 
+                    #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
+                    $self->send_server_unsafe (NOTICE => $nickname, $line);
+                }
+
+                return 1;
+            }
+            if(lc $arg eq 'channel' && $self->is_admin($who)) {
+                my $h = "channel <command> <args>\n";
+                $h .= "command - available commands are \'add\',\'remove\',\'list\' or \'ls\'.\n";
+                $h .= "args - optional arguments for command.";
+                
+                for my $line (split /\n/, $h) { 
+                    #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
+                    $self->send_server_unsafe (NOTICE => $nickname, $line);
+                }
+
+                return 1;
+            }
             return 1;
         },
         acl => $all_access_except_blacklist,

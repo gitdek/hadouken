@@ -76,23 +76,28 @@ sub _imdb {
     my $summary = '';
 
     try {
-        my $imdb = new IMDB::Film(crit => $title);    
+        my $imdb = new IMDB::Film(crit => $title); #, search => 'find?tt=on;mx=20;q=');
+        # warn Dumper($imdb);
+        unless($imdb->status) {
+            $imdb = new IMDB::Film(crit => $title, search => 'find?tt=on;mx=20;q=');
+        }
+        
         if($imdb->status) {
-            $summary = "[imdb] Title: ".$imdb->title()." - ";
-            $summary .= "Year: ".$imdb->year()." - " if defined $imdb->year && length $imdb->year;
+            $summary = "[imdb] ".$imdb->title()." ";
+            $summary .= "(".$imdb->year().") - " if defined $imdb->year && length $imdb->year;
 
             if(defined $imdb->rating && length $imdb->rating) {
                 my $rating = $imdb->rating();
                 $rating =~ s/\.?0*$//;
-                $summary .= "Rating: ".$rating."/10 - ";
+                $summary .= $rating."/10 - ";
             }
-            #warn "Plot Symmary: ".$imdb->plot()."\n";
+            warn "Tagline: ".$imdb->tagline()."\n";
             $summary .= "http://www.imdb.com/title/tt".$imdb->code."/";
         } else {
-            warn "Something wrong: ".$imdb->error;
+            #warn "Something wrong: ".$imdb->error;
+            #warn Dumper($imdb);
         }
 
-        #warn Dumper($imdb);
     }
     catch($e) {
         $summary = '';
