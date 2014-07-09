@@ -1,25 +1,30 @@
-package Hadouken::Configuration;
+##############################################
+# Hadouken
+# 
+#
 
-use strict;
-use warnings;
-
-use Moose;
-
-#use Redis;
-
-
-#has redis => (is => 'rw', isa => 'Redis', default => sub { my $redis = Redis->new(server => '127.0.0.1:6379'); $redis; });
-
-sub new {
-    my $class = shift;
-    my $self = {@_};
-    bless $self, $class;
-    return $self;
-}
-
-#__PACKAGE__->meta->make_immutable;
-
-1;
+#package Hadouken::Configuration;
+#
+#use strict;
+#use warnings;
+#
+#use Moose;
+#
+##use Redis;
+#
+#
+##has redis => (is => 'rw', isa => 'Redis', default => sub { my $redis = Redis->new(server => '127.0.0.1:6379'); $redis; });
+#
+#sub new {
+#    my $class = shift;
+#    my $self = {@_};
+#    bless $self, $class;
+#    return $self;
+#}
+#
+##__PACKAGE__->meta->make_immutable;
+#
+#1;
 
 package Hadouken;
 
@@ -41,7 +46,7 @@ use constant BIT_VOICE => 4;
 # 
 # use 5.014;
 
-our $VERSION = '0.7';
+our $VERSION = '0.7.1';
 our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
@@ -131,38 +136,38 @@ use constant B64 =>
 './0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 my @commands = (
-    {name => 'trivstop',       regex => 'trivstop$',               comment => 'stop trivia bot',                require_admin => 1 }, 
-    {name => 'trivstart',      regex => 'trivstart$',              comment => 'start trivia bot',               require_admin => 1 }, 
-    {name => 'raw',            regex => 'raw\s.+?',                comment => 'send raw command',               require_admin => 1 }, 
-    {name => 'statistics',     regex => '(stats|statistics)$',     comment => 'get statistics about bot',       require_admin => 1 },   
-    {name => 'channeladd',     regex => 'channeladd\s.+?',         comment => 'add channel',                    require_admin => 1 },
-    {name => 'channeldel',     regex => 'channeldel\s.+?',         comment => 'delete channel',                 require_admin => 1 },
-    {name => 'powerup',        regex => '(powerup|power\^)$',      comment => 'power up +o',                    require_admin => 1 },
-    {name => 'admindel',       regex => 'admindel\s.+?',           comment => 'delete admin <nick@host>',       require_admin => 1 },
-    {name => 'adminadd',       regex => 'adminadd\s.+?',           comment => 'add admin <nick@host>',          require_admin => 1 },
-    {name => 'whitelistdel',   regex => 'whitelistdel\s.+?',       comment => 'delete whitelist <nick@host>',   require_admin => 1 },
-    {name => 'whitelistadd',   regex => 'whitelistadd\s.+?',       comment => 'add whitelist <nick@host>',      require_admin => 1 },
-    {name => 'blacklistdel',   regex => 'blacklistdel\s.+?',       comment => 'delete blacklist <nick@host>',   require_admin => 1 },
-    {name => 'blacklistadd',   regex => 'blacklistadd\s.+?',       comment => 'add blacklist <nick@host>',      require_admin => 1 },
-    {name => 'shorten',        regex => 'shorten\s.+?',            comment => 'shorten <url>' },
-    {name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
-    {name => 'calc',           regex => 'calc\s.+?',               comment => 'google calculator' },
-    {name => 'geoip',          regex => 'geoip\s.+?',              comment => 'geo ip lookup' },
-    {name => 'lq',             regex => '(lq|lastquote)$',         comment => 'get most recently added quote' },
-    {name => 'aq',             regex => '(aq|addquote)\s.+?',      comment => 'add a quote' },
-    {name => 'dq',             regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote' },
-    {name => 'fq',             regex => '(fq|findquote)\s.+?',     comment => 'find a quote' },
-    {name => 'rq',             regex => '(rq|randquote)$',         comment => 'get a random quote' },
-    {name => 'q',              regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)' },
-    {name => 'btc',            regex => 'btc$',                    comment => 'display btc ticker' },
-    {name => 'ltc',            regex => 'ltc$',                    comment => 'display ltc ticker' },
-    {name => 'eur2usd',        regex => '(e2u|eur2usd)$',          comment => 'display euro to usd ticker' },
-    {name => 'commands',       regex => '(commands|cmds)$',        comment => 'display list of available commands' },
-    {name => 'plugins',        regex => 'plugins$',                comment => 'display list of available plugins' },
-    {name => 'help',           regex => 'help$',                   comment => 'get help info' },
-    {name => 'availableplugins', regex => 'availableplugins$',                comment => 'list all available plugins', require_admin => 1 },
-    {name => 'loadplugin',        regex => 'loadplugin\s.+?',                comment => 'load plugin', require_admin => 1 },
-    {name => 'unloadplugin',        regex => 'unloadplugin\s.+?',                comment => 'unload plugin', require_admin => 1 },
+    {name => 'trivstop',            regex => 'trivstop$',               comment => 'stop trivia bot',                require_admin => 1 }, 
+    {name => 'trivstart',           regex => 'trivstart$',              comment => 'start trivia bot',               require_admin => 1 }, 
+    {name => 'raw',                 regex => 'raw\s.+?',                comment => 'send raw command',               require_admin => 1 }, 
+    {name => 'statistics',          regex => '(stats|statistics)$',     comment => 'get statistics about bot',       require_admin => 1 },   
+    {name => 'channeladd',          regex => 'channeladd\s.+?',         comment => 'add channel',                    require_admin => 1 },
+    {name => 'channeldel',          regex => 'channeldel\s.+?',         comment => 'delete channel',                 require_admin => 1 },
+    {name => 'powerup',             regex => '(powerup|power\^)$',      comment => 'power up +o',                    require_admin => 1 },
+    {name => 'admindel',            regex => 'admindel\s.+?',           comment => 'delete admin <nick@host>',       require_admin => 1 },
+    {name => 'adminadd',            regex => 'adminadd\s.+?',           comment => 'add admin <nick@host>',          require_admin => 1 },
+    {name => 'whitelistdel',        regex => 'whitelistdel\s.+?',       comment => 'delete whitelist <nick@host>',   require_admin => 1 },
+    {name => 'whitelistadd',        regex => 'whitelistadd\s.+?',       comment => 'add whitelist <nick@host>',      require_admin => 1 },
+    {name => 'blacklistdel',        regex => 'blacklistdel\s.+?',       comment => 'delete blacklist <nick@host>',   require_admin => 1 },
+    {name => 'blacklistadd',        regex => 'blacklistadd\s.+?',       comment => 'add blacklist <nick@host>',      require_admin => 1 },
+    #{name => 'shorten',        regex => 'shorten\s.+?',            comment => 'shorten <url>' },
+    #{name => 'ipcalc',         regex => 'ipcalc\s.+?',             comment => 'calculate ip netmask' },
+    #{name => 'calc',           regex => 'calc\s.+?',               comment => 'google calculator' },
+    #{name => 'geoip',          regex => 'geoip\s.+?',              comment => 'geo ip lookup' },
+    {name => 'lq',                  regex => '(lq|lastquote)$',         comment => 'get most recently added quote' },
+    {name => 'aq',                  regex => '(aq|addquote)\s.+?',      comment => 'add a quote' },
+    {name => 'dq',                  regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote' },
+    {name => 'fq',                  regex => '(fq|findquote)\s.+?',     comment => 'find a quote' },
+    {name => 'rq',                  regex => '(rq|randquote)$',         comment => 'get a random quote' },
+    {name => 'q',                   regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)' },
+    #{name => 'btc',            regex => 'btc$',                    comment => 'display btc ticker' },
+    #{name => 'ltc',            regex => 'ltc$',                    comment => 'display ltc ticker' },
+    #{name => 'eur2usd',        regex => '(e2u|eur2usd)$',          comment => 'display euro to usd ticker' },
+    {name => 'commands',            regex => '(commands|cmds)$',        comment => 'display list of available commands' },
+    {name => 'plugins',             regex => 'plugins$',                comment => 'display list of available plugins' },
+    {name => 'help',                regex => 'help$',                   comment => 'get help info' },
+    {name => 'availableplugins',    regex => 'availableplugins$',       comment => 'list all available plugins', require_admin => 1 },
+    {name => 'loadplugin',          regex => 'loadplugin\s.+?',         comment => 'load plugin', require_admin => 1 },
+    {name => 'unloadplugin',        regex => 'unloadplugin\s.+?',       comment => 'unload plugin', require_admin => 1 },
 );
 
 # TODO: Whois command, finish up
@@ -264,15 +269,13 @@ sub _build_loaded_plugins {
 }
 
 
+# Case sensitive!
 sub load_plugin {
     my ($self, $plugin_name) = @_;
     
     for my $plugin ($self->available_modules) {
 
-        #next unless $plugin =~ $plugin_name;
-
-        # Try unloading first ?
-        # $self->unload_plugin($plugin);
+        next unless $plugin eq $plugin_name;
 
         my $m = undef;
         my $command_regex = undef;
@@ -313,6 +316,7 @@ sub load_plugin {
     return 1;
 }
 
+# Case sensitive!
 sub unload_plugin {
     my ($self, $plugin_name) = @_;
 
@@ -321,13 +325,13 @@ sub unload_plugin {
 
         my $r = $self->unload_class('Hadouken::Plugin::'.$plugin);
 
-        warn "** UNLOADING PLUGIN $plugin, r is $r";
+        warn "** UNLOADING PLUGIN $plugin - ". ($r ? 'Success' : 'Fail'); # r is $r";
 
         my $x = List::MoreUtils::first_index { $_->{name} eq $plugin_name } @{$self->{plugin_regexes}};
 
         splice @{$self->{plugin_regexes}}, $x, 1 if $x > -1;
         
-        warn Dumper @{$self->{plugin_regexes}};
+        #warn Dumper @{$self->{plugin_regexes}};
 
         delete $self->loaded_plugins->{$plugin};
         
@@ -631,11 +635,16 @@ sub start {
         my $mod = $self->_plugin($plugin);
         my $rx = $mod->command_regex;
         push @{$self->{plugin_regexes}}, {name => "$plugin", regex => $rx};
+        $self->unload_plugin($plugin);
     }
 
-
-    $self->unload_plugin('ExamplePlugin');
-
+    #foreach my $p (@{$self->{plugin_regexes}}) {
+    #    my $mod = $self->_plugin($p);
+    #    my $pname = $p->{name};
+    #    warn "* Trying unload $pname";
+    #    $self->unload_plugin($pname);
+    #}
+    
     if( $self->{private_rsa_key_filename} ne '' ) {
         my $key_string = $self->readPrivateKey($self->{private_rsa_key_filename}, $self->{private_rsa_key_password} ne '' ? $self->{private_rsa_key_password} : undef );
         $self->{_rsa} = Crypt::OpenSSL::RSA->new_private_key($key_string);
@@ -1770,98 +1779,98 @@ sub _buildup {
         acl => $admin_access,
     );
 
-    $self->add_func(name => 'shorten',
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+#    $self->add_func(name => 'shorten',
+#        delegate => sub {
+#            my ($who, $message, $channel, $channel_list) = @_;
+#            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+#
+#            my ($cmd, $arg) = split(/ /, $message, 2); # DO NOT LC THE MESSAGE!
+#
+#            return unless defined $arg;
+#
+#            my ($uri) = $arg =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/;
+#
+#            return 0 unless defined $uri;
+#
+#            # Only grab title for admins.
+#            my ($url,$title) = $self->_shorten($uri,$self->is_admin($who));
+#
+#            if(defined $url && $url ne '') {
+#                if(defined $title && $title ne '') {
+#                    $self->send_server_unsafe (PRIVMSG => $channel, "$url ($title)");
+#                } else {
+#                    $self->send_server_unsafe (PRIVMSG => $channel, "$url");   
+#                }
+#            }
+#
+#            return 1;
+#        },
+#        acl => $passive_access
+#    );
 
-            my ($cmd, $arg) = split(/ /, $message, 2); # DO NOT LC THE MESSAGE!
+#    $self->add_func(name => 'ipcalc',
+#        delegate => sub {
+#            my ($who, $message, $channel, $channel_list) = @_;
+#
+#            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+#
+#            my ($cmd, $arg) = split(/ /, lc($message), 2);
+#
+#            my ($network, $netbit) = split(/\//, $arg);
+#
+#            return 
+#            unless 
+#            (defined($network)) && 
+#            (defined($netbit)) && 
+#            ($network =~ /$RE{net}{IPv4}/);
+#
+#            if( ($netbit =~ /^$RE{num}{int}$/) && 
+#                ($netbit <= 32) && 
+#                ($netbit >= 0)) {
+#
+#                my $res_calc = $self->calc_netmask($network."\/".$netbit);
+#
+#                my $res_usable = $self->cidr2usable_v4($netbit);
+#
+#                return unless (defined $res_calc) || (defined $res_usable);
+#
+#                my $out_msg = "[ipcalc] $arg -> netmask: $res_calc - usable addresses: $res_usable";
+#
+#                $self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
+#            } elsif($netbit =~ /$RE{net}{IPv4}/) {
+#
+#                my $cidr = $self->netmask2cidr($netbit,$network);
+#
+#                my $poop = "[ipcalc] $arg -> cidr $cidr";
+#
+#                $self->send_server_unsafe (PRIVMSG => $channel, $poop);
+#            }
+#
+#            return 1;
+#        },
+#        acl => $passive_access,
+#    );
 
-            return unless defined $arg;
-
-            my ($uri) = $arg =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/;
-
-            return 0 unless defined $uri;
-
-            # Only grab title for admins.
-            my ($url,$title) = $self->_shorten($uri,$self->is_admin($who));
-
-            if(defined $url && $url ne '') {
-                if(defined $title && $title ne '') {
-                    $self->send_server_unsafe (PRIVMSG => $channel, "$url ($title)");
-                } else {
-                    $self->send_server_unsafe (PRIVMSG => $channel, "$url");   
-                }
-            }
-
-            return 1;
-        },
-        acl => $passive_access
-    );
-
-    $self->add_func(name => 'ipcalc',
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-
-            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
-            my ($cmd, $arg) = split(/ /, lc($message), 2);
-
-            my ($network, $netbit) = split(/\//, $arg);
-
-            return 
-            unless 
-            (defined($network)) && 
-            (defined($netbit)) && 
-            ($network =~ /$RE{net}{IPv4}/);
-
-            if( ($netbit =~ /^$RE{num}{int}$/) && 
-                ($netbit <= 32) && 
-                ($netbit >= 0)) {
-
-                my $res_calc = $self->calc_netmask($network."\/".$netbit);
-
-                my $res_usable = $self->cidr2usable_v4($netbit);
-
-                return unless (defined $res_calc) || (defined $res_usable);
-
-                my $out_msg = "[ipcalc] $arg -> netmask: $res_calc - usable addresses: $res_usable";
-
-                $self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
-            } elsif($netbit =~ /$RE{net}{IPv4}/) {
-
-                my $cidr = $self->netmask2cidr($netbit,$network);
-
-                my $poop = "[ipcalc] $arg -> cidr $cidr";
-
-                $self->send_server_unsafe (PRIVMSG => $channel, $poop);
-            }
-
-            return 1;
-        },
-        acl => $passive_access,
-    );
-
-    $self->add_func(name => 'calc',
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-
-            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
-            my ($cmd, $arg) = split(/ /, lc($message), 2);
-
-            return unless (defined($arg) && length($arg));
-
-            my $res_calc = $self->calc($arg);
-
-            return unless defined $res_calc;
-
-            $self->send_server_unsafe (PRIVMSG => $channel, "[calc] $res_calc");
-
-            return 1;
-        },
-        acl => $passive_access,
-    );
+#    $self->add_func(name => 'calc',
+#        delegate => sub {
+#            my ($who, $message, $channel, $channel_list) = @_;
+#
+#            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+#
+#            my ($cmd, $arg) = split(/ /, lc($message), 2);
+#
+#            return unless (defined($arg) && length($arg));
+#
+#            my $res_calc = $self->calc($arg);
+#
+#            return unless defined $res_calc;
+#
+#            $self->send_server_unsafe (PRIVMSG => $channel, "[calc] $res_calc");
+#
+#            return 1;
+#        },
+#        acl => $passive_access,
+#    );
 
     $self->add_func(name => 'geoip',
         delegate => sub {
@@ -2278,10 +2287,19 @@ sub _buildup {
             my ($who, $message, $channel, $channel_list) = @_;
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
-            my $si1 = String::IRC->new('Available Plugins:')->bold;
-            $self->send_server_unsafe (NOTICE => $nickname, $si1);
-
             try { # Plugins can be unpredictable.
+                
+                my $pcount = scalar keys %{$self->loaded_plugins};
+            
+                if(defined $pcount && $pcount < 1) {
+                    my $si1 = String::IRC->new('No plugins are available for you!')->bold;
+                    $self->send_server_unsafe (NOTICE => $nickname, $si1);
+                    return 1;
+                }   
+                
+                my $si1 = String::IRC->new('Available Plugins:')->bold;
+                $self->send_server_unsafe (NOTICE => $nickname, $si1);
+
                 foreach my $plugin (keys %{$self->loaded_plugins}) { 
                     my $command_summary = '';
                     my $p = $self->_plugin($plugin);
@@ -2293,9 +2311,7 @@ sub _buildup {
                     my $si = String::IRC->new($name)->bold;
                     $command_summary .= '['.$si.'] '.$ver.' -> '.$comment." ";
                    
-                   
                     $self->send_server_unsafe (NOTICE => $nickname, $command_summary);
-                
                 }
             }
             catch($e) {
@@ -2422,49 +2438,49 @@ sub _buildup {
         acl => $admin_access,
     );
 
-    $self->add_func(name => 'btc', 
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/btc_usd');
-            my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/btc_usd');
-            my $ret =  "[btc_usd\@btce] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
-            my $ret2 = "[btc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
-            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
-            $self->send_server_unsafe (PRIVMSG => $channel, $ret2);
-
-            return 1;
-        },
-        acl => $admin_access,
-    );
-
-    $self->add_func(name => 'ltc', 
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/ltc_usd');
-            my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/ltc_usd');
-            my $ret =  "[ltc_usd\@btce] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
-            my $ret2 = "[ltc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
-
-            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
-            $self->send_server_unsafe (PRIVMSG => $channel, $ret2);
-
-            return 1;
-        },
-        acl => $admin_access,
-    );
-
-    $self->add_func(name => 'eur2usd', 
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/eur_usd');
-            my $ret = "[eur_usd] Last: $json->{eur_usd}->{last} Low: $json->{eur_usd}->{low} High: $json->{eur_usd}->{high} Avg: $json->{eur_usd}->{avg} Vol: $json->{eur_usd}->{vol}";
-            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
-
-            return 1;
-        },
-        acl => $all_access_except_blacklist,
-    );
+#    $self->add_func(name => 'btc', 
+#        delegate => sub {
+#            my ($who, $message, $channel, $channel_list) = @_;
+#            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
+#            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/btc_usd');
+#            my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/btc_usd');
+#            my $ret =  "[btc_usd\@btce] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
+#            my $ret2 = "[btc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
+#            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
+#            $self->send_server_unsafe (PRIVMSG => $channel, $ret2);
+#
+#            return 1;
+#        },
+#        acl => $admin_access,
+#    );
+#
+#    $self->add_func(name => 'ltc', 
+#        delegate => sub {
+#            my ($who, $message, $channel, $channel_list) = @_;
+#            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/ltc_usd');
+#            my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/ltc_usd');
+#            my $ret =  "[ltc_usd\@btce] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
+#            my $ret2 = "[ltc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
+#
+#            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
+#            $self->send_server_unsafe (PRIVMSG => $channel, $ret2);
+#
+#            return 1;
+#        },
+#        acl => $admin_access,
+#    );
+#
+#    $self->add_func(name => 'eur2usd', 
+#        delegate => sub {
+#            my ($who, $message, $channel, $channel_list) = @_;
+#            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/eur_usd');
+#            my $ret = "[eur_usd] Last: $json->{eur_usd}->{last} Low: $json->{eur_usd}->{low} High: $json->{eur_usd}->{high} Avg: $json->{eur_usd}->{avg} Vol: $json->{eur_usd}->{vol}";
+#            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
+#
+#            return 1;
+#        },
+#        acl => $all_access_except_blacklist,
+#    );
 
     $self->{con}->reg_cb (
         connect => sub {
@@ -2642,37 +2658,38 @@ sub _buildup {
                 else {
                     warn "* Delegate not defined for $cmd->{'name'}\n";
                 }
-            } else {
+            } 
+            else {
 
-                my $uri = undef;
-
-                if (( ($uri) = $message =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/ ) ) { #m{($RE{URI})}gos ) {
-                    warn "* Matched a URL $uri\n";
-
-                    my $cur_channel_clean = $channel;
-                    $cur_channel_clean =~ s/^\#//;
-                    my $server_hash_ref = $self->{current_server};
-
-                    if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{shorten_urls} == 1 ) {
-
-                        warn "* shorten_urls IS set for this channel\n";
-
-                        # Only get titles if admin, since we trust admins.
-                        my $get_title = $self->is_admin($who);
-
-                        my ($shrt_url,$shrt_title) = $self->_shorten($uri, $get_title );
-
-                        if(defined($shrt_url) && $shrt_url ne '') {
-                            if(defined($shrt_title) && $shrt_title ne '') {
-                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
-                            } else {
-                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url");      
-                            }
-                        }
-                    } else {
-                        warn "* shorten_urls disabled for this channel\n";
-                    }
-                }
+#                my $uri = undef;
+#
+#                if (( ($uri) = $message =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/ ) ) { #m{($RE{URI})}gos ) {
+#                    warn "* Matched a URL $uri\n";
+#
+#                    my $cur_channel_clean = $channel;
+#                    $cur_channel_clean =~ s/^\#//;
+#                    my $server_hash_ref = $self->{current_server};
+#
+#                    if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{shorten_urls} == 1 ) {
+#
+#                        warn "* shorten_urls IS set for this channel\n";
+#
+#                        # Only get titles if admin, since we trust admins.
+#                        my $get_title = $self->is_admin($who);
+#
+#                        my ($shrt_url,$shrt_title) = $self->_shorten($uri, $get_title );
+#
+#                        if(defined($shrt_url) && $shrt_url ne '') {
+#                            if(defined($shrt_title) && $shrt_title ne '') {
+#                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
+#                                } else {
+#                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url");      
+#                                }
+#                            }
+#                         } else {
+#                         warn "* shorten_urls disabled for this channel\n";
+#                         }
+#                     }
 
                 # Try to match a plugin command last(but not least).
 
@@ -2702,32 +2719,31 @@ sub _buildup {
                 }
 
 
-                if($channel eq '#trivia') {
-                    if($nickname eq 'utonium') {
+                #if($channel eq '#trivia') {
+                #   if($nickname eq 'utonium') {
 
-                        if($message =~ 'QUESTION' || $message =~ 'googled the answer' || $message =~ 'start giving answers like this one') {
-                            my $stripped = $self->_decode_irc($message);
+                #       if($message =~ 'QUESTION' || $message =~ 'googled the answer' || $message =~ 'start giving answers like this one') {
+                #           my $stripped = $self->_decode_irc($message);
 
-                            $stripped =~ s/\x03\x31.*?\x03/ /g;
-                            $stripped =~ s/[\x20\x39]/ /g;
-                            $stripped =~ s/[\x30\x2c\x31]//g;
+                #           $stripped =~ s/\x03\x31.*?\x03/ /g;
+                #           $stripped =~ s/[\x20\x39]/ /g;
+                #           $stripped =~ s/[\x30\x2c\x31]//g;
 
-                            #$stripped = $self->strip_formatting($stripped);
 
-                            $stripped = $self->_strip_color($stripped);
+                #           $stripped = $self->_strip_color($stripped);
 
-                            $stripped =~ s/\h+/ /g;                            
+                #           $stripped =~ s/\h+/ /g;                            
 
-                            $stripped .= "\n";
+                #           $stripped .= "\n";
 
-                            $self->hexdump("Unstripped",$stripped);
+                #            $self->hexdump("Unstripped",$stripped);
 
-                            open(FILE,">>".$self->{ownerdir}.'/../data/new_questions_parsed');
-                            print FILE $stripped;
-                            close(FILE);
-                        }
-                    }
-                }
+                #           open(FILE,">>".$self->{ownerdir}.'/../data/new_questions_parsed');
+                #print FILE $stripped;
+                            #           close(FILE);
+                            #       }
+                            #}
+                            #}
 
                 # Try to match to trivia!
                 if($self->{triviarunning} && $channel eq $self->{trivia_channel}) {
@@ -2740,7 +2756,6 @@ sub _buildup {
                             if($message eq $self->{_answer}) {
 
                                 my $answer_elapsed = sprintf "%.1f", time - $self->{_question_time};
-
 
                                 unless(exists $self->{streak}) {
                                     $self->{streak} = ();
@@ -2795,8 +2810,8 @@ sub _buildup {
                                 my $pos_prev = $rankings[$user_rank - 2] || undef;
                                 my $pos_next = $rankings[$user_rank + 2] || undef;
 
-                                warn $pos_prev;
-                                warn $pos_next;
+                                #warn $pos_prev;
+                                #warn $pos_next;
 
                                 if($user_rank == 1 && defined $pos_next) {
                                     my $points_ahead = $self->{_scores}{$nickname}{score} - $self->{_scores}{$pos_next}{score};
@@ -3247,7 +3262,7 @@ sub _start {
     #$self->send_server_unsafe(PRIVMSG => "\*status","ClearAllChannelBuffers");
 
     $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port},
-        { localaddr => $self->{iface}, real => 'bitch',nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
+        { localaddr => $self->{iface}, real => 'hadouken',nick => $self->{nick}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
 
     #     sub {
     #        my ($fh) = @_;

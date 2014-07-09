@@ -58,7 +58,8 @@ sub request {
             while (@tmp) {
                 my $t1 = shift @tmp;
                 my $t2 = shift @tmp;
-                push @cookies, "$t1,$t2";
+                
+                push @cookies, "$t1,$t2" if defined $t1 && defined $t2;
             }
 
             $header->{'set-cookie'} = \@cookies;

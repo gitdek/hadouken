@@ -15,7 +15,7 @@ use Config::General;
 use TryCatch;
 use namespace::autoclean;
 
-use Data::Printer alias => 'Dumper', colored => 1;
+# use Data::Printer alias => 'Dumper', colored => 1;
 
 my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
@@ -41,9 +41,6 @@ my $conf = Config::General->new(-ForceArray => 1, -ConfigFile => $config_filenam
 
 my %config = $conf->getall;
 
-#print Dumper(%config);
-#exit(0);
-
 my $log_filename = exists $config{log} ? Cwd::abs_path($config{log}) : '/var/log/hadouken.log';
 
 my $pid_filename = exists $config{pid} ? Cwd::abs_path($config{pid}) : '/var/run/hadouken.pid';
@@ -66,7 +63,7 @@ sub on_config_update {
 }
 
 my $cb = Hadouken->new_with_options(
-    nick => $config{nickname} || 'hadouken',
+    nick => $config{nick} || 'hadouken',
     servers => [ $config{server} ],
     admin => $config{admin},
     config_hash => \%config,
@@ -79,13 +76,11 @@ my $cb = Hadouken->new_with_options(
     bitly_api_key => $config{bitly_api_key} || '',
     private_rsa_key_filename => $rsakey_filename,
     private_rsa_key_password => $config{rsa_key_password} || '',
-    blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # DEFAULT Blowfish key
+    blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
     ownerdir => $filedirname,
     reconnect => $config{reconnect} || 1,
     reconnect_delay => $config{reconnect_delay} || 30,
-    iface => $config{iface} || '', # blank will use any.
 );
-
 
 my %daemon_args = ( 
     name        => "Hadouken",
