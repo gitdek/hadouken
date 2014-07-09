@@ -46,7 +46,7 @@ use constant BIT_VOICE => 4;
 # 
 # use 5.014;
 
-our $VERSION = '0.7.1';
+our $VERSION = '0.8.1';
 our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
