@@ -2,7 +2,6 @@
 
 use strict;
 use warnings;
-
 use FindBin qw($Bin);
 use lib "$Bin/../lib";
 
@@ -17,7 +16,13 @@ use Config::General;
 use TryCatch;
 use namespace::autoclean;
 
-# use Data::Printer alias => 'Dumper', colored => 1;
+use Term::ReadPassword;
+
+use Data::Printer alias => 'Dumper', colored => 1;
+
+$|=1;
+
+$SIG{'HUP'} = \&reload_daemon;
 
 my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
@@ -25,11 +30,12 @@ my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 # so items in our config are relative from here.
 chdir $filedirname;
 
+
 my $config_flag = "--config=";
-
 my $setup_flag = "--setup";
-
+my $showconfig_flag = "--showconfig";
 my $config_filename = '/etc/hadouken.conf';
+my $cipher = undef;
 
 if (my ($idx) = grep $ARGV[$_] =~ $config_flag, 0 .. $#ARGV) {
     my($flag,$cf) = split(/=/, $ARGV[$idx]);
@@ -45,39 +51,35 @@ my $conf_plain = '';
 
 if(grep $ARGV[$_] =~ $setup_flag, 0 .. $#ARGV) {
     createconf();
-
 } else {
     $conf_plain = readconf();
 }
 
-#-String
+if(grep $ARGV[$_] =~ $showconfig_flag, 0 .. $#ARGV) {
+    showconf();
+}
 
 my $conf = Config::General->new(-ForceArray => 1, -String => $conf_plain, -AutoTrue => 1);
-
 my %config = $conf->getall;
 
 my $log_filename = exists $config{log} ? Cwd::abs_path($config{log}) : '/var/log/hadouken.log';
-
 my $pid_filename = exists $config{pid} ? Cwd::abs_path($config{pid}) : '/var/run/hadouken.pid';
-
 my $rsakey_filename = exists $config{rsa_key_file} ? Cwd::abs_path($config{rsa_key_file}) : '';
 
+
+# Make sure file exists and is readable by effective uid/gid.
 if($rsakey_filename ne '') {
-    # Make sure file exists and is readable by effective uid/gid.
     unless(-e $rsakey_filename && -r $rsakey_filename) {
         die "RSA key is specified but does not exist.";
     }
 }
 
-unless(exists $config{admin} && $config{server}) {
+unless(exists $config{admin} && exists $config{server}) {
     die "Missing configuration values";
 }
 
-sub on_config_update {
-
-}
-
 my $cb = Hadouken->new_with_options(
+    conf_update => \&on_config_update, #sub { print Dumper(@_); }, #on_config_update,
     nick => $config{nick} || 'hadouken',
     servers => [ $config{server} ],
     admin => $config{admin},
@@ -107,7 +109,7 @@ my %daemon_args = (
     program => sub { $cb->start },
 
     help => "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n",
-    kill_timeout => 6,
+    kill_timeout => 7,
 
     pid_file    => $pid_filename,
     stderr_file => $log_filename,
@@ -149,6 +151,35 @@ catch($e) {
 
 exit(($exit_code || 0));
 
+sub on_config_update {
+    my ($conf_data) = @_;
+    my $encrypted = $cipher->encrypt($conf_data);
+    $encrypted = encode_base64($encrypted);
+    chomp($encrypted);
+    
+    unlink $config_filename;
+    
+    open FILE, ">$config_filename" or die "Error reading configuration file: $!";
+    print FILE $encrypted;
+    close FILE;
+}
+
+sub reload_daemon {
+    my $conf_encrypted = '';
+    
+    open FILE, $config_filename or die "Error reading configuration file: $!";
+    while (<FILE>){
+        $conf_encrypted .= $_;
+    }
+    close FILE;
+
+    die "Error reloading" unless defined $cipher && defined $cb;
+
+    my $plaintext = $cipher->decrypt(decode_base64($conf_encrypted));
+    $cb->reload_config($plaintext);
+
+    return 1;
+}
 
 sub createconf {
     open FILE, $config_filename or die "Error reading configuration file: $!";
@@ -159,20 +190,11 @@ sub createconf {
     
     unlink($config_filename);
 
-    my $password = '';
-    my $password_confirm = '';
-    print "Enter password:";
-    system('stty','-echo');
-    chomp($password=<STDIN>);
-    system('stty','echo');
-    print "\nRepeat:";
-    system('stty','-echo');
-    chomp($password_confirm=<STDIN>);
-    system('stty','echo');
+    my $password = readcredentials();
     
-    exit(1337) unless $password eq $password_confirm;
+    exit(1337) unless defined $password && length $password;
  
-    my $cipher = Crypt::CBC->new({
+    $cipher = Crypt::CBC->new({
             key         => $password, # 256 bits
         });
 
@@ -180,7 +202,6 @@ sub createconf {
     $encrypted = encode_base64($encrypted);
     chomp($encrypted);
     
-    my $plaintext = $cipher->decrypt(decode_base64($encrypted));
     open FILE, ">$config_filename" or die "Error reading configuration file: $!";
     print FILE $encrypted;
     close FILE;
@@ -190,23 +211,15 @@ sub createconf {
 }
 
 sub readconf {
-    my $password = '';
-    my $password_confirm = '';
-    print "Enter password:";
-    system('stty','-echo');
-    chomp($password=<STDIN>);
-    system('stty','echo');
-    print "\nRepeat:";
-    system('stty','-echo');
-    chomp($password_confirm=<STDIN>);
-    system('stty','echo');
-    exit(1337) unless $password eq $password_confirm;
-    print "\n";
+    unless(defined $cipher) {
+        my $password = readcredentials();
+        exit(1337) unless defined $password && length $password;
 
-    my $cipher = Crypt::CBC->new({
-            key         => $password, # 256 bits
-        });
-
+        $cipher = Crypt::CBC->new({
+                key         => $password, # 256 bits
+            });
+    }
+    
     my $conf_encrypted = '';
     open FILE, $config_filename or die "Error reading configuration file: $!";
     while (<FILE>){
@@ -217,4 +230,32 @@ sub readconf {
     my $plaintext = $cipher->decrypt(decode_base64($conf_encrypted));
 
     return $plaintext;
+}
+
+sub showconf {
+    my $plaintext = readconf();
+    print $plaintext;
+    exit(0);
+}
+
+sub readcredentials {
+    my $password;
+    my $password_confirm;
+
+    my $confirm = 0;
+
+    while(1) {
+        $password = Term::ReadPassword::read_password('Enter password: ');
+        redo unless defined $password && length $password;
+
+        last unless $confirm;
+        
+        $password_confirm = Term::ReadPassword::read_password('Repeat: ');
+        redo unless defined $password_confirm && length $password_confirm && $password eq $password_confirm;
+    
+
+        last;
+    }
+
+    return $password;
 }

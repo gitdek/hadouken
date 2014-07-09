@@ -33,13 +33,10 @@ sub command_comment {
 
 # Clean name of command.
 sub command_name {
-    my $self = shift;
-
     return "mitch";
 }
 
 sub command_regex {
-
     return 'mitch$';
 }
 
@@ -100,8 +97,6 @@ sub command_run {
         warn $wrapped;
 
         my @lines = split(/\n/,$wrapped);
-
-
 
         my $cnt = 0;
         foreach my $l (@lines) {
