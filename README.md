@@ -46,7 +46,12 @@ Command-line options
     Run in foreground:
         hadouken foreground
 
-
+		Encrypt configuration file:
+				hadouken --setup
+				
+		Display encrypted configuration file:
+				hadouken --showconfig
+		
 Issues
 ----
 Some dependencies may not be satisfied. 
