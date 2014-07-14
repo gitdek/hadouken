@@ -17,7 +17,7 @@ our $VERSION = '0.01';
 
 
 has timeout => (is => 'rw', isa => 'Int', default => sub { 30 });
-has agent => (is => 'rw', isa => 'Str', default => sub { join "/", __PACKAGE__, $VERSION });
+has agent => (is => 'rw', isa => 'Str', default => sub { 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)' }); #join "/", __PACKAGE__, $VERSION });
 has cookie_jar => (is => 'rw', isa => 'HTTP::Cookies', default => sub { my $jar = HTTP::Cookies->new; $jar; });
 
 sub get { _request(GET => @_) }
@@ -59,7 +59,7 @@ sub request {
                 my $t1 = shift @tmp;
                 my $t2 = shift @tmp;
                 
-                push @cookies, "$t1,$t2" if defined $t1 && defined $t2;
+                push @cookies, "$t1,$t2"; # if defined $t1 && defined $t2;
             }
 
             $header->{'set-cookie'} = \@cookies;

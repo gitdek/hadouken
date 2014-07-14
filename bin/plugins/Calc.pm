@@ -45,7 +45,6 @@ sub acl_check {
         return 1;
     }
 
-
     return 0;
 }
 
@@ -62,7 +61,7 @@ sub command_run {
 
     return unless defined $res_calc;
 
-    $self->send_server_unsafe (PRIVMSG => $channel, "[calc] $res_calc");
+    $self->send_server (PRIVMSG => $channel, "[calc] $res_calc");
 
     return 1;
 
@@ -72,14 +71,19 @@ sub calc {
 
     my $url = URI->new('http://www.google.com/search');
     $url->query_form(q => $expression);
-
+    
     my $ret = undef;
 
-    $self->asyncsock->get($url, sub {
-            my ($body, $header) = @_;
-            $ret = $self->parse_calc_result($body);
-            $ret =~ s/[^[:ascii:]]+//g if $ret;
-        });
+    my $result = $self->{Owner}->_webclient->get($url);
+    
+    $ret = $self->parse_calc_result($result->content);
+    $ret =~ s/[^[:ascii:]]+//g; # if $ret;
+
+    #$self->asyncsock->get($url, sub {
+    #        my ($body, $header) = @_;
+    #        $ret = $self->parse_calc_result($body);
+    #        $ret =~ s/[^[:ascii:]]+//g if $ret;
+    #    });
 
     return $ret;
 }

@@ -122,17 +122,16 @@ use constant B64 =>
 './0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 my @commands = (
-    {name => 'trivstop',            regex => 'trivstop$',               comment => 'stop trivia bot',                require_admin => 1 }, 
-    {name => 'trivstart',           regex => 'trivstart$',              comment => 'start trivia bot',               require_admin => 1 }, 
+    {name => 'trivia',              regex => 'trivia\s.+?',             comment => 'trivia <command>',               require_admin => 1, channel_only => 1 }, 
     {name => 'raw',                 regex => 'raw\s.+?',                comment => 'send raw command',               require_admin => 1 }, 
     {name => 'statistics',          regex => '(stats|statistics)$',     comment => 'get statistics about bot',       require_admin => 1 },   
-    {name => 'powerup',             regex => '(powerup|power\^)$',      comment => 'power up +o',                    require_admin => 1 },
-    {name => 'lq',                  regex => '(lq|lastquote)$',         comment => 'get most recently added quote' },
-    {name => 'aq',                  regex => '(aq|addquote)\s.+?',      comment => 'add a quote' },
-    {name => 'dq',                  regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote' },
-    {name => 'fq',                  regex => '(fq|findquote)\s.+?',     comment => 'find a quote' },
-    {name => 'rq',                  regex => '(rq|randquote)$',         comment => 'get a random quote' },
-    {name => 'q',                   regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)' },
+    {name => 'powerup',             regex => '(powerup|power\^)$',      comment => 'power up +o',                    require_admin => 1, channel_only => 1 },
+    {name => 'lq',                  regex => '(lq|lastquote)$',         comment => 'get most recently added quote', channel_only => 1 },
+    {name => 'aq',                  regex => '(aq|addquote)\s.+?',      comment => 'add a quote', channel_only => 1 },
+    {name => 'dq',                  regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote', channel_only => 1 },
+    {name => 'fq',                  regex => '(fq|findquote)\s.+?',     comment => 'find a quote', channel_only => 1 },
+    {name => 'rq',                  regex => '(rq|randquote)$',         comment => 'get a random quote', channel_only => 1 },
+    {name => 'q',                   regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)', channel_only => 1 },
     {name => 'commands',            regex => '(commands|cmds)$',        comment => 'display list of available commands' },
     {name => 'plugins',             regex => 'plugins$',                comment => 'display list of available plugins' },
     {name => 'help',                regex => 'help.*?',                 comment => 'get help info' },
@@ -1540,37 +1539,30 @@ sub _buildup {
         }
     );
 
-    $self->add_func(name => 'trivstart',
+    $self->add_func(name => 'trivia',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
             my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
 
             return unless defined $channel;
+            
+            my (undef,$cmd, $arg) = split(/ /, $message, 3);
 
-            #$self->send_server_unsafe(PRIVMSG => $channel, "  Starting trivia!");
+            return unless defined $cmd && length $cmd;
+            
+            $cmd = lc($cmd);
 
-            $self->_start_trivia($channel);
-
-            return 1;
-        },
-        acl => $admin_access
-    );
-
-    $self->add_func(name => 'trivstop',
-        delegate => sub {
-            my ($who, $message, $channel, $channel_list) = @_;
-            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-
-            #return unless defined $channel;
-
-            #$self->send_server_unsafe(PRIVMSG => $channel, "  Starting trivia!");
-
-            $self->_stop_trivia;
+            if($cmd eq 'start') {
+                $self->_start_trivia($channel);
+            } elsif($cmd eq 'stop') {
+                $self->_stop_trivia;
+            }
 
             return 1;
         },
         acl => $admin_access
     );
+
 
     $self->add_func(name => 'powerup',
         delegate => sub {
@@ -2446,6 +2438,18 @@ sub _buildup {
 
                 return 1;
             }
+
+            if(lc $arg eq 'trivia' && $self->is_admin($who)) {
+                my $h = "trivia <command>\n";
+                $h .= "command - available commands are \'start\',\'stop\'.\n";
+                
+                for my $line (split /\n/, $h) { 
+                    #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
+                    $self->send_server_unsafe (NOTICE => $nickname, $line);
+                }
+
+                return 1;
+            }
             return 1;
         },
         acl => $all_access_except_blacklist,
@@ -2627,13 +2631,21 @@ sub _buildup {
             if($self->is_admin($who)) {
                 try {
                     if ($message =~ s/^\+OK //) {
+                        
+                        # TODO: check if the user does not have a key set.
+                        # If user does NOT have a key set, try to decrypt with default key.
+                        # If default key fails, initialize key exchange.
+                        # Otherwise use the user's key.
+                        
                         $message = $self->_chat_decrypt( $who, $message); #, $self->{keys}->[0] );
                         $message =~ s/\0//g;
 
                         warn "* Decrypted $message\n";
+                        
+                        ## We change the channel to who because that's who we are privmsg'ing results to.
+                        $channel = $who;
 
                         #my $init_msg = 'Hello there how are you';
-
                         #my $msg = sprintf '+OK %s', $self->_encrypt( $init_msg, $self->{keys}->[0] );
                         #$self->send_server_unsafe(PRIVMSG => $nickname, $msg);
                     }
@@ -2647,9 +2659,14 @@ sub _buildup {
             my $cmd = undef;
             if ( defined($cmd = List::MoreUtils::first_value { $message =~ /$command_prefix$_->{'regex'}/ } @commands) ) {
 
-                unless($self->is_admin($who) && $cmd->{'require_admin'}) {
+                if($cmd->{'channel_only'}) {
                     return unless ((defined $channel) && ($self->{con}->is_channel_name($channel)));
                 }
+
+                #unless($self->is_admin($who) && $cmd->{'require_admin'}) {
+                #    warn "* test";
+                #    return unless ((defined $channel) && ($self->{con}->is_channel_name($channel)));
+                #}
 
                 print "* Command $cmd->{'name'} was matched\n";
 
@@ -3382,28 +3399,6 @@ sub uc_irc {
     return $value;
 }
 
-sub parse_calc_result {
-    my ($self,$html) = @_;
-
-    $html =~ s!<sup>(.*?)</sup>!^$1!g;
-    $html =~ s!&#215;!*!g;
-
-    my $res;
-    my $p = HTML::TokeParser->new( \$html );
-    while ( my $token = $p->get_token ) {
-        next
-        unless ( $token->[0] || '' ) eq 'S'
-        && ( $token->[1]        || '' ) eq 'img'
-        && ( $token->[2]->{src} || '' ) eq '/images/icons/onebox/calculator-40.gif';
-
-        $p->get_tag('h2');
-        $res = $p->get_trimmed_text('/h2');
-        return $res;
-    }
-
-    return $res;
-}
-
 sub cidr2usable_v4 {
     my ($self, $bit) = @_;
 
@@ -3445,26 +3440,7 @@ sub calc_netmask {
     return join('.', unpack('C4', pack("N", ($full_mask ^ $bit))));
 }
 
-sub calc {
-    my ($self, $expression) = @_;
 
-    my $url = URI->new('http://www.google.com/search');
-    $url->query_form(q => $expression);
-
-    my $ret;
-    my $response = $self->_webclient->get($url);
-
-    if($response->is_success) {
-
-        $ret = $self->parse_calc_result($response->content);
-        $ret =~ s/[^[:ascii:]]+//g;
-
-    } else {
-        warn "calc failed with server response code ".$response->status_line."\n";
-    }
-
-    return $ret;
-}
 
 sub _webclient {
     my $self = shift;
