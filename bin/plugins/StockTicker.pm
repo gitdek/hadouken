@@ -21,8 +21,9 @@ use warnings;
 
 use Finance::Quote;
 use TryCatch;
+use String::IRC;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
 # Description of this command.
@@ -41,7 +42,7 @@ sub command_name {
 
 sub command_regex {
 
-    return 'stock\s.+?';
+    return '(stock|\.)\s.+?';
 }
 
 # Return 1 if OK.
@@ -90,13 +91,35 @@ sub command_run {
     return unless defined $arg;
 
     try {
-
         $arg = uc($arg);
         my $q = Finance::Quote->new();
-        my %data = $q->fetch('nyse', $arg);
+        $q->require_labels(qw/price date high low volume/);
+        $q->failover(0);
+        $q->timeout(10);
 
+        my %data = $q->fetch('usa', $arg);
+        
         if ($data{$arg, 'success'}) {
-            my $summary = $data{$arg, 'name'} ." Price: ". $data{$arg, 'price'} ." Volume: ".$data{$arg, 'volume'}." High: ".$data{$arg, 'high'}." Low: ".$data{$arg, 'low'};
+            my $summary = $arg." "."(".$data{$arg,'name'}.") ";
+            my $net_change = $data{$arg,'net'};
+            my $p_change = $data{$arg,'p_change'};
+            my $day_range = $data{$arg,'day_range'};
+            my $year_range = $data{$arg,'year_range'};
+            
+            
+            # Make everything pretty.
+            my $pretty_nchange = String::IRC->new($net_change);
+            my $pretty_pchange = String::IRC->new($p_change."%");
+            $pretty_nchange->light_green if($net_change =~ /^\+/);
+            $pretty_nchange->red if($net_change =~ /^\-/);
+            $pretty_pchange->light_green if($p_change =~ /^\+/);
+            $pretty_pchange->red if($p_change =~ /^\-/);
+            $day_range =~ s/\s+//g;
+            $year_range =~ s/\s+//g;
+
+            $summary .= "Last: ".$data{$arg,'last'}." ".$pretty_nchange." ".$pretty_pchange." (Vol: ".$data{$arg,'volume'}.") ";
+            $summary .= "Daily Range: (".$day_range.") Yearly Range: (".$year_range.") ";
+            #my $summary = $data{$arg, 'name'} ." Price: ". $data{$arg, 'price'} ." Volume: ".$data{$arg, 'volume'}." High: ".$data{$arg, 'high'}." Low: ".$data{$arg, 'low'};
             $self->send_server (PRIVMSG => $channel, $summary);
         } else {
             warn "Failure";

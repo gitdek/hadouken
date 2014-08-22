@@ -11,7 +11,7 @@ use HTML::TokeParser;
 
 use TryCatch;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
 # Description of this command.
@@ -31,7 +31,8 @@ sub command_name {
 sub command_regex {
     my $self = shift;
 
-    return 'urban\s.+?';
+    #return 'urban\s.+?';
+    return 'urban';
 }
 
 # Return 1 if OK.
@@ -44,7 +45,7 @@ sub acl_check {
     #my $channel = $aclentry{'channel'};
     #my $message = $aclentry{'message'};
 
- 
+
     # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.
     if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
@@ -63,38 +64,74 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
     my ($cmd, $arg) = split(/ /, lc($message),2);
 
-    return 
-        unless 
-            (defined($arg) && length($arg));
+    #return 
+    #    unless 
+    #        (defined($arg) && length($arg));
 
-    my $urban_url = 'http://www.urbandictionary.com/define.php?term='. uri_escape($arg);
+    my $parg = $arg;
+    
+    if(defined($arg) && length($arg)) {
+        $arg =~ s/luchinii/sword fight/gi;
+        $arg =~ s/luchini/sword fight/gi;
+        $arg =~ s/luchi/sword fight/gi;
+        $arg =~ s/dek/Awesomatimistic/gi;
+        $arg =~ s/mptank/boss/gi;
+        $arg =~ s/dakuwan/boss/gi;
+        $arg =~ s/f8al/M8/gi;
+        $arg =~ s/moe/politically challenged/gi;
+        $arg =~ s/adminmike/alabama mudslide/gi;
+        $arg =~ s/frosty/boss/gi;
+        $arg =~ s/yak/canadian hot pocket/gi;
+    }
+    
+    my $get_random;
+    my $urban_url;
+
+    if(defined($arg) && length($arg)) {
+        $urban_url = 'http://www.urbandictionary.com/define.php?term='. uri_escape($arg);
+    } else {
+        $get_random = 1;
+        $urban_url = 'http://www.urbandictionary.com/random.php';
+    }
+
+    my $random_meaning = 'random';
 
     $self->asyncsock->get($urban_url, sub {
-        my ($body, $header) = @_;
+            my ($body, $header) = @_;
 
-        return unless defined $body && defined $header;
-        
-        my $parser = HTML::TokeParser->new( \$body );
-        
-        while (my $token = $parser->get_tag('div')) {
-            next unless (defined $token->[1] && exists $token->[1]{'class'});
+            return unless defined $body && defined $header;
 
-            my $c = $token->[1]{'class'};
+            my $parser = HTML::TokeParser->new( \$body );
 
-            if($c =~ 'meaning') {
-                my $text = $parser->get_trimmed_text("/div");
-            
-                my $arg_pretty = String::IRC->new($arg)->bold;
-                
-                my $ret = "[$arg_pretty] - $text";
-
-                $self->send_server (PRIVMSG => $channel, $ret);
-
-                last;
+            if($get_random) {
+            if ($parser->get_tag("title")) {
+                $random_meaning = $parser->get_trimmed_text;
+                $random_meaning =~ s/Urban Dictionary: //g;
+                $parg = $random_meaning;
+                $arg = $random_meaning;
             }
+            }
+            
+            while (my $token = $parser->get_tag('div')) {
+                next unless (defined $token->[1] && exists $token->[1]{'class'});
 
-        }
-    });
+                my $c = $token->[1]{'class'};
+
+                if($c =~ 'meaning') {
+                    my $text = $parser->get_trimmed_text("/div");
+
+                    if(length($text) > 500) {
+                        $text = substr($text,1, 500);
+                    }
+
+                    my $arg_pretty = String::IRC->new($parg)->bold;                
+                    my $ret = "[$arg_pretty] - $text";
+                    $self->send_server (PRIVMSG => $channel, $ret);
+                    last;
+                }
+
+            }
+        });
 
     return 1;
 }
