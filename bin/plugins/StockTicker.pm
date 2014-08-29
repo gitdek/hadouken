@@ -1,4 +1,4 @@
-
+package Hadouken::Plugin::StockTicker;
 use strict;
 use warnings;
 
@@ -11,15 +11,21 @@ our $AUTHOR = 'dek';
 
 # Description of this command.
 sub command_comment {
+    my $self = shift;
+
     return "Look up stock by stock <symbol(s)>";
 }
 
 # Clean name of command.
 sub command_name {
+    my $self = shift;
+
     return "stockticker";
 }
 
 sub command_regex {
+    my $self = shift;
+
     return '(stock|\.)\s.+?';
 }
 
