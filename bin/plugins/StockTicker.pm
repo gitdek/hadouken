@@ -1,3 +1,5 @@
+
+
 #===============================================================================
 #
 #         FILE: StockTicker.pm
@@ -28,20 +30,15 @@ our $AUTHOR = 'dek';
 
 # Description of this command.
 sub command_comment {
-    my $self = shift;
-
-    return "Look up stock by stock <symbol>";
+    return "Look up stock by stock <symbol(s)>";
 }
 
 # Clean name of command.
 sub command_name {
-    my $self = shift;
-
     return "stockticker";
 }
 
 sub command_regex {
-
     return '(stock|\.)\s.+?';
 }
 
@@ -55,21 +52,13 @@ sub acl_check {
     my $channel = $aclentry{'channel'};
     my $message = $aclentry{'message'};
 
-    # Hadouken::BIT_ADMIN OR Hadouken::BIT_WHITELIST OR Hadouken::BIT_OP Hadouken::NOT_RIP
-    my $minimum_perms = (1 << 0) | (1 << 1) | (1 << 3);
-
-    #my $acl_min = (1 << Hadouken::BIT_ADMIN) | (1 << Hadouken::BIT_WHITELIST) | (1 << Hadouken::NOT_RIP);
-
-    my $value = ($permissions & $minimum_perms);
-
-    #warn $value;
-
-    if($value > 0) {
-        # At least one of the items is set.
-        return 1;
-    }
-
-    # Or you can do it with the function Hadouken exports.
+    # Available acl flags:
+    # Hadouken::BIT_ADMIN
+    # Hadouken::BIT_WHITELIST
+    # Hadouken::BIT_OP 
+    # Hadouken::VOICE
+    # Hadouken::BIT_BLACKLIST
+    
     # Make sure at least one of these flags is set.
     if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
         || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
@@ -97,32 +86,33 @@ sub command_run {
         $q->failover(0);
         $q->timeout(10);
 
-        my %data = $q->fetch('usa', $arg);
-        
-        if ($data{$arg, 'success'}) {
-            my $summary = $arg." "."(".$data{$arg,'name'}.") ";
-            my $net_change = $data{$arg,'net'};
-            my $p_change = $data{$arg,'p_change'};
-            my $day_range = $data{$arg,'day_range'};
-            my $year_range = $data{$arg,'year_range'};
-            
-            
-            # Make everything pretty.
-            my $pretty_nchange = String::IRC->new($net_change);
-            my $pretty_pchange = String::IRC->new($p_change."%");
-            $pretty_nchange->light_green if($net_change =~ /^\+/);
-            $pretty_nchange->red if($net_change =~ /^\-/);
-            $pretty_pchange->light_green if($p_change =~ /^\+/);
-            $pretty_pchange->red if($p_change =~ /^\-/);
-            $day_range =~ s/\s+//g;
-            $year_range =~ s/\s+//g;
+        my @z = split(/ /,$arg);
+        foreach my $sym(@z) {
+            my %data = $q->fetch('usa', $sym);
 
-            $summary .= "Last: ".$data{$arg,'last'}." ".$pretty_nchange." ".$pretty_pchange." (Vol: ".$data{$arg,'volume'}.") ";
-            $summary .= "Daily Range: (".$day_range.") Yearly Range: (".$year_range.") ";
-            #my $summary = $data{$arg, 'name'} ." Price: ". $data{$arg, 'price'} ." Volume: ".$data{$arg, 'volume'}." High: ".$data{$arg, 'high'}." Low: ".$data{$arg, 'low'};
-            $self->send_server (PRIVMSG => $channel, $summary);
-        } else {
-            warn "Failure";
+            if ($data{$sym, 'success'}) {
+                my $summary = $sym." "."(".$data{$sym,'name'}.") ";
+                my $net_change = $data{$sym,'net'};
+                my $p_change = $data{$sym,'p_change'};
+                my $day_range = $data{$sym,'day_range'};
+                my $year_range = $data{$sym,'year_range'};
+
+                # Make everything pretty.
+                my $pretty_nchange = String::IRC->new($net_change);
+                my $pretty_pchange = String::IRC->new($p_change."%");
+                $pretty_nchange->light_green if($net_change =~ /^\+/);
+                $pretty_nchange->red if($net_change =~ /^\-/);
+                $pretty_pchange->light_green if($p_change =~ /^\+/);
+                $pretty_pchange->red if($p_change =~ /^\-/);
+                $day_range =~ s/\s+//g;
+                $year_range =~ s/\s+//g;
+
+                $summary .= "Last: ".$data{$sym,'last'}." ".$pretty_nchange." ".$pretty_pchange." (Vol: ".$data{$sym,'volume'}.") ";
+                $summary .= "Daily Range: (".$day_range.") Yearly Range: (".$year_range.") ";
+                $self->send_server (PRIVMSG => $channel, $summary);
+            } else {
+                warn "Failure";
+            }
         }
     } 
     catch($e) {
@@ -134,4 +124,5 @@ sub command_run {
 }
 
 1;
+
 
