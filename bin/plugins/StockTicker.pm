@@ -1,23 +1,4 @@
 
-
-#===============================================================================
-#
-#         FILE: StockTicker.pm
-#
-#  DESCRIPTION: Plugin for Hadouken which gets stock info by ticker symbol.
-#
-#        FILES: ---
-#         BUGS: ---
-#        NOTES: ---
-#       AUTHOR: YOUR NAME (), 
-# ORGANIZATION: 
-#      VERSION: 1.0
-#      CREATED: 04/26/2014 01:10:31 AM
-#     REVISION: ---
-#===============================================================================
-
-package Hadouken::Plugin::StockTicker;
-
 use strict;
 use warnings;
 
@@ -44,6 +25,7 @@ sub command_regex {
 
 # Return 1 if OK.
 # 0 if does not pass ACL.
+# command_run will only be called if ACL passes.
 sub acl_check {
     my ($self, %aclentry) = @_;
 
@@ -77,17 +59,20 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
     my ($cmd, $arg) = split(/ /, lc($message),2);
 
-    return unless defined $arg;
-
+    return 
+    unless 
+    (defined($arg) && length($arg));
+    
     try {
-        $arg = uc($arg);
         my $q = Finance::Quote->new();
         $q->require_labels(qw/price date high low volume/);
         $q->failover(0);
         $q->timeout(10);
 
-        my @z = split(/ /,$arg);
+        my @z = split(/ /,uc($arg));
         foreach my $sym(@z) {
+            next unless (defined($sym) && length($sym));
+
             my %data = $q->fetch('usa', $sym);
 
             if ($data{$sym, 'success'}) {
@@ -119,10 +104,28 @@ sub command_run {
         warn $e;
     }
 
-
     return 1;
 }
 
 1;
 
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::StockTicker - Stock ticker plugin.
+
+=head1 DESCRIPTION
+
+Stock ticker plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 

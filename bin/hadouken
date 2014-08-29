@@ -259,3 +259,8 @@ sub readcredentials {
 
     return $password;
 }
+
+sub usage {
+
+    my $u = "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n",
+}
