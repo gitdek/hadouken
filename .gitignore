@@ -33,6 +33,7 @@ hadouken.conf
 Hadouken.packed.pl
 import-quotes.pl
 backups/
+data/bots.txt
 data/admins.txt
 data/blacklist.txt
 data/whitelist.txt

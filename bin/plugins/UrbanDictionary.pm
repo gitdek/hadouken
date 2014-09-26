@@ -70,17 +70,23 @@ sub command_run {
 
     my $parg = $arg;
     
+    $parg =~ s/stankdick/luchi/gi;
+    
     if(defined($arg) && length($arg)) {
+        $arg =~ s/dave__/black american princess/gi;
         $arg =~ s/luchinii/sword fight/gi;
+        $arg =~ s/vapor/HNIC/gi;
+        $arg =~ s/2f/dickcheese/gi;
         $arg =~ s/luchini/sword fight/gi;
         $arg =~ s/luchi/sword fight/gi;
         $arg =~ s/dek/Awesomatimistic/gi;
         $arg =~ s/mptank/boss/gi;
         $arg =~ s/dakuwan/boss/gi;
+        $arg =~ s/nimrood/boss/gi;
         $arg =~ s/f8al/M8/gi;
         $arg =~ s/moe/politically challenged/gi;
         $arg =~ s/adminmike/alabama mudslide/gi;
-        $arg =~ s/frosty/boss/gi;
+        $arg =~ s/frosty/el jefe/gi;
         $arg =~ s/yak/canadian hot pocket/gi;
     }
     

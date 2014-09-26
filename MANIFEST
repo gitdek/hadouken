@@ -1,5 +1,14 @@
 bin/createconfig.pl
 bin/hadouken
+bin/plugins/Ticker.pm
+bin/plugins/Shredder.pm
+bin/plugins/StockMarket.pm
+bin/plugins/GoogleSearch.pm
+bin/plugins/IMDB.pm
+bin/plugins/Shorten.pm
+bin/plugins/Calc.pm
+bin/plugins/IPCalc.pm
+bin/plugins/Nmap.pm
 bin/plugins/Boobs.pm
 bin/plugins/Coitus.pm
 bin/plugins/Dictionary.pm
@@ -7,11 +16,11 @@ bin/plugins/ExamplePlugin.pm
 bin/plugins/MagicEight.pm
 bin/plugins/MitchQuotes.pm
 bin/plugins/StockTicker.pm
-bin/plugins/Ticker.pm
 bin/plugins/Translate.pm
 bin/plugins/UrbanDictionary.pm
 bin/plugins/Weather.pm
 bin/plugins/Whois.pm
+bin/plugins/GeoIP.pm
 data/coitus
 data/geoip/GeoIP.dat
 data/geoip/GeoIPCity.dat

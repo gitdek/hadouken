@@ -15,7 +15,7 @@ our $AUTHOR = 'dek';
 sub command_comment {
     my $self = shift;
 
-    return "Get weather info by weather <zip> or <location>";
+    return "Get weather info by weather <zip> or <location>. command alias: w";
 }
 
 # Clean name of command.
@@ -28,7 +28,8 @@ sub command_name {
 sub command_regex {
     my $self = shift;
 
-    return 'weather\s.+?';
+    return '(weather|forecast|w)\s.+?';
+    #return 'weather\s.+?';
 }
 
 # Return 1 if OK.
@@ -38,15 +39,18 @@ sub acl_check {
 
     my $permissions = $aclentry{'permissions'};
 
-    if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+#    if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
+#        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
+#        || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+#
+#        return 1;
+#    }
 
-        return 1;
+    if($self->check_acl_bit($permissions,Hadouken::BIT_BLACKLIST)) {
+        return 0;
     }
 
-
-    return 0;
+    return 1;
 }
 
 # Return 1 if OK (and then callback can be called)
@@ -121,7 +125,7 @@ sub _weather {
             #}
 
 
-            warn Dumper($ret);
+            #warn Dumper($ret);
         }
     }
     catch($e) {

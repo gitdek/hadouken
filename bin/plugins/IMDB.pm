@@ -37,15 +37,18 @@ sub acl_check {
 
     my $permissions = $aclentry{'permissions'};
 
-    if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+    #if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
+    #    || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
+    #    || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+    #
+    #    return 1;
+    #}
 
-        return 1;
+    if($self->check_acl_bit($permissions,Hadouken::BIT_BLACKLIST)) {
+        return 0;
     }
 
-
-    return 0;
+    return 1;
 }
 
 # Return 1 if OK (and then callback can be called)
@@ -57,31 +60,17 @@ sub command_run {
 
     return unless defined $arg;
 
-    my $summary = $self->_imdb($arg);
-
-    if(defined $summary && $summary ne '') {
-        #my $weather_msg = "$arg -> $summary";
-        #warn $weather_msg;
-        $self->send_server (PRIVMSG => $channel, $summary);
-    }
-
-    return 1;
-}
-
-sub _imdb {
-    my ($self, $title) = @_;
-
-    return unless defined $title && $title ne '';
-
     my $summary = '';
+    my $title = $arg;
 
     try {
         my $imdb = new IMDB::Film(crit => $title); #, search => 'find?tt=on;mx=20;q=');
-        # warn Dumper($imdb);
+
+        # Try searching.
         unless($imdb->status) {
             $imdb = new IMDB::Film(crit => $title, search => 'find?tt=on;mx=20;q=');
         }
-        
+
         if($imdb->status) {
             $summary = "[imdb] ".$imdb->title()." ";
             $summary .= "(".$imdb->year().") - " if defined $imdb->year && length $imdb->year;
@@ -91,20 +80,32 @@ sub _imdb {
                 $rating =~ s/\.?0*$//;
                 $summary .= $rating."/10 - ";
             }
-            warn "Tagline: ".$imdb->tagline()."\n";
+
+            my $storyline = $imdb->storyline();
+            $storyline =~ s/Plot Summary \| Add Synopsis//;
             $summary .= "http://www.imdb.com/title/tt".$imdb->code."/";
+
+            $self->send_server (PRIVMSG => $channel, $summary);
+
+            my $wrapped;
+            ($wrapped = $storyline) =~ s/(.{0,300}(?:\s|$))/$1\n/g;
+            my @lines = split(/\n/,$wrapped);
+            my $cnt = 0;
+            foreach my $l (@lines) {
+                next unless defined $l && length $l;
+                $cnt++;
+                $self->send_server(PRIVMSG => $channel, $cnt > 1 ? $l : "Summary - $l");
+            }
         } else {
             #warn "Something wrong: ".$imdb->error;
             #warn Dumper($imdb);
         }
-
     }
     catch($e) {
         $summary = '';
-
     }
 
-    return $summary;
+    return 1;
 }
 
 

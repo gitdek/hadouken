@@ -20,9 +20,10 @@ use Term::ReadPassword;
 
 use Data::Printer alias => 'Dumper', colored => 1;
 
-$|=1;
+use AnyEvent;
 
-$SIG{'HUP'} = \&reload_daemon;
+# $|=1;
+$|++;
 
 my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 
@@ -79,6 +80,7 @@ unless(exists $config{admin} && exists $config{server}) {
 }
 
 my $cb = Hadouken->new_with_options(
+    reload_update => \&on_reload_update, #sub { print Dumper(@_); }, #on_config_update,
     conf_update => \&on_config_update, #sub { print Dumper(@_); }, #on_config_update,
     nick => $config{nick} || 'hadouken',
     servers => [ $config{server} ],
@@ -139,6 +141,10 @@ if ($command eq 'stop') {
     exit($exit_code || 0);
 }
 
+
+my $w = AnyEvent->signal(signal => "HUP", cb => \&on_reload_update);
+
+
 try {
     $exit_code = $daemon->run_command($command);
 }
@@ -148,6 +154,7 @@ catch (Str $e where { $_ =~ /^Error: undefined action/i } ) {
 catch($e) {
     warn $e,"\n";
 }
+
 
 exit(($exit_code || 0));
 
@@ -164,22 +171,31 @@ sub on_config_update {
     close FILE;
 }
 
-sub reload_daemon {
-    my $conf_encrypted = '';
-    
-    open FILE, $config_filename or die "Error reading configuration file: $!";
-    while (<FILE>){
-        $conf_encrypted .= $_;
-    }
-    close FILE;
+sub on_reload_update {
 
-    die "Error reloading" unless defined $cipher && defined $cb;
-
-    my $plaintext = $cipher->decrypt(decode_base64($conf_encrypted));
-    $cb->reload_config($plaintext);
-
-    return 1;
+    $daemon->pretty_print("Reloading", "red"); # if(defined $cb->start_time && $cb->start_time ne '');
+    $cb->stop();
+    # TODO: Reload Hadouken.pm from disk.
+    $cb->start();
+    $daemon->pretty_print("Reloaded", "green"); # if(defined $cb->start_time && $cb->start_time ne '');
 }
+
+#sub reload_daemon {
+#    my $conf_encrypted = '';
+#    
+#    open FILE, $config_filename or die "Error reading configuration file: $!";
+#    while (<FILE>){
+#        $conf_encrypted .= $_;
+#    }
+#    close FILE;
+#
+#    die "Error reloading" unless defined $cipher && defined $cb;
+#
+#    my $plaintext = $cipher->decrypt(decode_base64($conf_encrypted));
+#    $cb->reload_config($plaintext);
+#
+#    return 1;
+#}
 
 sub createconf {
     open FILE, $config_filename or die "Error reading configuration file: $!";

@@ -65,6 +65,7 @@ WriteMakefile(
         'Object::Event'         => 0,
         'Digest::SHA3'          => 0,
         'Term::ReadPassword'    => 0,
+        'Finance::Quote'				=> 0,
     },
     PM => {
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
