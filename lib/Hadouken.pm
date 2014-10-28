@@ -78,7 +78,7 @@ use Encode qw( encode decode );
 use Encode::Guess;
 use JSON; # qw( encode_json decode_json );
 use POSIX qw(strftime);
-use Time::HiRes qw( sleep );
+use Time::HiRes qw( sleep usleep nanosleep time );
 use Geo::IP;
 use Tie::Array::CSV;
 use Regexp::Common;
@@ -114,7 +114,7 @@ use Module::Pluggable search_dirs => [ "$Bin/plugins/" ], sub_name => '_plugins'
 
 has start_time => (is => 'ro', isa => 'Str', writer => '_set_start_time');
 has connect_time => (is => 'ro', isa => 'Str', writer => '_set_connect_time');
-has safe_delay => (is => 'rw', isa => 'Str', required => 0, default => '0.25');
+has safe_delay => (is => 'rw', isa => 'Str', required => 0, default => '0.25', trigger => \&_safedelay_set);
 has quote_limit => (is => 'rw', isa => 'Str', required => 0, default => '3');
 
 has loaded_plugins => (
@@ -178,6 +178,15 @@ sub new {
     my $self = {@_};
     bless $self, $class;
     return $self;
+}
+
+sub _safedelay_set {
+    my ( $self, $delay, $old_delay ) = @_;
+
+    return unless defined $delay && $delay > 0;
+
+    my $micro_delay = $delay * 1_000_000;
+    $self->getset('safe_micro_delay', $micro_delay);
 }
 
 sub getset {
@@ -647,7 +656,7 @@ sub start {
     $self->{plugin_regexes} = ();
 
     my $conf = $self->{config_hash};
-    
+
     foreach my $plugin (keys %{$self->loaded_plugins}) { 
         my $mod = $self->_plugin($plugin);
         my $rx = $mod->command_regex;
@@ -680,9 +689,9 @@ before 'send_server_unsafe' => sub {
     }
 
     $self->{burst_lines}++;
-    
+
     if($self->{burst_lines} >= 10) {
-        Time::HiRes::sleep($self->safe_delay);
+        usleep($self->safe_delay);
         $self->{burst_lines} = 0;
     }
 };
@@ -695,9 +704,9 @@ before 'send_server_safe' => sub {
     }
 
     $self->{burst_lines}++;
-    
-    if($self->{burst_lines} >= 4) {
-        Time::HiRes::sleep($self->safe_delay);
+
+    if($self->{burst_lines} >= 6) {
+        usleep($self->safe_delay);
         $self->{burst_lines} = 0;
     }
 };
@@ -710,9 +719,9 @@ before 'send_server_long_safe' => sub {
     }
 
     $self->{burst_lines}++;
-    
+
     if($self->{burst_lines} >= 4) {
-        Time::HiRes::sleep($self->safe_delay);
+        usleep($self->safe_delay);
         $self->{burst_lines} = 0;
     }
 };
@@ -2242,37 +2251,37 @@ sub _buildup {
                 warn "* ADMIN LIST $owner";
                 warn "* ADMIN LIST $who";
                 #if($self->matches_mask($owner,$who)) {
-                    for my $admin_row (@{$self->{adminsdb}}) {
-                        my $entry = $admin_row->[0];
-                        $entry .= " ".$admin_row->[1];
-                        $entry .= " created ";
-                        $entry .= scalar(gmtime($admin_row->[3]));
-                        $entry .= " added by ".$admin_row->[4] if defined $admin_row->[4];
-                        my $out_msg = "[admin] $entry";
+                for my $admin_row (@{$self->{adminsdb}}) {
+                    my $entry = $admin_row->[0];
+                    $entry .= " ".$admin_row->[1];
+                    $entry .= " created ";
+                    $entry .= scalar(gmtime($admin_row->[3]));
+                    $entry .= " added by ".$admin_row->[4] if defined $admin_row->[4];
+                    my $out_msg = "[admin] $entry";
 
-                        my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg ); #, $self->{keys}->[0] );
-                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
-                        #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
-                    }
-                    #}
+                    my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg ); #, $self->{keys}->[0] );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
+                }
+                #}
             }
             elsif($cmd eq 'grep') {
-                
+
                 return unless defined $arg;
 
                 my $owner = $self->normalize_mask($self->{admin});
                 warn "* ADMIN LIST $owner";
                 warn "* ADMIN LIST $who";
-                
+
                 #if($self->matches_mask($owner,$who)) {
-                    my @matches = grep { /$arg/ } map { $_->[0].'@'.$_->[1] } @{$self->{adminsdb}};
-                    #warn Dumper(@matches);
-                    for my $admin_row (@matches) {
-                        my $out_msg = "[admin] $admin_row";
-                        my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg ); #, $self->{keys}->[0] );
-                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
-                    }
-                    #}
+                my @matches = grep { /$arg/ } map { $_->[0].'@'.$_->[1] } @{$self->{adminsdb}};
+                #warn Dumper(@matches);
+                for my $admin_row (@matches) {
+                    my $out_msg = "[admin] $admin_row";
+                    my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg ); #, $self->{keys}->[0] );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                }
+                #}
             }
             elsif($cmd eq 'key') {
                 return unless defined $arg;
@@ -2337,19 +2346,19 @@ sub _buildup {
                 warn "* WHITELIST LIST $owner";
                 warn "* WHITELIST LIST $who";
                 #if($self->matches_mask($owner,$who)) {
-                    for my $wl_row (@{$self->{whitelistdb}}) {
-                        my $entry = $wl_row->[0];
-                        $entry .= " ".$wl_row->[1];
-                        $entry .= " created ";
-                        $entry .= scalar(gmtime($wl_row->[3]));
-                        $entry .= " added by ".$wl_row->[4] if defined $wl_row->[4];
-                        my $out_msg = "[whitelist] $entry";
+                for my $wl_row (@{$self->{whitelistdb}}) {
+                    my $entry = $wl_row->[0];
+                    $entry .= " ".$wl_row->[1];
+                    $entry .= " created ";
+                    $entry .= scalar(gmtime($wl_row->[3]));
+                    $entry .= " added by ".$wl_row->[4] if defined $wl_row->[4];
+                    my $out_msg = "[whitelist] $entry";
 
-                        my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
-                        #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
-                    }
-                    #}
+                    my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg );
+                    $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
+                    #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
+                }
+                #}
             }
 
             return 1;
@@ -2743,7 +2752,7 @@ sub _buildup {
 
             unless(defined $arg || length $arg) {
                 my $h = "general help\n";
-                $h .= "type .commands in the channel for available commands.\n";
+                $h .= "type .commands for available commands.\n";
                 $h .= "use .help <command> for help on a specific command.";
 
                 for my $line (split /\n/, $h) { 
@@ -3024,6 +3033,12 @@ sub _buildup {
         },
         kick => sub {
             my($con, $kicked_nick, $channel, $is_myself, $msg, $kicker_nick) = (@_);
+
+            my $ident = $con->nick_ident($kicker_nick);
+
+            my $cur_channel_clean = $channel;
+            $cur_channel_clean =~ s/^\#//;
+
             warn "* KICK CALLED -> $kicked_nick by $kicker_nick from $channel with message $msg -> is myself: $is_myself!\n";
             # warn "my nick is ". $self->{con}->nick() ."\n";
             if($self->{con}->nick() eq $kicked_nick || $self->{con}->is_my_nick($kicked_nick)) {
@@ -3033,6 +3048,56 @@ sub _buildup {
                 }
                 # my $si = String::IRC->new($kicker_nick)->red->bold;
                 # $self->send_server_unsafe (PRIVMSG => $channel,"kicked by $si, behavior logged");
+            } else {
+
+
+                if($self->is_bot($con->nick_ident($kicked_nick))) {
+
+                    warn "* KICKED BOT";
+                    
+                    if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_AGGRESSIVE)) {
+
+                        if(!($self->{con}->is_my_nick($ident)) 
+                            && !($self->is_admin($ident)) 
+                            && !($self->is_bot($ident)) 
+                            && !($self->whitelisted($ident))) {
+
+                            my (undef,$host) = split /@/, $ident;
+                            my $banmask = "*!*@".$host;
+
+                            if($self->matches_mask($banmask, $ident)) {
+
+                                warn "* Banning $ident from $cur_channel_clean (AGGRESSIVE MODE)";
+
+                                $self->send_server_unsafe( MODE => $channel, '+b', $banmask);
+                            } else {
+
+                                warn "* Ban mask didn't match when trying to ban!";
+                            }
+                        }
+
+
+                        warn "* Aggressive mode is disabling whitelist protection and auto-ops so they cannot regain ops.";
+                        $self->channel_mode_human($cur_channel_clean,'-V-W');
+
+                        $self->send_server_unsafe( KICK => $channel, $kicker_nick, "$kicker_nick.") 
+                        unless $self->{con}->is_my_nick($kicker_nick) || $self->is_admin($ident) || $self->is_bot($ident);
+
+                    } else {
+
+                        $self->send_server_unsafe( MODE => $channel, '-o', $kicker_nick) 
+                        unless $self->{con}->is_my_nick($kicker_nick) || $self->is_admin($ident) || $self->is_bot($ident);
+
+                    }
+
+                }
+
+
+
+
+
+
+
             }
         },
         dcc_request => sub {
@@ -3415,7 +3480,7 @@ sub _buildup {
 
                                     warn "* Aggressive mode is disabling whitelist protection and auto-ops so they cannot regain ops.";
                                     $self->channel_mode_human($cur_channel_clean,'-V-W');
-                                    
+
                                     $self->send_server_unsafe( KICK => $chan, $nick, "$nick.") 
                                     unless $self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident);
 
@@ -3478,92 +3543,92 @@ sub _buildup {
 
                                     } else {
 
-                                    $self->send_server_unsafe( MODE => $chan, '-o', $nick) 
-                                    unless $self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident);
-
-                                }
-
-                                # Always kick if they -o owner, unless the owner does it himself.
-                                $self->send_server_unsafe(KICK => $chan, $nick, "$nick.") if defined $owner && length $owner && $nick ne $owner;
-
-                                #if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_PROTECT_ADMIN)) {
-
-                                my $it = List::MoreUtils::natatime 4, @admins;
-
-                                while (my @vals = $it->()) {
-                                    my $mode = '+';
-
-                                    $mode .= 'o' x ($#vals + 1);
-                                    $mode .= '-b';
-
-                                    my $cookie = $self->makecookie($nick,$self->{nick},$chan);
-                                    my $test = $self->checkcookie($nick,$self->{nick},$chan,$cookie);
-                                    push(@vals,$cookie);
-                                    #unshift(@vals,$cookie);
-                                    warn "* Protect triggered in $chan, setting MODE $mode ".join('  ',@vals) ."\n";
-                                    unshift(@vals,$mode);
-
-                                    $self->send_server_unsafe( MODE => $chan, @vals);
-                                }
-                            }
-                        } # // if(@admins) {
-
-                        if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_PROTECT_WHITELIST)) {
-
-                            if(@wls) {
-
-                                # If a whitelist user is deopped by a BOT or ADMIN, we do not protect.
-                                # And if we are in aggressive mode, we disable auto-op and protection for whitelist users in this channel.
-
-                                if($self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident)) {
-
-                                    warn "* Not protecting whitelist, BOT or ADMIN deopped them.";
-
-                                    if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_AGGRESSIVE)) {
-
-                                        warn "* Aggressive mode is disabling whitelist protection and auto-ops so they cannot regain ops.";
-
-                                        $self->channel_mode_human($cur_channel_clean,'-V-W');
+                                        $self->send_server_unsafe( MODE => $chan, '-o', $nick) 
+                                        unless $self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident);
 
                                     }
 
-                                } else {
+                                    # Always kick if they -o owner, unless the owner does it himself.
+                                    $self->send_server_unsafe(KICK => $chan, $nick, "$nick.") if defined $owner && length $owner && $nick ne $owner;
 
-                                    my $it2 = List::MoreUtils::natatime 4, @wls;
+                                    #if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_PROTECT_ADMIN)) {
 
-                                    while (my @vals2 = $it2->()) {
+                                    my $it = List::MoreUtils::natatime 4, @admins;
+
+                                    while (my @vals = $it->()) {
                                         my $mode = '+';
-                                        $mode .= 'o' x ($#vals2 + 1);
+
+                                        $mode .= 'o' x ($#vals + 1);
                                         $mode .= '-b';
+
                                         my $cookie = $self->makecookie($nick,$self->{nick},$chan);
                                         my $test = $self->checkcookie($nick,$self->{nick},$chan,$cookie);
-                                        push(@vals2,$cookie);
-                                        warn "* Protect triggered in for whitelist $chan, setting MODE $mode ".join('  ',@vals2) ."\n";
-                                        unshift(@vals2,$mode);
+                                        push(@vals,$cookie);
+                                        #unshift(@vals,$cookie);
+                                        warn "* Protect triggered in $chan, setting MODE $mode ".join('  ',@vals) ."\n";
+                                        unshift(@vals,$mode);
 
-                                        $self->send_server_unsafe( MODE => $chan, @vals2);
+                                        $self->send_server_unsafe( MODE => $chan, @vals);
                                     }
                                 }
-                            } # // if(@wls) {
+                            } # // if(@admins) {
 
+                            if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_PROTECT_WHITELIST)) {
+
+                                if(@wls) {
+
+                                    # If a whitelist user is deopped by a BOT or ADMIN, we do not protect.
+                                    # And if we are in aggressive mode, we disable auto-op and protection for whitelist users in this channel.
+
+                                    if($self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident)) {
+
+                                        warn "* Not protecting whitelist, BOT or ADMIN deopped them.";
+
+                                        if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_AGGRESSIVE)) {
+
+                                            warn "* Aggressive mode is disabling whitelist protection and auto-ops so they cannot regain ops.";
+
+                                            $self->channel_mode_human($cur_channel_clean,'-V-W');
+
+                                        }
+
+                                    } else {
+
+                                        my $it2 = List::MoreUtils::natatime 4, @wls;
+
+                                        while (my @vals2 = $it2->()) {
+                                            my $mode = '+';
+                                            $mode .= 'o' x ($#vals2 + 1);
+                                            $mode .= '-b';
+                                            my $cookie = $self->makecookie($nick,$self->{nick},$chan);
+                                            my $test = $self->checkcookie($nick,$self->{nick},$chan,$cookie);
+                                            push(@vals2,$cookie);
+                                            warn "* Protect triggered in for whitelist $chan, setting MODE $mode ".join('  ',@vals2) ."\n";
+                                            unshift(@vals2,$mode);
+
+                                            $self->send_server_unsafe( MODE => $chan, @vals2);
+                                        }
+                                    }
+                                } # // if(@wls) {
+
+                            }
                         }
-                    }
 
-                    my @bans = List::MoreUtils::after { $_ =~ /\+b/ } @{$msg->{params}};
-                    if(@bans) {
+                        my @bans = List::MoreUtils::after { $_ =~ /\+b/ } @{$msg->{params}};
+                        if(@bans) {
 
-                        unless($self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident)) {
+                            unless($self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident)) {
 
-                            warn "* Protect triggered in $chan, UNBANNING ".join('  ',@bans) ."\n";
+                                warn "* Protect triggered in $chan, UNBANNING ".join('  ',@bans) ."\n";
 
-                            # Only de-op unless we are in Aggressive mode.
-                            # If so, then we kick and ban.
+                                # Only de-op unless we are in Aggressive mode.
+                                # If so, then we kick and ban.
 
-                            $self->send_server_unsafe( MODE => $chan, '-o', $nick) 
+                                $self->send_server_unsafe( MODE => $chan, '-o', $nick) 
                                 unless $self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident);
 
                                 if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_AGGRESSIVE)) {
-                                    
+
                                     if(!($self->{con}->is_my_nick($nick)) && !($self->is_admin($ident)) && !($self->is_bot($ident)) && !($self->whitelisted($ident))) {
 
                                         my (undef,$host) = split /@/, $ident;
@@ -3582,70 +3647,69 @@ sub _buildup {
 
                                         $self->send_server_unsafe( KICK => $chan, $nick, "$nick.");
                                     }
-                            
-                            }
 
-                            foreach my $ban (@bans) {
-                                warn "UNBANNING $ban";
-                                $self->send_server_unsafe( MODE => $chan, '-b', $ban);
-                                # $self->send_server_unsafe( MODE => $chan, '-o-b', $nick, $ban);
-                            }
-
-                        } else {
-
-                            warn "* Admin is banning users in $chan, ".join('  ',@bans) ."\n";
-                            
-                            foreach my $ban (@bans) {
-
-                                my $n_ban = $self->normalize_mask($ban);
-
-                                # Admin can ban anyone except:
-                                # Admin can't ban other admins
-                                # OR BOTS!
-                                if(grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{adminsdb}}){
-
-                                    #|| grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{botsdb}}) {
-
-                                    $self->send_server_unsafe( MODE => $chan, '-b', $ban);
-
-                                    unless($self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident)) {
-                                        $self->send_server_unsafe( MODE => $chan, '-o-b', $nick, $ban);
-                                    } else {
-                                        $self->send_server_unsafe( MODE => $chan, '-b', $ban);
-                                    }
                                 }
 
-                                # Can't ban whitelisted!
-                                if(grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{whitelistdb}} ) {
+                                foreach my $ban (@bans) {
+                                    warn "UNBANNING $ban";
+                                    $self->send_server_unsafe( MODE => $chan, '-b', $ban);
+                                    # $self->send_server_unsafe( MODE => $chan, '-o-b', $nick, $ban);
+                                }
 
-                                    #$self->send_server_unsafe( MODE => $chan, '-b', $ban);
+                            } else {
 
-                                    unless ($self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident)) {
-                                        $self->send_server_unsafe( MODE => $chan, '-o-b', $nick, $ban);
-                                    } else {
+                                warn "* Admin is banning users in $chan, ".join('  ',@bans) ."\n";
+
+                                foreach my $ban (@bans) {
+
+                                    my $n_ban = $self->normalize_mask($ban);
+
+                                    # Admin can ban anyone except:
+                                    # Admin can't ban other admins
+                                    # OR BOTS!
+                                    if( (grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{adminsdb}})
+                                        || (grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{botsdb}}) ) {
+
                                         $self->send_server_unsafe( MODE => $chan, '-b', $ban);
+
+                                        unless($self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident)) {
+                                            $self->send_server_unsafe( MODE => $chan, '-o-b', $nick, $ban);
+                                        } else {
+                                            $self->send_server_unsafe( MODE => $chan, '-b', $ban);
+                                        }
+                                    }
+
+                                    # Can't ban whitelisted!
+                                    if(grep { $self->matches_mask($n_ban, $self->normalize_mask($_->[0].'@'.$_->[1]) ) } @{$self->{whitelistdb}} ) {
+
+                                        #$self->send_server_unsafe( MODE => $chan, '-b', $ban);
+
+                                        unless ($self->{con}->is_my_nick($nick) || $self->is_admin($ident) || $self->is_bot($ident)) {
+                                            $self->send_server_unsafe( MODE => $chan, '-o-b', $nick, $ban);
+                                        } else {
+                                            $self->send_server_unsafe( MODE => $chan, '-b', $ban);
+                                        }
                                     }
                                 }
                             }
                         }
+
+
+
+                        #}
                     }
 
-
-
-                    #}
                 }
-
+            } else {
+                warn "< " .$cmd."\t\t".$params."\n";
             }
-        } else {
-            warn "< " .$cmd."\t\t".$params."\n";
-        }
-    });
+        });
 
-$self->{con}->reg_cb ('debug_send' => sub {
-        my ($con, $command, @params) = @_;
-        my $sent = "> " .$command."\t\t" . join("\t", @params) . "\n";
-        warn $sent;
-    });
+    $self->{con}->reg_cb ('debug_send' => sub {
+            my ($con, $command, @params) = @_;
+            my $sent = "> " .$command."\t\t" . join("\t", @params) . "\n";
+            warn $sent;
+        });
 
 }
 
@@ -4195,7 +4259,7 @@ sub makecookie {
     # Just incase.
     $cookie =~ s/^\s+//;
     $cookie =~ s/\s+$//;
-
+    $cookie =~ s/\n//g;
     return $cookie;
 }
 

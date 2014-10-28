@@ -53,11 +53,11 @@ sub acl_check {
 
     # Make sure at least one of these flags is set.
     if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST)) {
+       || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST)) {
         #|| $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
 
-        return 1;
-    }
+           return 1;
+       }
 
     return 0;
 }
@@ -106,6 +106,9 @@ sub command_run {
 
             if(is_local_net($addr)) {
                 warn "* Trying to scan internal network (in callback)";
+
+                $self->send_server (PRIVMSG => $channel, "no....");
+                warn "* Trying to scan internal network (in callback)";
                 return 0;
             }
             
@@ -145,14 +148,13 @@ sub command_run {
         });
 
     my $port_arg = defined $ports && length $ports ? '-p '.$ports : '-F --top-ports 100';
-    $np->parsescan('/usr/bin/nmap','-Pn --dns-servers 8.8.8.8 -O -sS '.$port_arg, $hosts); # --dns-servers 8.8.8.8 
+    $np->parsescan('/usr/bin/nmap','-Pn --dns-servers 8.8.8.8 -O -T4 -sS '.$port_arg, $hosts); # --dns-servers 8.8.8.8 
 
     return 1;
 }
 
 sub is_local_net {
     my $host = shift;
-    return 
     if($host =~ m/(^localhost)|(^127\.0\.0\.1)|(^10\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^192\.168\.)/) {
         return 1;
     }

@@ -13,7 +13,7 @@ our $VERSION = '0.1';
 our $AUTHOR = 'dek';
 
 
-my %iso3_codes = ('english' => 'eng', 'korean' => 'kor', 'italian' => 'ita', 'dutch' => 'nld', 'french' => 'fra','portuguese' => 'por', 'arabic' => 'ara','russian' => 'rus','spanish' => 'spa','german' => 'deu','japanese' => 'jpn');
+my %iso3_codes = ('english' => 'eng', 'korean' => 'kor', 'italian' => 'ita', 'dutch' => 'nld', 'french' => 'fra','portuguese' => 'por', 'arabic' => 'ara','russian' => 'rus','spanish' => 'spa','german' => 'deu','japanese' => 'jpn', 'swedish' => 'swe');
 
 # Description of this command.
 sub command_comment {

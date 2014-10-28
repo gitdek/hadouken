@@ -138,6 +138,10 @@ sub command_run {
                 #$summary .= " Exchange: $best_market";
                 $self->send_server (PRIVMSG => $channel, $summary);
                 
+
+                #if($id eq 'BTC_USD' && $last > 0 && $last < 350) {
+                #    $self->send_server(PRIVMSG => $channel,'(╯°□°）╯︵ ┻━┻'); 
+                #}
                 #print Dumper($exchangeVolumes);
                 # my $totalVolume = $json{'totalVolume'};
                 

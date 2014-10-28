@@ -85,9 +85,12 @@ sub command_run {
         $arg =~ s/nimrood/boss/gi;
         $arg =~ s/f8al/M8/gi;
         $arg =~ s/moe/politically challenged/gi;
-        $arg =~ s/adminmike/alabama mudslide/gi;
+        $arg =~ s/adminmike/nigger/gi;        
+#$arg =~ s/adminmike/alabama mudslide/gi;
         $arg =~ s/frosty/el jefe/gi;
         $arg =~ s/yak/canadian hot pocket/gi;
+        $arg =~ s/r0ach/canadian hot pocket/gi;
+        $arg =~ s/subz/habitual bungler/gi;
     }
     
     my $get_random;

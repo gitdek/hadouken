@@ -91,7 +91,7 @@ sub command_run {
                 my $record = $self->{Owner}->{geoip}->record_by_addr($ip_addr);   
 
                 unless(defined $record) {
-                    $self->send_server_unsafe (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
+                    $self->send_server (PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db");
                     return;
                 }
 
