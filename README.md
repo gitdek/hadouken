@@ -55,9 +55,9 @@ Command-line options
 		
 Commands
 ----
-command aliases for 'remove' are: 'rm','rem','del','delete'.
-command aliases for 'list' are: 'ls'.
-command aliases for 'all' are: '*'.
+    command aliases for 'remove' are: 'rm','rem','del','delete'.
+    command aliases for 'list' are: 'ls'.
+    command aliases for 'all' are: '*'.
 
 command prefixes: '.', 'hadouken','hadouken,'.
 eg: .admin add dek@dek.com

@@ -21,7 +21,7 @@ our $AUTHOR = 'dek';
 sub command_comment {
     my $self = shift;
 
-    return "get asset quote(btc ltc) or asset pairs (btc_usd,ltc_usd,doge_ltc) alias: ...";
+    return "get asset quote(btc ltc) or asset pairs (btc_usd,ltc_usd,doge_ltc). command alias: ...";
 }
 
 # Clean name of command.
