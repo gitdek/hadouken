@@ -3,17 +3,23 @@ package Hadouken::Plugin::Translate;
 use strict;
 use warnings;
 
+use utf8;
+use Text::Unidecode;
+
+# use Data::Printer alias => 'Dumper', colored => 1;
 use String::IRC;
 use TryCatch;
 use Encode qw( encode ); 
 use JSON::XS qw( encode_json decode_json );
-use Data::Dumper;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
 
+my %iso2_codes = ('english' => 'en', 'korean' => 'ko', 'italian' => 'it', 'dutch' => 'nl', 'french' => 'fr','polish' => 'pl', 'portuguese' => 'po','russian' => 'ru','spanish' => 'es','german' => 'de','japanese' => 'ja');
+
 my %iso3_codes = ('english' => 'eng', 'korean' => 'kor', 'italian' => 'ita', 'dutch' => 'nld', 'french' => 'fra','portuguese' => 'por', 'arabic' => 'ara','russian' => 'rus','spanish' => 'spa','german' => 'deu','japanese' => 'jpn', 'swedish' => 'swe');
+
 
 # Description of this command.
 sub command_comment {
@@ -71,20 +77,19 @@ sub command_run {
 
     my $srclang = 'english';
 
-    my $src_lang = 'eng';
+    my $src_lang = 'en';
 
     if($dstlang =~ m/\-/) {
         my ($src,$dst) = split(/-/,$dstlang,2);
 
-        if(defined $src && length $src && exists $iso3_codes{$src}) {
+        if(defined $src && length $src && exists $iso2_codes{$src}) {
             $srclang = $src;
-            $src_lang = $iso3_codes{$src};
+            $src_lang = $iso2_codes{$src};
             $dstlang = $dst;
         }
     } else {
         if($dstlang ne 'english') {
             $srclang = 'english';
-            #$dstlang = 'english';
         }
     }
 
@@ -94,41 +99,46 @@ sub command_run {
 
     return 
         unless 
-            exists $iso3_codes{$dstlang} && exists $iso3_codes{$srclang};
+            exists $iso2_codes{$dstlang} && exists $iso2_codes{$srclang};
 
 
-    warn "trying $srclang $dstlang $phrase";
+    # warn "trying $srclang $dstlang $phrase";
     
-    my $dest_lang = $iso3_codes{$dstlang};
-    $src_lang = $iso3_codes{$srclang};
+    my $dest_lang = $iso2_codes{$dstlang};
+    $src_lang = $iso2_codes{$srclang};
 
     my $encoded_phrase = $phrase;
     
-    $encoded_phrase = 'penis' if $encoded_phrase =~ 'luchini';
-    $encoded_phrase = 'awesome' if $encoded_phrase =~ 'dek';
+    # $encoded_phrase = 'penis' if $encoded_phrase =~ 'luchini';
+    # $encoded_phrase = 'awesome' if $encoded_phrase =~ 'dek';
 
     $encoded_phrase =~ s/ /\%20/g;
 
+    my $langpair = $src_lang."|".$dest_lang;
+
     #warn $encoded_phrase;
 
-    my $define_url = "http://glosbe.com/gapi/translate?from=".$src_lang."&dest=".$dest_lang."&format=json&phrase=".$encoded_phrase."&pretty=true";
+    my $define_url = "http://mymemory.translated.net/api/get?q=".$encoded_phrase."&langpair=".$langpair;
+    #my $define_url = "http://glosbe.com/gapi/translate?from=".$src_lang."&dest=".$dest_lang."&format=json&phrase=".$encoded_phrase."&pretty=true";
 
     $self->asyncsock->get($define_url, sub {
         my ($body, $header) = @_;
         my $json = $self->_jsonify($body);
 
         # print Dumper($json);
-
         return
             unless 
                 ((defined $json) && 
-                (exists $json->{'tuc'}));
+                (exists $json->{'responseData'}));
                 #(exists $json->{'tuc'}->[0]->{meanings}); 
 
                 
         my $arg_pretty = String::IRC->new($phrase)->bold; #$json->{phrase})->bold;       
-        my $translation = $json->{tuc}->[0]->{phrase}->{text};
-        #warn $translation;
+        my $translation = $json->{responseData}->{translatedText};
+        # $translation =~ s/[^[:ascii:]]+//g;
+        $translation =~ s/([^[:ascii:]]+)/unidecode($1)/ge;
+        #my $translation = $json->{tuc}->[0]->{phrase}->{text};
+        # warn $translation;
 
         return 
             unless
@@ -159,4 +169,24 @@ sub _jsonify {
 
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::Translate - Translate word or phrase.
+
+=head1 DESCRIPTION
+
+Translation plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 
