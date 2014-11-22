@@ -49,4 +49,4 @@ data/geoip/GeoIP.dat
 data/geoip/GeoIPCity.dat
 data/geoip/GeoIPOrg.dat
 data/geoip/GeoLiteCity.dat
-clearconf.conf
+clear.conf
