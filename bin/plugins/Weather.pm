@@ -5,7 +5,7 @@ use warnings;
 
 use Yahoo::Weather;
 use TryCatch;
-use Data::Dumper;
+# use Data::Dumper;
 use String::IRC;
 
 our $VERSION = '0.3';

@@ -4,7 +4,6 @@ use strict;
 use warnings;
 
 use TryCatch;
-use Data::Dumper;
 use Regexp::Common;
 use AnyEvent::DNS;
 
