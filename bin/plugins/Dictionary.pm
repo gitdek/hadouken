@@ -9,7 +9,7 @@ use Encode qw( encode );
 use JSON::XS qw( encode_json decode_json );
 use Data::Dumper;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
 
@@ -17,7 +17,7 @@ our $AUTHOR = 'dek';
 sub command_comment {
     my $self = shift;
 
-    return "Dictionary lookup";
+    return "Dictionary lookup. command alias: define";
 }
 
 # Clean name of command.
@@ -83,20 +83,16 @@ sub command_run {
 
                 
         my $arg_pretty = String::IRC->new($origin_arg)->bold; #$json->{phrase})->bold;
-        
         my $meaning = $json->{tuc}->[0]->{meanings}->[0]->{text};
         #warn $meaning;
+
         return 
             unless
                 ((defined $meaning) && (length($meaning)));
 
-        my $ret =  "[$arg_pretty] Defintion: ".$meaning; #Last: $json->{price} Volume: $json->{volume_first} Most volume: $json->{best_market}";
+        my $ret =  "[$arg_pretty] Defintion: ".$meaning;
         $self->send_server (PRIVMSG => $channel, $ret);
     });
-
-
-
-
 
     return 1;
 }
@@ -117,4 +113,24 @@ sub _jsonify {
 
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::Dictionary - Dictionary plugin.
+
+=head1 DESCRIPTION
+
+Dictionary plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 

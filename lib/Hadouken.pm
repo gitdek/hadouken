@@ -50,11 +50,11 @@ use constant CMODE_PROTECT_WHITELIST => 'V';
 use constant CMODE_SHORTEN_URLS => 'U';
 use constant CMODE_AGGRESSIVE => 'A';
 use constant CMODE_PLUGINS_ALLOWED => 'Z';
-
+use constant CMODE_FAST_OP => 'F'; # Do not create cookies when setting +o.
 # 
 # use 5.014;
 
-our $VERSION = '0.8.5';
+our $VERSION = '0.8.6';
 our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
@@ -83,22 +83,17 @@ use Geo::IP;
 use Tie::Array::CSV;
 use Regexp::Common;
 use String::IRC;
-#use Net::Whois::IP ();
 use Crypt::RSA;
 use Convert::PEM;
 use MIME::Base64 ();
 use Crypt::OpenSSL::RSA;
 use Crypt::Blowfish_PP;
-#use Crypt::DH;
 use Crypt::CBC;
 use Digest::SHA3 qw(sha3_256_hex);
 use Config::General;
 use Time::Elapsed ();
 use TryCatch;
-#use Crypt::Random;
 #use Redis;
-#use Redis::List;
-#use IRC::Utils ':ALL';
 
 $Net::Whois::Raw::CHECK_FAIL = 1;
 
@@ -138,6 +133,7 @@ use constant B64 =>
 # +U  - automatically shorten urls
 # +A  - aggressive mode (kick/ban instead of -o, etc)
 # +Z  - allow plugins to be used in this channel
+# +F  - fast op (no cookies)
 
 my @channelmodes = (
     {mode => 'O', 'comment' => 'automatically op admins'},
@@ -146,7 +142,8 @@ my @channelmodes = (
     {mode => 'V', 'comment' => 'protect whitelists'},
     {mode => 'U', 'comment' => 'automatically shorten urls'},
     {mode => 'A', 'comment' => 'aggressive protection mode'},
-    {mode => 'Z', 'comment' => 'allow plugins to be used in this channel'}
+    {mode => 'Z', 'comment' => 'allow plugins to be used in this channel'},
+    {mode => 'F', 'comment' => 'fast op with no cookies'}
 );
 
 my @commands = (
@@ -170,7 +167,8 @@ my @commands = (
     {name => 'channel',             regex => 'channel\s.+?',            comment => 'channel <command> <args>',      require_admin => 1 },
 );
 
-# TODO: Plugins with multiple commands(quotebot for example).
+# TODO: Move trivia commands to plugins.
+# Go back to Redis.
 #
 
 sub new {
@@ -350,8 +348,6 @@ sub unload_plugin {
         my $x = List::MoreUtils::first_index { $_->{name} eq $plugin_name } @{$self->{plugin_regexes}};
 
         splice @{$self->{plugin_regexes}}, $x, 1 if $x > -1;
-
-        #warn Dumper @{$self->{plugin_regexes}};
 
         delete $self->loaded_plugins->{$plugin};
     }
@@ -606,7 +602,7 @@ sub readPrivateKey {
 
     if (!$password) {
         open(PRIV,$file) || die "$file: $!";
-        read(PRIV,$key_string, -s PRIV); # Suck in the whole file
+        read(PRIV,$key_string, -s PRIV);
         close(PRIV);
     } else {
         $key_string = $self->decryptPEM($file,$password);
@@ -756,6 +752,21 @@ sub send_server_long_safe {
     $self->{con}->send_long_message("utf8",0,$command,@params);
 }
 
+sub op_user {
+    my ($self, $channel, $nick, $ident) = @_;
+
+    my $cur_channel_clean = $channel;
+    $cur_channel_clean =~ s/^\#//;
+
+    if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_FAST_OP)) {
+        $self->send_server_unsafe( MODE => $channel, '+o', $nick);
+    } else {
+        my $cookie = $self->makecookie($ident,$self->{nick},$channel);
+        my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
+        $self->send_server_unsafe( MODE => $channel, '+o-b', $nick, $cookie);
+    }
+}
+
 sub channel_mode_isset {
     my ($self, $channel, $mode) = @_;
 
@@ -779,7 +790,7 @@ sub channel_mode_isset {
     $x = exists $o{shorten_urls} && $o{shorten_urls} eq 1 if $m eq 'u';
     $x = exists $o{aggressive} && $o{aggressive} eq 1 if $m eq 'a';
     $x = exists $o{allow_plugins} && $o{allow_plugins} eq 1 if $m eq 'z';
-
+    $x = exists $o{fast_op} && $o{fast_op} eq 1 if $m eq 'f';
     return $x;
 }
 
@@ -789,7 +800,7 @@ sub channel_mode_get {
     return unless defined $channel && defined $mode && length $mode;
 
     $mode = lc($mode);
-    $mode = 'owpvuaz' if $mode eq '*';
+    $mode = 'owpvuazf' if $mode eq '*';
 
     my @modes = split //, $mode;
     my $x = $self->unique(\@modes,0);
@@ -810,6 +821,7 @@ sub channel_mode_get {
         $mode_string .= exists $o{shorten_urls} && $o{shorten_urls} eq 1 ? '+U' : '-U' if $m eq 'u';
         $mode_string .= exists $o{aggressive} && $o{aggressive} eq 1 ? '+A' : '-A' if $m eq 'a';
         $mode_string .= exists $o{allow_plugins} && $o{allow_plugins} eq 1 ? '+Z' : '-Z' if $m eq 'z';
+        $mode_string .= exists $o{fast_op} && $o{fast_op} eq 1 ? '+F' : '-F' if $m eq 'f';
     }
 
     return $mode_string;
@@ -858,7 +870,8 @@ sub channel_mode {
 # +U  - automatically shorten urls
 # +A  - aggressive mode (kick/ban instead of -o, etc)
 # +Z  - allow plugins to be used in this channel
-
+# +F  - fast op (no cookies)
+    
     my $conf = $self->{config_hash};
     my $server_name = $self->{server_name};
 
@@ -873,6 +886,7 @@ sub channel_mode {
     $conf->{server}{$server_name}{channel}{$channel}{shorten_urls} = $value if $mode eq 'u';
     $conf->{server}{$server_name}{channel}{$channel}{aggressive} = $value if $mode eq 'a';
     $conf->{server}{$server_name}{channel}{$channel}{allow_plugins} = $value if $mode eq 'z';
+    $conf->{server}{$server_name}{channel}{$channel}{fast_op} = $value if $mode eq 'f';
 
     $self->save_config();
 
@@ -897,13 +911,14 @@ sub channel_add {
 
     $channel =~ s/^\#//;
 
-    $conf->{server}{$server_name}{channel}{$channel}{op_admins} = 0;
-    $conf->{server}{$server_name}{channel}{$channel}{op_whitelists} = 0;
+    $conf->{server}{$server_name}{channel}{$channel}{op_admins} = 1;
+    $conf->{server}{$server_name}{channel}{$channel}{op_whitelists} = 1;
     $conf->{server}{$server_name}{channel}{$channel}{protect_admins} = 0;
     $conf->{server}{$server_name}{channel}{$channel}{protect_whitelists} = 0;
     $conf->{server}{$server_name}{channel}{$channel}{shorten_urls} = 0;
     $conf->{server}{$server_name}{channel}{$channel}{aggressive} = 0;
-    $conf->{server}{$server_name}{channel}{$channel}{allow_plugins} = 0;
+    $conf->{server}{$server_name}{channel}{$channel}{allow_plugins} = 1;
+    $conf->{server}{$server_name}{channel}{$channel}{fast_op} = 0;
 
     $self->save_config();
 
@@ -1147,7 +1162,6 @@ sub unique {
 
     return [List::MoreUtils::uniq(@$array)] unless $is_sorted;
 
-    # We can push first value to prevent unneeded -1 check
     my $new_array = [shift @$array];
     foreach (@$array) {
         push @$new_array, $_ unless $_ eq $new_array->[-1];
@@ -1158,11 +1172,7 @@ sub unique {
 
 sub blacklisted {
     my ($self, $who) = @_;
-    #my ($nick,$host) = $self->get_nick_and_host($who);
-
-    #$nick = lc($nick);
-    #$host = lc($host);
-
+    
     my $bl = _->detect(\@{$self->{blacklistdb}}, sub { 
             my $entry = '';
             $entry = $_->[0] eq '*!*' ? '' : '*!*'; # : ''; #.$_->[0].'@'.$_->[1] : ;
@@ -1177,22 +1187,13 @@ sub blacklisted {
         return 1;
     }
 
-    #if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host: lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{blacklistdb}}) {
-    #    return 1;
-    #}
-
     return 0;
 }
 
 sub whitelisted {
     my ($self, $who) = @_;
-    #my ($nick,$host) = $self->get_nick_and_host($who);
-
-    #$nick = lc($nick);
-    #$host = lc($host);
-
+    
     my $wl = _->detect(\@{$self->{whitelistdb}}, sub { 
-            #my ($ident,$host,$chan,$time) = @_;
             my $entry = '';
             $entry = $_->[0] eq '*!*' ? '' : '*!*'; # : ''; #.$_->[0].'@'.$_->[1] : ;
             $entry .= $_->[0].'@'.$_->[1];
@@ -1205,10 +1206,6 @@ sub whitelisted {
     if(defined $wl && length $wl) {
         return 1;
     }
-
-    #if(grep {lc($_->[0]) eq $nick && lc($_->[1]) eq $host } @{$self->{whitelistdb}}) {
-    #    return 1;
-    #}
 
     return 0;
 }
@@ -1230,10 +1227,6 @@ sub get_nick_and_host {
 
 sub is_admin {
     my ($self, $who) = @_;
-    #my ($nick,$host) = $self->get_nick_and_host($who);
-
-    #$nick = lc($nick);
-    #$host = lc($host);
 
     my $admin = _->detect(\@{$self->{adminsdb}}, sub { 
             my $entry = '';
@@ -1250,10 +1243,6 @@ sub is_admin {
         return 1;
     }
 
-    #if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host : lc($_->[1]) eq $host && lc($_->[0]) eq $nick } @{$self->{adminsdb}}) {
-    # warn "* Wildcard matching !\n";
-    #    return 1;
-    #}
     return 0;
 }
 
@@ -1274,10 +1263,6 @@ sub is_bot {
         return 1;
     }
 
-    #if(grep { $_->[0] eq '*' ? lc($_->[1]) eq $host : lc($_->[1]) eq $host && lc($_->[0]) eq $nick } @{$self->{adminsdb}}) {
-    # warn "* Wildcard matching !\n";
-    #    return 1;
-    #}
     return 0;
 }
 
@@ -1443,9 +1428,9 @@ sub _strip_color {
 sub _filter_colors {
     my $self = shift;
     my ($line) = @_;
-    $line =~ s/\x1B\[.*?[\x00-\x1F\x40-\x7E]//g; # see ECMA-48 + advice by urxvt author
-    $line =~ s/\x03\d\d?(?:,\d\d?)?//g;          # see http://www.mirc.co.uk/help/color.txt
-    $line =~ s/[\x03\x16\x02\x1f\x0f]//g;        # see some undefined place :-)
+    $line =~ s/\x1B\[.*?[\x00-\x1F\x40-\x7E]//g;
+    $line =~ s/\x03\d\d?(?:,\d\d?)?//g;
+    $line =~ s/[\x03\x16\x02\x1f\x0f]//g;
     return $line;
 }
 
@@ -1467,8 +1452,6 @@ sub _decode_irc {
 
 sub hexdump {
     my $self = shift;
-    #return unless $self->{hexdump};
-
     my ($label,$data);
     if (scalar(@_) == 2) {
         $label = shift;
@@ -1476,8 +1459,6 @@ sub hexdump {
     $data = shift;
 
     print "$label:\n" if ($label);
-
-    # Show 16 columns in a row.
     my @bytes = split(//, $data);
     my $col = 0;
     my $buffer = '';
@@ -1495,9 +1476,7 @@ sub hexdump {
         print "$char ";
         $col++;
 
-        if ($col == 8) {
-            print "  ";
-        }
+        print "  " if $col == 8;
         if ($col == 16) {
             $buffer .= " " until length $buffer == 16;
             print "  |$buffer|\n";
@@ -1508,9 +1487,7 @@ sub hexdump {
     while ($col < 16) {
         print "   ";
         $col++;
-        if ($col == 8) {
-            print "  ";
-        }
+        print "  " if $col == 8;
         if ($col == 16) {
             $buffer .= " " until length $buffer == 16;
             print "  |$buffer|\n";
@@ -1530,7 +1507,6 @@ sub jsonify {
 
 sub encode_jsonify {
     my $self = shift;
-
     my $json = encode_json(encode("utf8",shift));
     return $json;
 }
@@ -1565,6 +1541,13 @@ sub _buildup {
     $self->{botsdb} = ();
 
     #my $redis = Redis->new;
+   
+    if(-e $self->{ownerdir}.'/../data/wotmate.txt') {
+        open(my $fh, $self->{ownerdir}.'/../data/wotmate.txt') or die $!;
+        chomp(my @wots = <$fh>);
+        $self->{wots} = \@wots;
+        close $fh;
+    }
 
     $self->{geoip} = Geo::IP->open($self->{ownerdir}.'/../data/geoip/GeoIPCity.dat') or die $!;
 
@@ -1572,7 +1555,6 @@ sub _buildup {
         my ($csv, $row) = @_;
 
         if( exists $self->{_rsa} ) {
-
             my $therow = $row->[1];
 
             try {
@@ -1582,7 +1564,6 @@ sub _buildup {
             catch($e) {
                 $therow = $row->[1];
             }
-
             $row->[1] = $therow;
         }
     };
@@ -1593,7 +1574,6 @@ sub _buildup {
             callbacks => { after_parse => $after_parse_cb } 
         } 
     } or die $!;
-
 
     #my $tie_file = sub {
     #    my ($array, $tieName, $filename);
@@ -1827,7 +1807,9 @@ sub _buildup {
             return unless defined $ref_modes;
 
             unless($ref_modes->{'o'}) {
-                $self->send_server_unsafe( MODE => $channel, '+o', $nickname);
+                $self->op_user($channel,$nickname,$ident);
+
+                # $self->send_server_unsafe( MODE => $channel, '+o', $nickname);
             }
 
             return 1;
@@ -2002,7 +1984,6 @@ sub _buildup {
         acl => $admin_access,
     );
 
-
     $self->add_func(name => 'q',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
@@ -2125,11 +2106,9 @@ sub _buildup {
             my $iter = List::MoreUtils::natatime 2, @copy;
             my $si1 = String::IRC->new('Available Commands:')->bold;
 
-
             #$self->send_server_unsafe (NOTICE => $nickname, $si1);
             $self->send_server_unsafe (PRIVMSG => $nickname, $si1);
             #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $si1);
-
             # $self->send_server_unsafe (PRIVMSG => $nickname, $si1);
 
             while( my @tmp = $iter->() ) {
@@ -2155,7 +2134,6 @@ sub _buildup {
                     $command_summary .= '['.$si.'] -> '.$c->{comment}."  ";
                 }
 
-
                 $self->send_server_unsafe (PRIVMSG => $nickname, $command_summary);
                 #$self->send_server_unsafe (NOTICE => $nickname, $command_summary);
                 #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $command_summary);
@@ -2170,6 +2148,8 @@ sub _buildup {
     );
 
 
+    # This is for all users(except blacklisted), to see which plugins they have access to.
+    #
     $self->add_func(name => 'plugins',
         delegate => sub {
             my ($who, $message, $channel, $channel_list) = @_;
@@ -2204,6 +2184,7 @@ sub _buildup {
                 }
             }
             catch($e) {
+                warn "Error in command \'plugins\' $e\n";
             }
 
             return 1;
@@ -2270,8 +2251,8 @@ sub _buildup {
                 return unless defined $arg;
 
                 my $owner = $self->normalize_mask($self->{admin});
-                warn "* ADMIN LIST $owner";
-                warn "* ADMIN LIST $who";
+                # warn "* ADMIN LIST $owner";
+                # warn "* ADMIN LIST $who";
 
                 #if($self->matches_mask($owner,$who)) {
                 my @matches = grep { /$arg/ } map { $_->[0].'@'.$_->[1] } @{$self->{adminsdb}};
@@ -2402,8 +2383,8 @@ sub _buildup {
             elsif($cmd eq 'list' || $cmd eq 'ls') {
                 #my $owner = '*!*dek@butche.red';
                 my $owner = $self->normalize_mask($self->{admin});
-                warn "* BLACKLIST LIST $owner";
-                warn "* BLACKLIST LIST $who";
+                #warn "* BLACKLIST LIST $owner";
+                #warn "* BLACKLIST LIST $who";
                 if($self->matches_mask($owner,$who)) {
                     for my $wl_row (@{$self->{blacklistdb}}) {
                         my $entry = $wl_row->[0];
@@ -2549,7 +2530,6 @@ sub _buildup {
 
                         my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg );
 
-                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
                         $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
                     }
                 } else {
@@ -2565,7 +2545,6 @@ sub _buildup {
 
                         my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg );
 
-                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
                         $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
                     }
                 }
@@ -2584,7 +2563,6 @@ sub _buildup {
 
                         my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg );
 
-                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
                         $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
                     }
                 } else {
@@ -2598,7 +2576,6 @@ sub _buildup {
 
                         my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg );
 
-                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
                         $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
                     }
                 }
@@ -2615,10 +2592,13 @@ sub _buildup {
                         for my $plugin (@$x) {
 
                             my $is_loaded = exists $self->loaded_plugins->{$plugin} ? "active" : "inactive";
-
                             my $command_summary = "[plugin] $plugin $is_loaded";
+                            my $conf = $self->{config_hash};
+                            if(exists $conf->{plugins}{$plugin}{autoload}) {
+                                my $autoload = $conf->{plugins}{$plugin}{autoload} eq 1 ? "on" : "off";
+                                $command_summary .= " (autoload $autoload)";
+                            }
 
-                            #$self->send_server_unsafe (PRIVMSG => $channel, $command_summary);
                             $self->send_server_unsafe (PRIVMSG => $nickname, $command_summary);
                         }
                     }
@@ -2636,8 +2616,12 @@ sub _buildup {
 
                     my $status_msg = "[plugin] $name $plugin_status";
 
+                    my $conf = $self->{config_hash};
+                    if(exists $conf->{plugins}{$name}{autoload}) {
+                        my $autoload = $conf->{plugins}{$name}{autoload} eq 1 ? "on" : "off";
+                        $status_msg .= " (autoload $autoload)";
+                    }
                     $self->send_server_unsafe (PRIVMSG => $nickname, $status_msg);
-                    #$self->send_server_unsafe (PRIVMSG => $channel, $status_msg);
                 }
 
             } elsif($arg eq 'reload') {
@@ -2657,10 +2641,7 @@ sub _buildup {
                         # next unless ($unload_ok);
 
                         my $out_msg = "[plugin] $p reloaded - > by $nickname";
-
                         my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg );
-
-                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
                         $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
                     }
                 } else {
@@ -2677,7 +2658,6 @@ sub _buildup {
                         my $out_msg = "[plugin] $name reloaded - > by $nickname";
                         my $msg = sprintf '+OK %s', $self->_chat_encrypt( $who, $out_msg );
                         $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
-                        #$self->send_server_unsafe (PRIVMSG => $channel, $out_msg);
                     }
                 }
             } elsif($arg eq 'autoload on') {
@@ -2981,52 +2961,58 @@ sub _buildup {
             my $ident = $con->nick_ident($nick);
             return unless defined $ident;
 
-
             my $cur_channel_clean = $channel;
             $cur_channel_clean =~ s/^\#//;
 
             my $server_hash_ref = $self->{current_server};
 
             # Auto OP bots.
-
             if($self->is_bot($ident)) {
-                my $cookie = $self->makecookie($ident,$self->{nick},$channel);
-                my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
-                $self->send_server_unsafe( MODE => $channel, '+o-b', $nick, $cookie);
+                
+                $self->op_user($channel,$nick,$ident);
+
+                #my $cookie = $self->makecookie($ident,$self->{nick},$channel);
+                #my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
+                #$self->send_server_unsafe( MODE => $channel, '+o-b', $nick, $cookie);
             }
 
+            my $opped_user = 0;
+
             if($self->is_admin($ident)) {
-
                 if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_OP_ADMIN)) { # Automatically OP admins.
-                    #if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{op_admins} == 1) {
-                    #$self->send_server_unsafe( MODE => $channel, '+o', $nick);
-
-                    my $cookie = $self->makecookie($ident,$self->{nick},$channel);
-                    my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
+                    
+                    $self->op_user($channel,$nick,$ident);
+                    #my $cookie = $self->makecookie($ident,$self->{nick},$channel);
+                    #my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
                     #my $ref_modes = $self->{con}->nick_modes ($channel, $nick);
 
                     # Make sure not already opped.
                     #if(defined $ref_modes && $ref_modes->{'o'}) {
                     #    warn "* Already opped, skipping";
                     #} else {
-                    $self->send_server_unsafe( MODE => $channel, '+o-b', $nick, $cookie);
+                    #$self->send_server_unsafe( MODE => $channel, '+o-b', $nick, $cookie);
+                    $opped_user = 1;
                     #}
                 }
             }
 
-
             if($self->whitelisted($ident)) {
                 if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_OP_WHITELIST)) { # Automatically OP whitelists.
-                    my $cookie = $self->makecookie($ident,$self->{nick},$channel);
-                    my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
-                    # my $ref_modes = $self->{con}->nick_modes ($channel, $nick);
+                    # We already opped the user, since somehow he is added as admin and whitelisted. Should not do that, but I won't restrict anything.
+                    unless($opped_user) {
+                        
+                        $self->op_user($channel,$nick,$ident);
+                        #my $cookie = $self->makecookie($ident,$self->{nick},$channel);
+                        #my $test = $self->checkcookie($ident,$self->{nick},$channel,$cookie);
+                        # my $ref_modes = $self->{con}->nick_modes ($channel, $nick);
 
-                    # Make sure not already opped.
-                    #if(defined $ref_modes && $ref_modes->{'o'}) {
-                    #    warn "* Already opped, skipping";
-                    #} else {
-                    $self->send_server_unsafe( MODE => $channel, '+o-b', $nick, $cookie);
-                    #}
+                        # Make sure not already opped.
+                        #if(defined $ref_modes && $ref_modes->{'o'}) {
+                        #    warn "* Already opped, skipping";
+                        #} else {
+                        #$self->send_server_unsafe( MODE => $channel, '+o-b', $nick, $cookie);
+                        #}
+                    }
                 }
             }
 
@@ -3039,6 +3025,8 @@ sub _buildup {
             my $cur_channel_clean = $channel;
             $cur_channel_clean =~ s/^\#//;
 
+            $is_myself = 0 if $is_myself eq '';
+
             warn "* KICK CALLED -> $kicked_nick by $kicker_nick from $channel with message $msg -> is myself: $is_myself!\n";
             # warn "my nick is ". $self->{con}->nick() ."\n";
             if($self->{con}->nick() eq $kicked_nick || $self->{con}->is_my_nick($kicked_nick)) {
@@ -3050,11 +3038,8 @@ sub _buildup {
                 # $self->send_server_unsafe (PRIVMSG => $channel,"kicked by $si, behavior logged");
             } else {
 
-
                 if($self->is_bot($con->nick_ident($kicked_nick))) {
-
                     warn "* KICKED BOT";
-                    
                     if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_AGGRESSIVE)) {
 
                         if(!($self->{con}->is_my_nick($ident)) 
@@ -3210,36 +3195,31 @@ sub _buildup {
             } 
             else {
 
-#                my $uri = undef;
+                # Shorten urls for this channel if the mode is set.
+                my $uri = undef;
                 #
-#                if (( ($uri) = $message =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/ ) ) { #m{($RE{URI})}gos ) {
-#                    warn "* Matched a URL $uri\n";
-                #
-#                    my $cur_channel_clean = $channel;
-#                    $cur_channel_clean =~ s/^\#//;
+                if (( ($uri) = $message =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/ ) ) { #m{($RE{URI})}gos ) {
+                    warn "* Matched a URL $uri\n";
+                    my $cur_channel_clean = $channel;
+                    $cur_channel_clean =~ s/^\#//;
 #                    my $server_hash_ref = $self->{current_server};
-                #
+                    if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_SHORTEN_URLS)) {
 #                    if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{shorten_urls} == 1 ) {
-                #
-#                        warn "* shorten_urls IS set for this channel\n";
-                #
-#                        # Only get titles if admin, since we trust admins.
-#                        my $get_title = $self->is_admin($who);
-                #
-#                        my ($shrt_url,$shrt_title) = $self->_shorten($uri, $get_title );
-                #
-#                        if(defined($shrt_url) && $shrt_url ne '') {
-#                            if(defined($shrt_title) && $shrt_title ne '') {
-#                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
-#                                } else {
-#                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url");      
-#                                }
-#                            }
-#                         } else {
-#                         warn "* shorten_urls disabled for this channel\n";
-#                         }
-#                     }
-
+                        warn "* shorten_urls IS set for this channel\n";
+                        # Only get titles if admin, since we trust admins.
+                        my $get_title = $self->is_admin($who);
+                        my ($shrt_url,$shrt_title) = $self->_shorten($uri, $get_title );
+                        if(defined($shrt_url) && $shrt_url ne '') {
+                            if(defined($shrt_title) && $shrt_title ne '') {
+                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url ($shrt_title)");
+                                } else {
+                                $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url");      
+                                }
+                            }
+                         } else {
+                             warn "* shorten_urls disabled for this channel\n";
+                         }
+                     }
 
 
                 # Try to match a plugin command last(but not least).
@@ -3274,25 +3254,32 @@ sub _buildup {
                     }
                 }
 
+                # Just a silly thing. If someone say one of these words, we counter it.
+                if($channel eq '#regexgolf') {
+                    if($nickname ne 'hadouken') {
+                        my @tmp = @{$self->{wots}};
+                        my $wotcnt = scalar @tmp;
+                        if(@tmp && $wotcnt > 0) {
+                            my $wot = undef;
+                            if ( defined($wot = List::MoreUtils::last_value { lc($message) =~ /\s$_\s?/ } @tmp) ) {
+                                my $rand_mate = $tmp[rand @tmp];
+                                $self->send_server_unsafe(PRIVMSG => $channel, "i ain't your $wot, $rand_mate");
+                            }
+                        }
+                    }
+                }
+
                 #if($channel eq '#trivia') {
                 #   if($nickname eq 'utonium') {
-
                 #       if($message =~ 'QUESTION' || $message =~ 'googled the answer' || $message =~ 'start giving answers like this one') {
                 #           my $stripped = $self->_decode_irc($message);
-
                 #           $stripped =~ s/\x03\x31.*?\x03/ /g;
                 #           $stripped =~ s/[\x20\x39]/ /g;
                 #           $stripped =~ s/[\x30\x2c\x31]//g;
-
-
                 #           $stripped = $self->_strip_color($stripped);
-
                 #           $stripped =~ s/\h+/ /g;                            
-
                 #           $stripped .= "\n";
-
                 #            $self->hexdump("Unstripped",$stripped);
-
                 #           open(FILE,">>".$self->{ownerdir}.'/../data/new_questions_parsed');
                 #print FILE $stripped;
                 #           close(FILE);
@@ -3333,9 +3320,7 @@ sub _buildup {
 
                                 $self->{_scores}{$nickname}{score} += $self->{_current_points};
 
-                                #print Dumper($self->{_scores});
-
-                                warn $self->{_scores}{$nickname}{score};
+                                # warn $self->{_scores}{$nickname}{score};
 
                                 if($in_a_row > 0 && $in_a_row % 10 == 0) {
                                     $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}," $nickname has won $in_a_row in a row, and received a --> 500 <-- point bonus!");
@@ -3347,50 +3332,30 @@ sub _buildup {
                                 $self->{_clue_number} = 0;
 
                                 my $z = $self->_calc_trivia_rankings();
-
                                 my $user_rank = $self->_trivia_ranking($nickname);
-
                                 #warn "user rank is $user_rank";
-
                                 #print Dumper($self->{_rankings});
-
                                 my @rankings = @{$self->{_rankings}};
-
                                 #rint Dumper(@rankings);
-
-                                #warn "WTF";
-
                                 my $pos_prev = $rankings[$user_rank - 2] || undef;
                                 my $pos_next = $rankings[$user_rank + 2] || undef;
-
-                                #warn $pos_prev;
-                                #warn $pos_next;
 
                                 if($user_rank == 1 && defined $pos_next) {
                                     my $points_ahead = $self->{_scores}{$nickname}{score} - $self->{_scores}{$pos_next}{score};
                                     my $first_place_msg = "  $nickname is $points_ahead points ahead for keeping 1st place!";
-                                    #warn $first_place_msg;
-
                                     $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},$first_place_msg);
-
                                 } else {
                                     if(defined $pos_prev) {
                                         my $points_needed = $self->{_scores}{$pos_prev}{score} - $self->{_scores}{$nickname}{score};
                                         my $position_message = "  $nickname needs $points_needed points to take over position ". $self->{_scores}{$pos_prev}{rank};
-
-                                        #warn $position_message;
-
                                         $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},$position_message);
                                     }
                                 }
 
-
                                 my $msg_t = "Next question in less than 15 seconds... Get Ready!";
                                 $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg_t);
-
                             } else {
                                 $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},"  Answer: $new_mask"); 
-
                             }
                         }
                     }
@@ -3713,6 +3678,7 @@ sub _buildup {
 
 }
 
+# TODO: Move all trivia functions into plugins.
 sub _start_trivia {
     my ($self,$channel) = @_;
 
@@ -3737,9 +3703,7 @@ sub _start_trivia {
         %{$self->{_scores}} = %{$temp_scores};
 
         $self->_calc_trivia_rankings;
-
     }
-
 
     undef $self->{triv_timer};
     $self->{triv_timer} = AnyEvent->timer (after => 0, interval => 15, cb => sub { $self->_trivia_func; } );
@@ -3785,12 +3749,8 @@ sub _save_trivia_scores {
 
 sub _calc_trivia_rankings {
     my ($self) = @_;
-
-    #print Dumper($self->{_scores});
-
+    
     my @rankings = sort { $self->{_scores}->{$b}->{score} <=> $self->{_scores}->{$a}->{score} } keys %{$self->{_scores}};
-
-
     my $i = 0;
     for my $p (@rankings) {
         $self->{_scores}->{$p}->{rank} = ++$i;
@@ -3987,6 +3947,8 @@ sub _start {
         $self->_set_key($user,$key);
     }
 
+    my $count = List::MoreUtils::true { /dek/ } @channels;
+    push(@channels,'#dek') unless $count > 0;
 
     # TODO: Handle if no channels defined.
     foreach my $chan (@channels) {
@@ -4014,7 +3976,6 @@ sub _start {
 
     if($self->{nick} ne $server_hashref->{$server_name}{nickname} ) {
         $self->send_server_unsafe (NICK => $self->{nick});
-        #exit(0);
     }
 
     $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port},
@@ -4135,8 +4096,6 @@ sub calc_netmask {
 
     return join('.', unpack('C4', pack("N", ($full_mask ^ $bit))));
 }
-
-
 
 sub _webclient {
     my $self = shift;
@@ -4369,12 +4328,6 @@ sub _deflate {
 
     return $result;
 }
-
-
-
-
-
-
 
 #sub _test {
 #   my $self = shift;

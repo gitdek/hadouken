@@ -7,20 +7,20 @@ use HTML::Strip;
 use String::IRC;
 use REST::Google::Search;
 
-REST::Google::Search->http_referer('http://atl.dek.codes');
+REST::Google::Search->http_referer('http://hadouken.pw');
 
 #use Data::Printer alias => 'Dumper', colored => 1;
 
 use TryCatch;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
 # Description of this command.
 sub command_comment {
     my $self = shift;
 
-    return "google search";
+    return "google search. command aliases: google, goog. add results=N to display N results.";
 }
 
 # Clean name of command.
@@ -42,11 +42,7 @@ sub acl_check {
     my ($self, %aclentry) = @_;
 
     my $permissions = $aclentry{'permissions'};
-    #my $who = $aclentry{'who'};
-    #my $channel = $aclentry{'channel'};
-    #my $message = $aclentry{'message'};
-
-
+    
     if($self->check_acl_bit($permissions,Hadouken::BIT_BLACKLIST)) {
         return 0;
     }
@@ -109,19 +105,10 @@ sub command_run {
         my $data = $res->responseData;
         my $cursor = $data->cursor;
         my $pages = $cursor->pages;
-
-        printf "current page index: %s\n", $cursor->currentPageIndex;
-        printf "estimated result count: %s\n", $cursor->estimatedResultCount;
-
         my @results = $data->results;
 
-        
         foreach my $r (@results) {
-            #printf "\n";
-            #printf "title: %s\n", $r->title;
-            #printf "url: %s\n", $r->url;
             next unless defined $r && defined $r->url && defined $r->title;
-
 
             my $hs = HTML::Strip->new();
             my $clean_text = $hs->parse( $r->title );
@@ -146,4 +133,24 @@ sub command_run {
 
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::GoogleSearch - Google search plugin.
+
+=head1 DESCRIPTION
+
+Google search plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 

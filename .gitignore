@@ -43,3 +43,5 @@ localserver.conf
 test-*.pl
 data/new_questions_parsed
 data/scores.json
+bin/plugins/Shredder.pm
+mptank_server/

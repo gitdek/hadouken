@@ -222,7 +222,7 @@ sub createconf {
     print FILE $encrypted;
     close FILE;
 
-    print "\n\nSetup complete!\n";
+    print "\n\nSetup complete!\n\nYou can now run hadouken.\n";
     exit(0);
 }
 

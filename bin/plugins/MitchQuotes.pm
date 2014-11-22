@@ -1,19 +1,3 @@
-#===============================================================================
-#
-#         FILE: StockTicker.pm
-#
-#  DESCRIPTION: Plugin for Hadouken which gets stock info by ticker symbol.
-#
-#        FILES: ---
-#         BUGS: ---
-#        NOTES: ---
-#       AUTHOR: YOUR NAME (), 
-# ORGANIZATION: 
-#      VERSION: 1.0
-#      CREATED: 04/26/2014 01:10:31 AM
-#     REVISION: ---
-#===============================================================================
-
 package Hadouken::Plugin::MitchQuotes;
 
 use strict;
@@ -21,7 +5,7 @@ use warnings;
 
 use TryCatch;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
 our @visuals = ('default','cower','moose','duck','head-in','cock');
@@ -61,11 +45,6 @@ sub acl_check {
 
     #warn $value;
 
-    #if($value > 0) {
-        # At least one of the items is set.
-        #    return 1;
-        #}
-
     # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.
     if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
@@ -92,30 +71,34 @@ sub command_run {
         rand($.) < 1 && ($line = $_) while <FILE>;
         close(FILE);    
 
+        # I disabled the below feature, it would use cowthink/cowsay plus @visuals arg to do funny ascii stuff.
+
+
+
         # Max of 4 lines(90width) or it looks odd.
         #
-        if(length($line) <= 360) {
+        #if(length($line) <= 360) {
         
-            $line .= "\n";
+        #   $line .= "\n";
 
-            $line =~ s/\"/\'/g;
-            #$line =~ s/@/\@/g;
+        #   $line =~ s/\"/\'/g;
+        ##   #$line =~ s/@/\@/g;
     
-            my $visual_opts = scalar @visuals;
-            my $rand_idx = int(rand($visual_opts));
-            my $visual = $visuals[$rand_idx];
+        #  my $visual_opts = scalar @visuals;
+        #   my $rand_idx = int(rand($visual_opts));
+        #   my $visual = $visuals[$rand_idx];
 
-            my $binfile = int(rand(2)) % 2 ? "cowthink" : "cowsay";
-            my $cow = qx(/usr/games/$binfile -f $visual -W 90 "$line");
+        #   my $binfile = int(rand(2)) % 2 ? "cowthink" : "cowsay";
+        #   my $cow = qx(/usr/games/$binfile -f $visual -W 90 "$line");
             
-            my @c = split(/\n/,$cow);
+        #   my @c = split(/\n/,$cow);
 
-            foreach my $crap (@c) {
-                $self->send_server(PRIVMSG => $channel, "$crap");
-            }
+        #   foreach my $crap (@c) {
+        #       $self->send_server(PRIVMSG => $channel, "$crap");
+        #   }
             
-            return 1;
-        }
+        #   return 1;
+        #}
 
         my $wrapped;
         ($wrapped = $line) =~ s/(.{0,300}(?:\s|$))/$1\n/g;
@@ -140,4 +123,24 @@ sub command_run {
 }
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::MitchQuotes - Mitch Hedberg quotes.
+
+=head1 DESCRIPTION
+
+Mitch Hedberg plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 

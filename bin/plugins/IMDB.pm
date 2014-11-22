@@ -7,14 +7,14 @@ use TryCatch;
 use Data::Dumper;
 use IMDB::Film;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
 # Description of this command.
 sub command_comment {
     my $self = shift;
 
-    return "Get imdb info by title";
+    return "Perform IMDb search.";
 }
 
 # Clean name of command.
@@ -66,7 +66,7 @@ sub command_run {
     try {
         my $imdb = new IMDB::Film(crit => $title); #, search => 'find?tt=on;mx=20;q=');
 
-        # Try searching.
+        # Try searching if we do not get a result.
         unless($imdb->status) {
             $imdb = new IMDB::Film(crit => $title, search => 'find?tt=on;mx=20;q=');
         }
@@ -87,17 +87,20 @@ sub command_run {
 
             $self->send_server (PRIVMSG => $channel, $summary);
 
+            # Wrap the summary, might be big.
             my $wrapped;
             ($wrapped = $storyline) =~ s/(.{0,300}(?:\s|$))/$1\n/g;
             my @lines = split(/\n/,$wrapped);
             my $cnt = 0;
             foreach my $l (@lines) {
                 next unless defined $l && length $l;
+                next if $l eq 'Add Full Plot | Add Synopsis';
+
                 $cnt++;
                 $self->send_server(PRIVMSG => $channel, $cnt > 1 ? $l : "Summary - $l");
             }
         } else {
-            #warn "Something wrong: ".$imdb->error;
+            # warn "Something wrong: ".$imdb->error;
             #warn Dumper($imdb);
         }
     }
@@ -110,4 +113,24 @@ sub command_run {
 
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::IMDB - IMDb plugin.
+
+=head1 DESCRIPTION
+
+IMDb plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 

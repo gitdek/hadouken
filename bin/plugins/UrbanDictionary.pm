@@ -18,7 +18,7 @@ our $AUTHOR = 'dek';
 sub command_comment {
     my $self = shift;
 
-    return "urban dictionary lookup";
+    return "urban dictionary lookup. no arguments for random definition.";
 }
 
 # Clean name of command.
@@ -31,7 +31,6 @@ sub command_name {
 sub command_regex {
     my $self = shift;
 
-    #return 'urban\s.+?';
     return 'urban';
 }
 
@@ -64,21 +63,19 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
     my ($cmd, $arg) = split(/ /, lc($message),2);
 
-    #return 
-    #    unless 
-    #        (defined($arg) && length($arg));
-
     my $parg = $arg;
     
     $parg =~ s/stankdick/luchi/gi;
     
     if(defined($arg) && length($arg)) {
         $arg =~ s/dave__/black american princess/gi;
+        $arg =~ s/erb/homo/gi;
         $arg =~ s/luchinii/sword fight/gi;
         $arg =~ s/vapor/HNIC/gi;
         $arg =~ s/2f/dickcheese/gi;
-        $arg =~ s/luchini/sword fight/gi;
-        $arg =~ s/luchi/sword fight/gi;
+        $arg =~ s/luchini/gook/gi;
+        $arg =~ s/luchinii/gook/gi;
+        $arg =~ s/luchi/gook/gi; #sword fight
         $arg =~ s/dek/Awesomatimistic/gi;
         $arg =~ s/mptank/boss/gi;
         $arg =~ s/dakuwan/boss/gi;
@@ -86,7 +83,6 @@ sub command_run {
         $arg =~ s/f8al/M8/gi;
         $arg =~ s/moe/politically challenged/gi;
         $arg =~ s/adminmike/nigger/gi;        
-#$arg =~ s/adminmike/alabama mudslide/gi;
         $arg =~ s/frosty/el jefe/gi;
         $arg =~ s/yak/canadian hot pocket/gi;
         $arg =~ s/r0ach/canadian hot pocket/gi;
@@ -129,6 +125,8 @@ sub command_run {
                 if($c =~ 'meaning') {
                     my $text = $parser->get_trimmed_text("/div");
 
+                    last if $text eq '* Meaning';
+
                     if(length($text) > 500) {
                         $text = substr($text,1, 500);
                     }
@@ -148,4 +146,24 @@ sub command_run {
 
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::UrbanDictionary - Urban Dictionary plugin.
+
+=head1 DESCRIPTION
+
+Urban dictionary plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 
