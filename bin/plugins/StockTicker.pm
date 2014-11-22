@@ -1,3 +1,5 @@
+# Use StockMarket.pm plugin this one is obsolete.
+
 package Hadouken::Plugin::StockTicker;
 use strict;
 use warnings;
