@@ -45,8 +45,8 @@ data/new_questions_parsed
 data/scores.json
 bin/plugins/Shredder.pm
 mptank_server/
-data/geoip/GeoIP.dat
-data/geoip/GeoIPCity.dat
-data/geoip/GeoIPOrg.dat
-data/geoip/GeoLiteCity.dat
+#data/geoip/GeoIP.dat
+#data/geoip/GeoIPCity.dat
+#data/geoip/GeoIPOrg.dat
+#data/geoip/GeoLiteCity.dat
 clear.conf
