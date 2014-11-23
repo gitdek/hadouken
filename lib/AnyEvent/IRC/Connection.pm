@@ -159,8 +159,9 @@ sub connect {
           my ($sock) = @_;
           #my $bind = AnyEvent::Socket::pack_sockaddr 43, v127.0.0.1;
           #bind $sock, $bind
-          setsockopt($sock, SOL_SOCKET, SO_REUSEPORT, 1)
-              or die "Crap: $!";
+          
+          #setsockopt($sock, SOL_SOCKET, SO_REUSEPORT, 1)
+          #    or die "Crap: $!";
 
           if(defined $localaddr && $localaddr ne '') {
             setsockopt($sock, SOL_SOCKET, 25, pack("Z*", $localaddr)) 
