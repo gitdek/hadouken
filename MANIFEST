@@ -1,7 +1,6 @@
 bin/createconfig.pl
 bin/hadouken
 bin/plugins/Ticker.pm
-bin/plugins/Shredder.pm
 bin/plugins/StockMarket.pm
 bin/plugins/GoogleSearch.pm
 bin/plugins/IMDB.pm
@@ -102,6 +101,7 @@ lib/AnyEvent/IRC/Connection.pm
 lib/AnyEvent/IRC/Util.pm
 lib/AsyncSocket.pm
 lib/Hadouken.pm
+lib/Hadouken/DH1080.pm
 inc/Module/AutoInstall.pm
 inc/Module/Install.pm
 inc/Module/Install/AutoInstall.pm
@@ -112,6 +112,7 @@ inc/Module/Install/MakeMaker.pm
 inc/Module/Install/Metadata.pm
 t/Hadouken.t
 t/AsyncSocket.t
+t/DH1080.t
 Makefile.PL
 MANIFEST
 README.md
