@@ -92,6 +92,7 @@ use Crypt::OpenSSL::RSA;
 use Crypt::Blowfish;
 use Crypt::CBC;
 use Digest::SHA3 qw(sha3_256_hex);
+use Digest::SHA;
 use Config::General;
 use Time::Elapsed ();
 use TryCatch;
@@ -515,11 +516,10 @@ sub keyx_handler {
     my $dh1080 = undef;
 
     unless(defined $self->{dh1080}) {
-        $self->{dh1080} = Hadouken::DH1080->new();
+        $self->{dh1080} = new Hadouken::DH1080;
     }
 
     $dh1080 = $self->{dh1080};
-
 
     # handle it.
     my $secret = $dh1080->get_shared_secret($peer_public);
@@ -4183,7 +4183,7 @@ sub _chat_decrypt {
 
 sub _encrypt {
     my ( $self, $text, $key ) = @_;
-
+    
     $text =~ s/(.{8})/$1\n/g;
     my $result = '';
     try {
@@ -4199,7 +4199,7 @@ sub _encrypt {
 
 sub _decrypt {
     my ( $self, $text, $key ) = @_;
-
+   
     $text =~ s/(.{12})/$1\n/g;
     my $result = '';
     my $cipher = new Crypt::Blowfish $key;
@@ -4210,6 +4210,7 @@ sub _decrypt {
 
     return $result;
 }
+
 
 sub _set_key {
     my ( $self, $user, $key ) = @_;
