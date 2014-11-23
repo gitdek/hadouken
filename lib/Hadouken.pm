@@ -80,7 +80,7 @@ use Encode qw( encode decode );
 use Encode::Guess;
 use JSON; # qw( encode_json decode_json );
 use POSIX qw(strftime);
-use Time::HiRes qw( sleep usleep nanosleep time );
+use Time::HiRes qw( sleep usleep nanosleep time gettimeofday);
 use Geo::IP;
 use Tie::Array::CSV;
 use Regexp::Common;
@@ -3145,14 +3145,16 @@ sub _buildup {
             } 
             else {
 
+                my $cur_channel_clean = $channel;
+                $cur_channel_clean =~ s/^\#//;
                 # Shorten urls for this channel if the mode is set.
                 my $uri = undef;
                 #
+                if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_SHORTEN_URLS)) {
+
                 if (( ($uri) = $message =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/ ) ) { #m{($RE{URI})}gos ) {
                     warn "* Matched a URL $uri\n";
-                    my $cur_channel_clean = $channel;
-                    $cur_channel_clean =~ s/^\#//;
-                    if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_SHORTEN_URLS)) {
+                    #if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_SHORTEN_URLS)) {
                         # warn "* shorten_urls IS set for this channel";
                         # Only get titles if admin, since we trust admins.
                         my $get_title = $self->is_admin($who);
@@ -3164,11 +3166,9 @@ sub _buildup {
                                 $self->send_server_unsafe (PRIVMSG => $channel, "$shrt_url");      
                                 }
                             }
-                         } else {
-                             warn "* shorten_urls disabled for this channel\n";
-                         }
+                            #}
                      }
-
+                }
 
                 # Try to match a plugin command last(but not least).
 
@@ -3925,8 +3925,10 @@ sub _start {
         $self->send_server_unsafe (NICK => $self->{nick});
     }
 
+
     $self->{con}->connect ($server_hashref->{$server_name}{host}, $server_hashref->{$server_name}{port},
-        { localaddr => $self->{iface}, real => 'hadouken',nick => $server_hashref->{$server_name}{nickname}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
+        { iface => $self->{iface}, bindaddr => $self->{bind},
+            real => 'hadouken',nick => $server_hashref->{$server_name}{nickname}, password => $server_hashref->{$server_name}{password}, send_initial_whois => 1});
 
     #     sub {
     #        my ($fh) = @_;
