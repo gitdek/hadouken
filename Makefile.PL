@@ -55,7 +55,6 @@ WriteMakefile(
         'Crypt::RSA'            => 0,
         'Crypt::OpenSSL::RSA'   => 0,
         'Crypt::Blowfish_PP'    => 0,
-        'Crypt::DH'             => 0,
         'Crypt::Random'         => 0,
         'Crypt::CBC'            => 0,
         'File::Spec'            => 0,
@@ -70,7 +69,8 @@ WriteMakefile(
         'Digest::SHA'           => 0,
         'Term::ReadPassword'    => 0,
         'Text::Unidecode'       => 0,
-        'REST::Google::Search'  => 0,
+        'REST::Google'          => 0,
+        'Log::Log4perl'         => 0,
     },
     PM => {
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
