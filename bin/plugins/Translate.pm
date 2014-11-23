@@ -15,8 +15,18 @@ use JSON::XS qw( encode_json decode_json );
 our $VERSION = '0.2';
 our $AUTHOR = 'dek';
 
+my %iso2_codes =(
+'afrikaans' => 'af', 'albanian' => 'sq', 'arabic' => 'ar', 'azerbaijani' => 'az', 'basque' => 'eu', 'bengali' => 'bn', 'belarusian' => 'be', 'bulgarian' => 'bg', 
+'catalan' => 'ca', 'chinese' => 'zh-cn', 'chinesetraditional' => 'zh-tw', 'croatian' => 'hr', 'czech' => 'cs', 'danish' => 'da', 'dutch' => 'nl', 'english' => 'en', 
+'esperanto' => 'eo', 'estonian' => 'et', 'filipino' => 'tl', 'finnish' => 'fi', 'french' => 'fr', 'galician' => 'gl', 'georgian' => 'ka', 'german' => 'de', 'greek' => 'el', 
+'gujarati' => 'gu', 'haitian creole' => 'ht', 'hebrew' => 'iw', 'hindi' => 'hi', 'hungarian' => 'hu', 'icelandic' => 'is', 'indonesian' => 'id', 'irish' => 'ga', 'italian' => 'it', 
+'japanese' => 'ja', 'kannada' => 'kn', 'korean' => 'ko', 'latin' => 'la', 'latvian' => 'lv', 'lithuanian' => 'lt', 'macedonian' => 'mk', 'malay' => 'ms', 'maltese' => 'mt', 
+'norwegian' => 'no', 'persian' => 'fa', 'polish' => 'pl', 'portuguese' => 'pt', 'romanian' => 'ro', 'russian' => 'ru', 'serbian' => 'sr', 'slovak' => 'sk', 'slovenian' => 'sl', 
+'spanish' => 'es', 'swahili' => 'sw', 'swedish' => 'sv', 'tamil' => 'ta', 'telugu' => 'te', 'thai' => 'th', 'turkish' => 'tr', 'ukrainian' => 'uk', 'urdu' => 'ur', 
+'vietnamese' => 'vi', 'welsh' => 'cy', 'yiddish' => 'yi');
 
-my %iso2_codes = ('english' => 'en', 'korean' => 'ko', 'italian' => 'it', 'dutch' => 'nl', 'french' => 'fr','polish' => 'pl', 'portuguese' => 'po','russian' => 'ru','spanish' => 'es','german' => 'de','japanese' => 'ja');
+
+#my %iso2_codes = ('english' => 'en', 'korean' => 'ko', 'italian' => 'it', 'dutch' => 'nl', 'french' => 'fr','polish' => 'pl', 'portuguese' => 'po','russian' => 'ru','spanish' => 'es','swedish' => 'sv', 'german' => 'de','japanese' => 'ja');
 
 my %iso3_codes = ('english' => 'eng', 'korean' => 'kor', 'italian' => 'ita', 'dutch' => 'nld', 'french' => 'fra','portuguese' => 'por', 'arabic' => 'ara','russian' => 'rus','spanish' => 'spa','german' => 'deu','japanese' => 'jpn', 'swedish' => 'swe');
 
