@@ -60,7 +60,9 @@ our $AUTHOR = 'dek';
 use Data::Printer alias => 'Dumper', colored => 1;
 #use Data::Dumper;
 
+use Hadouken::DH1080;
 use AsyncSocket;
+
 
 use Scalar::Util ();
 use Cwd ();
@@ -87,7 +89,7 @@ use Crypt::RSA;
 use Convert::PEM;
 use MIME::Base64 ();
 use Crypt::OpenSSL::RSA;
-use Crypt::Blowfish_PP;
+use Crypt::Blowfish;
 use Crypt::CBC;
 use Digest::SHA3 qw(sha3_256_hex);
 use Config::General;
@@ -111,6 +113,8 @@ has start_time => (is => 'ro', isa => 'Str', writer => '_set_start_time');
 has connect_time => (is => 'ro', isa => 'Str', writer => '_set_connect_time');
 has safe_delay => (is => 'rw', isa => 'Str', required => 0, default => '0.25', trigger => \&_safedelay_set);
 has quote_limit => (is => 'rw', isa => 'Str', required => 0, default => '3');
+
+has keyx_cbc => (is => 'rw', isa => 'Int', required => 0, default => 0);
 
 has loaded_plugins => (
     is => 'rw',
@@ -487,114 +491,67 @@ sub randstring {
     return join "", map { ("a".."z", 0..9)[rand 36] } 1..$length;
 }
 
+sub keyx_handler {
+    my ($self, $message, $user) = @_;
 
-=begin  BlockComment  # BlockCommentNo_2
+    chomp $message;
+    # Uncomment for debug.
 
-sub dh_key_exchange {
-    my ($self,$user,$key) = @_;
+    my ($command, $cbcflag, $peer_public) = $message =~ /DH1080_(INIT|FINISH)(_cbc)? (.*)/i;
+    if (!$peer_public) {
+        # (_cbc)? did not match, so $cbcflag is now really $peer_public. fixing that:
+        $peer_public = $cbcflag;
+        $cbcflag='';
+    }
+    if ($cbcflag eq '_cbc') {
+        $self->keyx_cbc(1);
+    }
+    else {
+        $self->keyx_cbc(0);
+    }
 
-    return;
+    return 1 unless $command && $peer_public;
 
-    my $dh = Crypt::DH->new;
+    my $dh1080 = undef;
 
-    my $g=0;
-    while ($g<2){$g=int(rand(10));}
+    unless(defined $self->{dh1080}) {
+        $self->{dh1080} = Hadouken::DH1080->new();
+    }
 
-    $dh->g($g);
-    my $p = $self->generate_prime;
-    $dh->p($p);
-
-$dh->generate_keys;
-
-my $my_pub_key = $dh->pub_key;
-my $my_priv_key = $dh->priv_key;
-
-
-my $decoded_key = MIME::Base64::decode_base64($key);
-
-my $binstring = unpack('B*',pack ('a*', $decoded_key));
-
-my $shared_secret = $dh->compute_secret( $binstring );
-
-my $tempkey = unpack('B*',pack ('a*', $my_priv_key));
-
-my $shared_bin = unpack('B*',pack ('a*', $shared_secret));    
-
-$self->_set_key('all',$shared_secret);
-
-#warn $shared_bin;
-
-my $public_bin = unpack('B*',pack ('a*', $my_pub_key));
-
-my $enc_key = MIME::Base64::encode_base64($my_pub_key,'');
-
-warn $enc_key,"\n";
-
-my $dhfinish = 'DH1080_FINISH '. $enc_key;
-
-$self->send_server_unsafe(NOTICE => $user, $dhfinish);
-
-#warn "* Shared secret $shared_secret\n";
-
-}
-
-=end    BlockComment  # BlockCommentNo_2
-
-=cut
+    $dh1080 = $self->{dh1080};
 
 
+    # handle it.
+    my $secret = $dh1080->get_shared_secret($peer_public);
 
-=begin  BlockComment  # BlockCommentNo_1
-
-sub generate_prime {
-    my ($self) = @_;
-
-    my $p = new Math::BigInt('0');
-
-    do {
-        # generate a random number composed of random binary digits
-        my $i=1;
-        my $n="";
-        while ($i<=254){
-            $n=$n.int(rand(2));
-            $i++;
-        }
-        # add 1 at the beginning and the end of n
-        # then $n is big and odd
-        $n = "1".$n."1";
-
-        # convert n into a bigint via binary conversion
-        my $bign = new Math::BigInt('0');
-        foreach my $i (1..256){
-            if(substr($n,-$i,1) eq '1'){$bign->badd(2**($i-1));}
-        }
-
-        my $temoin = new Math::BigInt('2');
-        if ($temoin->bmodpow(($bign-1),$bign) == 1){
-            $temoin->bone();$temoin->bmul(3);
-            if ($temoin->bmodpow(($bign-1),$bign) == 1){
-                $temoin->bone();$temoin->bmul(5);
-                if ($temoin->bmodpow(($bign-1),$bign) == 1){
-                    $temoin->bone();$temoin->bmul(7);
-                    if ($temoin->bmodpow(($bign-1),$bign) == 1){
-                        $p->bone();
-                        $p->bmul($bign);
-                    }
-                }
+    if ($secret) {
+        if ($command =~ /INIT/i) {      
+            my $public = $dh1080->public_key;
+            my $keyx_header = 'DH1080_FINISH';
+            if ($self->keyx_cbc == 1) {
+                $keyx_header .= '_cbc';
             }
+            
+            $self->send_server_unsafe(NOTICE => $user, $keyx_header, $public);
+
+            # $server->command("\^notice $user $keyx_header $public");
+            warn "Received key from $user -- sent back our pubkey.";
+        }
+        else {
+            warn "Negotiated key with $user";
+        }
+        if ($self->keyx_cbc == 1) {
+            warn "CBC IS ENABLED.";
+            $secret = "cbc:$secret";
         }
 
-    } while ($p == 0);    
+        my $ident = $self->{con}->nick_ident($user);
+        warn "Debug: key = $secret";
+        $self->_set_key( $ident, $secret );
+        # $channels{$user} = 'keyx:'.$secret;
+    }
 
-
-    return $p;
 }
-
-=end    BlockComment  # BlockCommentNo_1
-
-=cut
-
-
 
 sub readPrivateKey {
     my ($self,$file,$password) = @_;
@@ -2831,13 +2788,15 @@ sub _buildup {
 
                 $h .= "value - \'+\',\'-\',\'1\',\'0\'.";
 
-                # MODES:
-                # +O  - auto op_admins
-                # +W  - auto op whitelist
-                # +P  - protect admins
-                # +V  - protect whitelist
-                # +U  - automatically shorten urls
-                # +A  - aggressive mode (kick/ban instead of -o, etc).
+# MODES:
+# +O  - auto op_admins
+# +W  - auto op whitelist
+# +P  - protect admins
+# +V  - protect whitelist
+# +U  - automatically shorten urls
+# +A  - aggressive mode (kick/ban instead of -o, etc)
+# +Z  - allow plugins to be used in this channel
+# +F  - fast op (no cookies)
                 for my $line (split /\n/, $h) { 
                     #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
                     $self->send_server_unsafe (PRIVMSG => $nickname, $line);
@@ -3133,12 +3092,6 @@ sub _buildup {
             if($self->is_admin($who)) {
                 try {
                     if ($message =~ s/^\+OK //) {
-
-                        # TODO: check if the user does not have a key set.
-                        # If user does NOT have a key set, try to decrypt with default key.
-                        # If default key fails, initialize key exchange.
-                        # Otherwise use the user's key.
-
                         $message = $self->_chat_decrypt( $who, $message); #, $self->{keys}->[0] );
                         $message =~ s/\0//g;
 
@@ -3181,13 +3134,10 @@ sub _buildup {
 
                     if($ret) {
                         if(defined $cmd->{delegate}) {
-
                             warn "* Command $cmd->{'name'} -> Calling delegate\n";
-
                             $cmd->{delegate}->($who, AnyEvent::IRC::Util::filter_colors($message), $channel, $channel_list);
                         }
                     }
-
                 }
                 else {
                     warn "* Delegate not defined for $cmd->{'name'}\n";
@@ -3202,10 +3152,8 @@ sub _buildup {
                     warn "* Matched a URL $uri\n";
                     my $cur_channel_clean = $channel;
                     $cur_channel_clean =~ s/^\#//;
-#                    my $server_hash_ref = $self->{current_server};
                     if($self->channel_mode_isset($cur_channel_clean, Hadouken::CMODE_SHORTEN_URLS)) {
-#                    if(exists $server_hash_ref->{channel}{$cur_channel_clean} && $server_hash_ref->{channel}{$cur_channel_clean}{shorten_urls} == 1 ) {
-                        warn "* shorten_urls IS set for this channel\n";
+                        # warn "* shorten_urls IS set for this channel";
                         # Only get titles if admin, since we trust admins.
                         my $get_title = $self->is_admin($who);
                         my ($shrt_url,$shrt_title) = $self->_shorten($uri, $get_title );
@@ -3378,15 +3326,14 @@ sub _buildup {
                     my ($notice_dest,$notice_msg) = @{$msg->{params}};
 
                     if($notice_dest eq $self->{nick}) {
-                        if($notice_msg  =~ 'DH1080_INIT') {
-                            my ($h,$pubkey) = split(/ /,$notice_msg);
-                            if(defined $pubkey && $pubkey ne '') {
+                        if($notice_msg  =~ 'DH1080_') {
 
-                                warn "* Key Exchange Initialized\n";
+                            my ($command, $cbcflag, $peer_public) = $notice_msg =~ /DH1080_(INIT|FINISH)(_cbc)? (.*)/i;
 
-                                # $self->dh_key_exchange($nick,$pubkey);
+                            $self->keyx_handler($notice_msg, $nick);
 
-                            }
+                            warn "* Key Exchange Initialized\n";
+
                         }
                     }
                 }
@@ -4240,7 +4187,7 @@ sub _encrypt {
     $text =~ s/(.{8})/$1\n/g;
     my $result = '';
     try {
-        my $cipher = new Crypt::Blowfish_PP $key;
+        my $cipher = new Crypt::Blowfish $key;
         foreach ( split /\n/, $text ) {
             $result .= $self->_inflate( $cipher->encrypt($_) );
 
@@ -4255,7 +4202,7 @@ sub _decrypt {
 
     $text =~ s/(.{12})/$1\n/g;
     my $result = '';
-    my $cipher = new Crypt::Blowfish_PP $key;
+    my $cipher = new Crypt::Blowfish $key;
     #my $cipher = Crypt::CBC->new(-key => $key, -cipher => 'Blowfish');
     foreach ( split /\n/, $text ) {
         $result .= $cipher->decrypt( $self->_deflate($_) );

@@ -67,13 +67,15 @@ WriteMakefile(
         'MooseX::Getopt::GLD'   => 0,
         'Object::Event'         => 0,
         'Digest::SHA3'          => 0,
+        'Digest::SHA'           => 0,
         'Term::ReadPassword'    => 0,
         'Text::Unidecode'       => 0,
         'REST::Google::Search'  => 0,
     },
     PM => {
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
-        'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm'
+        'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm',
+        'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm'
     },
     # EXE_FILES => ['bin/hadouken'],
     PL_FILES => {'bin/createconfig.pl' => '/etc/hadouken.conf'},
