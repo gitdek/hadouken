@@ -16,7 +16,7 @@ our $AUTHOR = 'dek';
 sub command_comment {
     my $self = shift;
 
-    return "Market commands: us, rtcom, agcom, tech, forex, q";
+    return "Market commands: us, rtcom, agcom, tech, forex, q, fun";
 }
 
 # Clean name of command.
@@ -29,7 +29,7 @@ sub command_name {
 sub command_regex {
     my $self = shift;
 
-    return '(us|rtcom|tech|agcom|forex|q|quote)';
+    return '(us|rtcom|tech|agcom|forex|q|quote|fun|\.\s.+?)';
 }
 
 # Return 1 if OK.
@@ -50,15 +50,21 @@ sub acl_check {
     # Hadouken::VOICE
     # Hadouken::BIT_BLACKLIST
 
-    # Make sure at least one of these flags is set.
-    if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST)) {
-        #|| $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
-
-        return 1;
+    if($channel eq '#stocks' || $channel eq '#trading') {
+        return 0;
     }
 
-    return 0;
+    # Make sure at least one of these flags is set.
+    if($self->check_acl_bit($permissions, Hadouken::BIT_BLACKLIST)) {
+        return 0;
+    }
+    #    || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST)) {
+        #|| $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+
+        #    return 1;
+        #}
+
+    return 1;
 }
 
 
@@ -68,9 +74,11 @@ sub command_run {
     my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
     my ($cmd, $arg) = split(/ /, lc($message),2);
 
+    $cmd = 'q' if $cmd eq '.';
     warn "Command: $cmd";
 
     my $url = "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=0&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
+
 
     if($cmd eq 'us') {
         $url = sprintf "$url",'.IXIC|.SPX|.DJI|.NYA|.NDX';
@@ -82,7 +90,7 @@ sub command_run {
         $url = sprintf "$url",'@KC.1|@C.1|@CT.1|@S.1|@SB.1|@W.1|@CC.1';
     } elsif($cmd eq 'forex') {
         $url = sprintf "$url",'EUR=|GBP=|JPY=|USDCAD|CHF=|AUD=|EURJPY=|EURCHF=|EURGBP=';
-    } elsif($cmd eq 'q' || $cmd eq 'quote') {
+    } elsif($cmd eq 'q' || $cmd eq 'quote' || $cmd eq 'fun') {
 
         return unless defined $arg && length $arg;
 
@@ -150,6 +158,8 @@ sub command_run {
                         $name =~ s/(\w+)/\u$1/g;
                     }
 
+                    my $wsid = $c->{issue_id}; # This is used when we make requests for {"title":"Show All","value":"*","issueType":"CS","symbol":"88160R101","wsodCompany":"2000016431"}
+
                     my $last = commify($c->{last});
                     my $change = $c->{change};
                     my $change_pct = $c->{change_pct};
@@ -174,6 +184,37 @@ sub command_run {
 
                     $summary .= "$name: $last $change_pretty ($change_pct_pretty)  ";
 
+                    if($cmd eq 'fun') {
+                        my $company_name = $c->{name};
+                        my $volume = $c->{volume};
+                        my $open = $c->{open};
+                        my $low = $c->{low};
+                        my $high = $c->{high};
+                        my $year_high = sprintf '%g', $c->{FundamentalData}{yrhiprice};
+                        my $year_low = sprintf '%g', $c->{FundamentalData}{yrloprice};
+                        my $yearly_range = $year_low.'-'.$year_high;
+                        my $daily_range = $low.'-'.$high; #$open > $last ? $open.'-'.$last : $last.'-'.$open;
+
+
+                        my $beta = sprintf '%.2f', $c->{FundamentalData}{beta};
+                        my $eps = sprintf '%.2f', $c->{FundamentalData}{eps};
+                        my $price_earnings = sprintf '%.3f', $c->{FundamentalData}{pe};
+                        my $roe_ttm = sprintf '%.2f', $c->{FundamentalData}{ROETTM};
+                        my $mktcapView = $c->{FundamentalData}{mktcapView};
+                        my $revenuettmView = $c->{FundamentalData}{revenuettmView};
+                        my $sharesoutView = $c->{FundamentalData}{sharesoutView};
+
+                        my $fun = "$name ($company_name) EPS: $eps P\/E: $eps Mcap: $mktcapView Revenue(TTM): $revenuettmView Beta: $beta Shares Outstanding: $sharesoutView ROETTM: $roe_ttm";
+                        #$quote .= "Daily Range: (".$daily_range.") Yearly Range: (".$yearly_range.")";
+
+                        $fun .= " DIV: ". sprintf '%g%%', $c->{FundamentalData}{dividend} if exists $c->{FundamentalData}{dividend};
+
+                        $self->send_server (PRIVMSG => $channel, $fun);
+
+                    # XOM - 91.9254  EPS: 7.949  P/E: 11.39  FPE: 13.72  P/S: 0.98  P/B: 2.12  BV: 42.646  50MA: 94.1711  200MA: 98.4349  DIV: %2.98  Beta: 0.9  Mcap: 389.3B  ROETTM: 19.61  Short Ratio: 3.10
+                    }
+
+
                     if($cmd eq 'q' || $cmd eq 'quote') {
                         my $company_name = $c->{name};
                         my $volume = $c->{volume};
@@ -188,7 +229,9 @@ sub command_run {
                         my $quote = "$name ($company_name) Last: $last $change_pretty $change_pct_pretty (Vol: $volume) ";
                         $quote .= "Daily Range: (".$daily_range.") Yearly Range: (".$yearly_range.")";
 
-                        if(exists $c->{ExtendedMktQuote}) {
+                        # warn Dumper($c);
+
+                        if($c->{curmktstatus} ne 'REG_MKT' && exists $c->{ExtendedMktQuote}) {
                             if(exists $c->{ExtendedMktQuote}{type} && $c->{ExtendedMktQuote}{type} eq 'POST_MKT') {
                                 my $last = commify($c->{ExtendedMktQuote}{last});
                                 my $v = $c->{ExtendedMktQuote}{volume};
@@ -212,7 +255,6 @@ sub command_run {
                                 } else {
                                     $change_pct_pretty->grey; # neutral
                                 }
-
                                 $quote .= " PostMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
                             }
                         }
@@ -222,14 +264,14 @@ sub command_run {
 
                 }
 
-                if($cmd ne 'q' && $cmd ne 'quote') {
+                if($cmd ne 'q' && $cmd ne 'quote' && $cmd ne 'fun') {
                     $summary =~ s/\s+$//;
                     $self->send_server (PRIVMSG => $channel, $summary) if defined $summary && length $summary;
                 }
             });
     } 
     catch($e) {
-        warn $e;
+        #warn $e;
     }
 
     return 1;
