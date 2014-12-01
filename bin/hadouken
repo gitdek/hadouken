@@ -31,7 +31,8 @@ my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
 # so items in our config are relative from here.
 chdir $filedirname;
 
-
+my $arg_password = undef;
+my $password_flag ="--password"; # Got tired of entering it manually so allow to pass as an argument.
 my $config_flag = "--config=";
 my $setup_flag = "--setup";
 my $showconfig_flag = "--showconfig";
@@ -42,6 +43,13 @@ if (my ($idx) = grep $ARGV[$_] =~ $config_flag, 0 .. $#ARGV) {
     my($flag,$cf) = split(/=/, $ARGV[$idx]);
     splice @ARGV,$idx,1; # Remove so it does not affect the Daemon.
     $config_filename = $cf;
+}
+
+
+if (my ($idx) = grep $ARGV[$_] =~ $password_flag, 0 .. $#ARGV) {
+    my($flag,$cf) = split(/=/, $ARGV[$idx]);
+    splice @ARGV,$idx,1; # Remove so it does not affect the Daemon.
+    $arg_password = $cf;
 }
 
 unless(-e $config_filename && -r $config_filename) {
@@ -261,6 +269,8 @@ sub readcredentials {
     my $password_confirm;
 
     my $confirm = 0;
+
+    return $arg_password if defined $arg_password && length $arg_password;
 
     while(1) {
         $password = Term::ReadPassword::read_password('Enter password: ');
