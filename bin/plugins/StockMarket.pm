@@ -59,10 +59,10 @@ sub acl_check {
         return 0;
     }
     #    || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST)) {
-        #|| $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+    #|| $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
 
-        #    return 1;
-        #}
+    #    return 1;
+    #}
 
     return 1;
 }
@@ -161,8 +161,8 @@ sub command_run {
                     my $wsid = $c->{issue_id}; # This is used when we make requests for {"title":"Show All","value":"*","issueType":"CS","symbol":"88160R101","wsodCompany":"2000016431"}
 
                     my $last = commify($c->{last});
-                    my $change = $c->{change};
-                    my $change_pct = $c->{change_pct};
+                    my $change = $c->{change} || 0;
+                    my $change_pct = $c->{change_pct} || 0;
                     my $change_pretty = String::IRC->new($change > 0 ? '+'.$change : $change);
                     my $change_pct_pretty = String::IRC->new($change_pct > 0 ? '+'.$change_pct.'%' : $change_pct.'%');
 
@@ -200,18 +200,35 @@ sub command_run {
                         my $eps = sprintf '%.2f', $c->{FundamentalData}{eps};
                         my $price_earnings = sprintf '%.3f', $c->{FundamentalData}{pe};
                         my $roe_ttm = sprintf '%.2f', $c->{FundamentalData}{ROETTM};
-                        my $mktcapView = $c->{FundamentalData}{mktcapView};
-                        my $revenuettmView = $c->{FundamentalData}{revenuettmView};
-                        my $sharesoutView = $c->{FundamentalData}{sharesoutView};
+                        my $mktcapView = $c->{FundamentalData}{mktcapView} || 0;
+                        my $revenuettmView = $c->{FundamentalData}{revenuettmView} || 0;
+                        my $sharesoutView = $c->{FundamentalData}{sharesoutView} || 0;
 
-                        my $fun = "$name ($company_name) EPS: $eps P\/E: $eps Mcap: $mktcapView Revenue(TTM): $revenuettmView Beta: $beta Shares Outstanding: $sharesoutView ROETTM: $roe_ttm";
+                        my $fun = "$name ($company_name) ";
+                        
+                        $fun .= String::IRC->new("EPS:")->cyan;
+                        $fun .= " $eps ";
+                        $fun .= String::IRC->new("P\/E:")->cyan;
+                        $fun .= " $price_earnings ";
+                        $fun .= String::IRC->new("Mcap:")->cyan;
+                        $fun .= " $mktcapView ";
+                        $fun .= String::IRC->new("Revenue(TTM):")->cyan;
+                        $fun .= " $revenuettmView ";
+                        $fun .= String::IRC->new("Beta:")->cyan;
+                        $fun .= " $beta ";
+                        $fun .= String::IRC->new("Shares Outstanding:")->cyan;
+                        $fun .= " $sharesoutView ";
+                        $fun .= String::IRC->new("ROETTM:")->cyan;
+                        $fun .= " $roe_ttm ";
+                        # $fun .= "EPS: $eps P\/E: $price_earnings Mcap: $mktcapView Revenue(TTM): $revenuettmView Beta: $beta Shares Outstanding: $sharesoutView ROETTM: $roe_ttm";
+                        
                         #$quote .= "Daily Range: (".$daily_range.") Yearly Range: (".$yearly_range.")";
-
-                        $fun .= " DIV: ". sprintf '%g%%', $c->{FundamentalData}{dividend} if exists $c->{FundamentalData}{dividend};
+                        $fun .= String::IRC->new("DIV:")->cyan if exists $c->{FundamentalData}{dividend};
+                        $fun .= " ".sprintf '%g%%', $c->{FundamentalData}{dividend} if exists $c->{FundamentalData}{dividend};
 
                         $self->send_server (PRIVMSG => $channel, $fun);
 
-                    # XOM - 91.9254  EPS: 7.949  P/E: 11.39  FPE: 13.72  P/S: 0.98  P/B: 2.12  BV: 42.646  50MA: 94.1711  200MA: 98.4349  DIV: %2.98  Beta: 0.9  Mcap: 389.3B  ROETTM: 19.61  Short Ratio: 3.10
+                        # XOM - 91.9254  EPS: 7.949  P/E: 11.39  FPE: 13.72  P/S: 0.98  P/B: 2.12  BV: 42.646  50MA: 94.1711  200MA: 98.4349  DIV: %2.98  Beta: 0.9  Mcap: 389.3B  ROETTM: 19.61  Short Ratio: 3.10
                     }
 
 
@@ -229,9 +246,39 @@ sub command_run {
                         my $quote = "$name ($company_name) Last: $last $change_pretty $change_pct_pretty (Vol: $volume) ";
                         $quote .= "Daily Range: (".$daily_range.") Yearly Range: (".$yearly_range.")";
 
+                        my $curmktstatus = exists $c->{curmktstatus} ? $c->{curmktstatus} : '';
+
                         # warn Dumper($c);
 
-                        if($c->{curmktstatus} ne 'REG_MKT' && exists $c->{ExtendedMktQuote}) {
+                        if( $curmktstatus ne 'REG_MKT' && exists $c->{ExtendedMktQuote}) {
+                            if(exists $c->{ExtendedMktQuote}{type} && $c->{ExtendedMktQuote}{type} eq 'PRE_MKT') {
+                                my $last = commify($c->{ExtendedMktQuote}{last});
+                                my $v = $c->{ExtendedMktQuote}{volume};
+                                my $change = $c->{ExtendedMktQuote}{change};
+                                my $change_pct = $c->{ExtendedMktQuote}{change_pct};
+                                my $change_pretty = String::IRC->new($change > 0 ? '+'.$change : $change);
+                                my $change_pct_pretty = String::IRC->new($change_pct > 0 ? '+'.$change_pct.'%' : $change_pct.'%');
+
+                                if($change > 0) {
+                                    $change_pretty->light_green;
+                                } elsif($change < 0) {
+                                    $change_pretty->red;
+                                } else {
+                                    $change_pretty->grey;
+                                }
+
+                                if($change_pct > 0) {
+                                    $change_pct_pretty->light_green;
+                                } elsif($change_pct < 0) {
+                                    $change_pct_pretty->red;
+                                } else {
+                                    $change_pct_pretty->grey; # neutral
+                                }
+                                $quote .= " PreMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
+                            }
+                        }
+
+                        if($curmktstatus ne 'REG_MKT' && exists $c->{ExtendedMktQuote}) {
                             if(exists $c->{ExtendedMktQuote}{type} && $c->{ExtendedMktQuote}{type} eq 'POST_MKT') {
                                 my $last = commify($c->{ExtendedMktQuote}{last});
                                 my $v = $c->{ExtendedMktQuote}{volume};

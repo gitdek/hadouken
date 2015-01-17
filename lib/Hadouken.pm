@@ -121,7 +121,7 @@ use Module::Pluggable search_dirs => [ "$Bin/plugins/" ], sub_name => '_plugins'
 
 has start_time => (is => 'ro', isa => 'Str', writer => '_set_start_time');
 has connect_time => (is => 'ro', isa => 'Str', writer => '_set_connect_time');
-has safe_delay => (is => 'rw', isa => 'Str', required => 0, default => '0.25',trigger => \&_safedelay_set);
+has safe_delay => (is => 'rw', isa => 'Str', required => 0, default => '0.25'); #,trigger => &_safedelay_set);
 has quote_limit => (is => 'rw', isa => 'Str', required => 0, default => '3');
 has keyx_cbc => (is => 'rw', isa => 'Int', required => 0, default => 0);
 
@@ -692,7 +692,7 @@ before 'send_server_unsafe' => sub {
     $self->{burst_lines}++;
 
     if($self->{burst_lines} >= 10) {
-        usleep($self->safe_delay);
+        Time::HiRes::sleep($self->safe_delay);
         $self->{burst_lines} = 0;
     }
 };
@@ -707,7 +707,8 @@ before 'send_server_safe' => sub {
     $self->{burst_lines}++;
 
     if($self->{burst_lines} >= 6) {
-        usleep($self->safe_delay);
+        sleep($self->safe_delay);
+        # Time::HiRes::sleep($self->safe_delay);
         $self->{burst_lines} = 0;
     }
 };
@@ -722,7 +723,8 @@ before 'send_server_long_safe' => sub {
     $self->{burst_lines}++;
 
     if($self->{burst_lines} >= 4) {
-        usleep($self->safe_delay);
+        sleep($self->safe_delay);
+        #Time::HiRes::sleep($self->safe_delay);
         $self->{burst_lines} = 0;
     }
 };
@@ -3427,8 +3429,9 @@ sub _buildup {
                                 
                                 if($old_mask ne $new_mask) {
                                 
-                                    $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, "  Answer: $new_mask"); 
-                                
+                                    my $clue_msg = String::IRC->new("  Answer:  ")->yellow('black');
+                                    $clue_msg .= String::IRC->new(" ".$new_mask." ")->lime('blue');
+                                    $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $clue_msg); 
                                 }
                                 #if($new_mask eq $self->{_answer}) {
                                 #   $self->{_clue_number} = 4;
@@ -4110,7 +4113,7 @@ sub _trivia_func {
 
     return unless $self->{triviarunning};
 
-    my %points = ( 0 => 20, 1 => 17, 2 => 11, 3 => 5 );
+    my %points = ( 0 => 31, 1 => 27, 2 => 23, 3 => 16 );
 
     $self->{_clue_number} = 0 unless exists $self->{_clue_number};
 
@@ -4122,10 +4125,18 @@ sub _trivia_func {
 
         warn "Answer is: ".$self->{_answer}."\n";
 
-        my $msg = "Question, worth ".$self->{_current_points}." points: ".$self->{_question};
+        my $msg = String::IRC->new('  * QUESTION *  ')->white('black');
+        $msg .= String::IRC->new("Worth ")->yellow('black');
+        $msg .= String::IRC->new($self->{_current_points})->red('black');
+        # $msg .= " points:  "
+        $msg .= String::IRC->new(" points:  ")->yellow('black');
+        $msg .= String::IRC->new($self->{_question}." ")->light_green('black');
+
         $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg );
 
-        my $clue_msg = "  Answer: ".$self->{_masked_answer};
+        my $clue_msg = String::IRC->new("  Answer:  ")->yellow('black');
+        $clue_msg .= String::IRC->new(" ".$self->{_masked_answer}." ")->lime('blue');
+
         $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $clue_msg );
 
         $self->{_question_time} = time();
@@ -4135,10 +4146,16 @@ sub _trivia_func {
 
         $self->{_current_points} = $points{$self->{_clue_number}};
         my $clue = $self->give_clue;
-        my $msg = "  Down to ".$self->{_current_points}." points: ".$clue;
+        # my $msg = "  Down to ".$self->{_current_points}." points: ".$clue;
+
+        my $msg = String::IRC->new("  Down to ")->yellow('black');
+        $msg .= String::IRC->new($self->{_current_points})->red('black');
+        $msg .= String::IRC->new(" points:  ")->yellow('black');
+        $msg .= String::IRC->new(" ".$clue." ")->lime('blue');
 
         $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg );
         $self->{_clue_number}++;
+
     } else {
         my $msg = "No one got it. The answer was: ". $self->{_answer};
         $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg );
