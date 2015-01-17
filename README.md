@@ -9,7 +9,8 @@ By Joe P <dek@dek.codes>
 
 [Hadouken][] is an irc bot which aims to provide fun, information, and
 channel management. The main goal is a simple plugin design so others can 
-contribute even with limited time.
+contribute even with limited time. There are many useful, and some not so
+useful plugins included to begin with.
 
 <A name="toc2-16" title="Getting Started" />
 ## Getting Started
@@ -68,6 +69,10 @@ encrypt it twice by accident, rendering it useless.
 	
 	> hadouken --showconfig
 
+*   Provide password as an argument:
+	
+	> hadouken --password=[passwd]
+	
 *   Generate init file for Hadouken
     
     > hadouken get_init_file
