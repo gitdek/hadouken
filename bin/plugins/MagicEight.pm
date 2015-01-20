@@ -7,7 +7,7 @@ use Hadouken ':acl_modes';
 use TryCatch;
 
 our $VERSION = '0.1';
-our $AUTHOR = 'dek';
+our $AUTHOR  = 'dek';
 
 my %responses = (
     'Yes' => [
@@ -46,7 +46,6 @@ my %responses = (
     ],
 );
 
-
 # Description of this command.
 sub command_comment {
     my $self = shift;
@@ -69,12 +68,12 @@ sub command_regex {
 # Return 1 if OK.
 # 0 if does not pass ACL.
 sub acl_check {
-    my ($self, %aclentry) = @_;
+    my ( $self, %aclentry ) = @_;
 
     my $permissions = $aclentry{'permissions'};
-    my $who = $aclentry{'who'};
-    my $channel = $aclentry{'channel'};
-    my $message = $aclentry{'message'};
+    my $who         = $aclentry{'who'};
+    my $channel     = $aclentry{'channel'};
+    my $message     = $aclentry{'message'};
 
     # Hadouken::BIT_ADMIN OR Hadouken::BIT_WHITELIST OR Hadouken::BIT_OP Hadouken::NOT_RIP
     #my $minimum_perms = (1 << 0) | (1 << 1) | (1 << 3);
@@ -92,9 +91,10 @@ sub acl_check {
 
     # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.
-    if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+    if (   $self->check_acl_bit( $permissions, Hadouken::BIT_ADMIN )
+        || $self->check_acl_bit( $permissions, Hadouken::BIT_WHITELIST )
+        || $self->check_acl_bit( $permissions, Hadouken::BIT_OP ) )
+    {
 
         return 1;
     }
@@ -102,46 +102,45 @@ sub acl_check {
     return 0; # Just let everyone use it :)
 }
 
-
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
-    my ($cmd, $arg) = split(/ /, lc($message),2);
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
+    my ( $cmd, $arg ) = split( / /, lc($message), 2 );
 
     return unless defined $arg;
 
     # First, if we were asked to pick from some options:
-    if (my($option_list) = $arg =~ /(?:choose|pick) \s+ (?:from\s+)? (.+)/x) {
+    if ( my ($option_list) = $arg =~ /(?:choose|pick) \s+ (?:from\s+)? (.+)/x ) {
         my @options = split /\s+or\s+/, $option_list;
         my $picked = $options[ rand @options ];
-        
-        $self->send_server(PRIVMSG => $channel, "8ball picked: $picked");
+
+        $self->send_server( PRIVMSG => $channel, "8ball picked: $picked" );
         return 1;
     }
 
-
     my $result;
-    if ($arg =~ / (?: alcohol | beer | pub | home | friday ) /xi) {
+    if ( $arg =~ / (?: alcohol | beer | pub | home | friday ) /xi ) {
         $result = 'Yes';
-    } elsif ($arg =~ / (?: cpai?nel | windows | exchange | work ) /xi) {
-        $result = 'No';
-    } else {
-        $result = (rand() < 0.3) ? 'Maybe' : (rand() < 0.5) ? 'Yes' : 'No';
     }
-    if ($arg =~ / (?: suck | fail | shit | fucked ) /xi) {
+    elsif ( $arg =~ / (?: cpai?nel | windows | exchange | work ) /xi ) {
+        $result = 'No';
+    }
+    else {
+        $result = ( rand() < 0.3 ) ? 'Maybe' : ( rand() < 0.5 ) ? 'Yes' : 'No';
+    }
+    if ( $arg =~ / (?: suck | fail | shit | fucked ) /xi ) {
         $result = { 'Yes' => 'No', 'No' => 'Yes' }->{$result} || $result;
     }
 
-    my $response = $responses{$result}[rand @{ $responses{$result} }];
+    my $response = $responses{$result}[ rand @{ $responses{$result} } ];
 
     warn $response;
 
-    $self->send_server(PRIVMSG => $channel, "8ball: $response");
+    $self->send_server( PRIVMSG => $channel, "8ball: $response" );
 
     return 1;
 }
-
 
 1;
 

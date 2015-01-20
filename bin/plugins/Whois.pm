@@ -12,7 +12,7 @@ use AnyEvent::Whois::Raw;
 use TryCatch;
 
 our $VERSION = '0.1';
-our $AUTHOR = 'dek';
+our $AUTHOR  = 'dek';
 
 # Description of this command.
 sub command_comment {
@@ -37,19 +37,19 @@ sub command_regex {
 # Return 1 if OK.
 # 0 if does not pass ACL.
 sub acl_check {
-    my ($self, %aclentry) = @_;
+    my ( $self, %aclentry ) = @_;
 
     my $permissions = $aclentry{'permissions'};
     #my $who = $aclentry{'who'};
     #my $channel = $aclentry{'channel'};
     #my $message = $aclentry{'message'};
 
- 
     # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.
-    if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+    if (   $self->check_acl_bit( $permissions, Hadouken::BIT_ADMIN )
+        || $self->check_acl_bit( $permissions, Hadouken::BIT_WHITELIST )
+        || $self->check_acl_bit( $permissions, Hadouken::BIT_OP ) )
+    {
 
         return 1;
     }
@@ -60,19 +60,23 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ($self,$nick,$host,$message,$channel,$is_admin,$is_whitelisted) = @_;
-    my ($cmd, $arg) = split(/ /, lc($message),2);
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
+    my ( $cmd, $arg ) = split( / /, lc($message), 2 );
 
-    return unless (defined($arg) && length($arg));
+    return unless ( defined($arg) && length($arg) );
 
-    AnyEvent::DNS::resolver->resolve($arg, "a", accept => ["a", "aaaa"], 
+    AnyEvent::DNS::resolver->resolve(
+        $arg, "a",
+        accept => [ "a", "aaaa" ],
         sub {
             foreach my $rec (@_) {
-                my (undef, undef, undef,undef, $ip) = @$rec;
+                my ( undef, undef, undef, undef, $ip ) = @$rec;
 
-                next unless (defined $ip && length $ip);
+                next unless ( defined $ip && length $ip );
 
-                AnyEvent::Whois::Raw::get_whois $ip, timeout => 10, sub {
+                AnyEvent::Whois::Raw::get_whois $ip,
+                  timeout => 10,
+                  sub {
                     my $data = shift;
                     my %parsed;
                     if ($data) {
@@ -84,24 +88,23 @@ sub command_run {
                             $line =~ s/\s+$//;
 
                             my ( $key, $value ) = $line =~ /^\s*([\d\w\s_-]+):\s*(.+)$/;
-                            next if  !$line || !$value;
+                            next if !$line || !$value;
                             $key =~ s/\s+$//;
                             $value =~ s/\s+$//;
 
-                            $parsed{$key} = ref $parsed{$key} eq 'ARRAY' ? 
-                            [ @{$parsed{$key}}, $value ] : [ $value ];
+                            $parsed{$key} =
+                              ref $parsed{$key} eq 'ARRAY' ? [ @{ $parsed{$key} }, $value ] : [$value];
 
                         }
 
                         my $sum = '[whois] ';
                         for my $key ( keys %parsed ) {
-                            $sum .= $key.":".$parsed{$key}[0]." ";
+                            $sum .= $key . ":" . $parsed{$key}[0] . " ";
                         }
 
-
-                        $self->send_server (PRIVMSG => $channel, $sum);
+                        $self->send_server( PRIVMSG => $channel, $sum );
                     }
-                    elsif (! defined $data) {
+                    elsif ( !defined $data ) {
                         my $srv = shift;
                         warn "* WHOIS No whois data information for domain on $srv found";
                     }
@@ -109,20 +112,16 @@ sub command_run {
                         my $reason = shift;
                         warn "* WHOIS error: $reason";
                     }
-                };
-
+                  };
 
                 last;
             }
 
-        });
-
-
+        }
+    );
 
     return 1;
 }
-
-
 
 1;
 

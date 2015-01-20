@@ -6,9 +6,8 @@ BEGIN {
     use_ok('Hadouken');
 }
 
-can_ok('Hadouken', ('new'));
+can_ok( 'Hadouken', ('new') );
 
-diag( "Testing Hadouken $Hadouken::VERSION, Perl $], $^X" );
-
+diag("Testing Hadouken $Hadouken::VERSION, Perl $], $^X");
 
 _

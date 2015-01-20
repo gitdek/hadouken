@@ -25,174 +25,178 @@ use AnyEvent;
 # $|=1;
 $|++;
 
-my $filedirname = File::Basename::dirname(Cwd::abs_path(__FILE__));
+my $filedirname = File::Basename::dirname( Cwd::abs_path(__FILE__) );
 
 # Change into the current file directory
 # so items in our config are relative from here.
 chdir $filedirname;
 
 my $arg_password = undef;
-my $password_flag ="--password"; # Got tired of entering it manually so allow to pass as an argument.
-my $config_flag = "--config=";
-my $setup_flag = "--setup";
+my $password_flag =
+    "--password";                               # Got tired of entering it manually so allow to pass as an argument.
+my $config_flag     = "--config=";
+my $setup_flag      = "--setup";
 my $showconfig_flag = "--showconfig";
 my $config_filename = '/etc/hadouken.conf';
-my $cipher = undef;
+my $cipher          = undef;
 
-if (my ($idx) = grep $ARGV[$_] =~ $config_flag, 0 .. $#ARGV) {
-    my($flag,$cf) = split(/=/, $ARGV[$idx]);
-    splice @ARGV,$idx,1; # Remove so it does not affect the Daemon.
+if ( my ($idx) = grep $ARGV[$_] =~ $config_flag, 0 .. $#ARGV ) {
+    my ( $flag, $cf ) = split( /=/, $ARGV[$idx] );
+    splice @ARGV, $idx, 1;                      # Remove so it does not affect the Daemon.
     $config_filename = $cf;
 }
 
-
-if (my ($idx) = grep $ARGV[$_] =~ $password_flag, 0 .. $#ARGV) {
-    my($flag,$cf) = split(/=/, $ARGV[$idx]);
-    splice @ARGV,$idx,1; # Remove so it does not affect the Daemon.
+if ( my ($idx) = grep $ARGV[$_] =~ $password_flag, 0 .. $#ARGV ) {
+    my ( $flag, $cf ) = split( /=/, $ARGV[$idx] );
+    splice @ARGV, $idx, 1;                      # Remove so it does not affect the Daemon.
     $arg_password = $cf;
 }
 
-unless(-e $config_filename && -r $config_filename) {
+unless ( -e $config_filename && -r $config_filename ) {
     die "Error reading configuration file";
 }
 
 my $conf_plain = '';
 
-if(grep $ARGV[$_] =~ $setup_flag, 0 .. $#ARGV) {
+if ( grep $ARGV[$_] =~ $setup_flag, 0 .. $#ARGV ) {
     createconf();
-} else {
+}
+else {
     $conf_plain = readconf();
 }
 
-if(grep $ARGV[$_] =~ $showconfig_flag, 0 .. $#ARGV) {
+if ( grep $ARGV[$_] =~ $showconfig_flag, 0 .. $#ARGV ) {
     showconf();
 }
 
-my $conf = Config::General->new(-ForceArray => 1, -String => $conf_plain, -AutoTrue => 1);
+my $conf = Config::General->new( -ForceArray => 1, -String => $conf_plain, -AutoTrue => 1 );
 my %config = $conf->getall;
 
-my $log_filename = exists $config{log} ? Cwd::abs_path($config{log}) : '/var/log/hadouken.log';
-my $pid_filename = exists $config{pid} ? Cwd::abs_path($config{pid}) : '/var/run/hadouken.pid';
-my $rsakey_filename = exists $config{rsa_key_file} ? Cwd::abs_path($config{rsa_key_file}) : '';
-
+my $log_filename =
+    exists $config{log} ? Cwd::abs_path( $config{log} ) : '/var/log/hadouken.log';
+my $pid_filename =
+    exists $config{pid} ? Cwd::abs_path( $config{pid} ) : '/var/run/hadouken.pid';
+my $rsakey_filename =
+    exists $config{rsa_key_file} ? Cwd::abs_path( $config{rsa_key_file} ) : '';
 
 # Make sure file exists and is readable by effective uid/gid.
-if($rsakey_filename ne '') {
-    unless(-e $rsakey_filename && -r $rsakey_filename) {
+if ( $rsakey_filename ne '' ) {
+    unless ( -e $rsakey_filename && -r $rsakey_filename ) {
         die "RSA key is specified but does not exist.";
     }
 }
 
-unless(exists $config{admin} && exists $config{server}) {
+unless ( exists $config{admin} && exists $config{server} ) {
     die "Missing configuration values";
 }
 
 my $cb = Hadouken->new_with_options(
-    reload_update => \&on_reload_update, #sub { print Dumper(@_); }, #on_config_update,
-    conf_update => \&on_config_update, #sub { print Dumper(@_); }, #on_config_update,
-    nick => $config{nick} || 'hadouken',
-    bind => $config{bind} || '',
-    iface => $config{iface} || '',
-    servers => [ $config{server} ],
-    admin => $config{admin},
-    config_hash => \%config,
+    reload_update => \&on_reload_update,        #sub { print Dumper(@_); }, #on_config_update,
+    conf_update   => \&on_config_update,        #sub { print Dumper(@_); }, #on_config_update,
+    nick          => $config{nick} || 'hadouken',
+    bind          => $config{bind} || '',
+    iface         => $config{iface} || '',
+    servers       => [ $config{server} ],
+    admin         => $config{admin},
+    config_hash   => \%config,
     config_filename => $config_filename,
-    conf_obj => $conf,
-    rejoin_on_kick => 1,
-    quote_limit => $config{quote_limit} || '2',
-    safe_delay => $config{safe_delay} || '0.25',
-    bitly_user_id => $config{bitly_user_id} || '', # To disable shortening, remove from config!
+    conf_obj        => $conf,
+    rejoin_on_kick  => 1,
+    quote_limit     => $config{quote_limit} || '2',
+    safe_delay      => $config{safe_delay} || '0.25',
+    bitly_user_id => $config{bitly_user_id} || '',  # To disable shortening, remove from config!
     bitly_api_key => $config{bitly_api_key} || '',
     private_rsa_key_filename => $rsakey_filename,
     private_rsa_key_password => $config{rsa_key_password} || '',
-    blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
-    ownerdir => $filedirname,
-    reconnect => $config{reconnect} || 1,
-    reconnect_delay => $config{reconnect_delay} || 30,
+    blowfish_key             => $config{blowfish_key} || 'hadoukeyletmein',    # Blowfish key
+    ownerdir                 => $filedirname,
+    reconnect                => $config{reconnect} || 1,
+    reconnect_delay          => $config{reconnect_delay} || 30,
 );
 
-my %daemon_args = ( 
-    name        => "Hadouken",
-    lsb_start   => '$syslog $remote_fs',
-    lsb_stop    => '$syslog',
-    lsb_sdesc   => 'Hadouke bot',
-    lsb_desc    => 'Hadouken bot by dek',
+my %daemon_args = (
+    name      => "Hadouken",
+    lsb_start => '$syslog $remote_fs',
+    lsb_stop  => '$syslog',
+    lsb_sdesc => 'Hadouke bot',
+    lsb_desc  => 'Hadouken bot by dek',
 
     program => sub { $cb->start },
 
-    help => "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n",
+    help =>
+        "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n",
     kill_timeout => 7,
 
     pid_file    => $pid_filename,
     stderr_file => $log_filename,
     stdout_file => $log_filename,
 
-    fork        => 2,
-    quiet       => 0,
+    fork  => 2,
+    quiet => 0,
 );
 
-$daemon_args{user} = $config{user} if(exists $config{user});
-$daemon_args{group} = $config{group} if(exists $config{group});
+$daemon_args{user}  = $config{user}  if ( exists $config{user} );
+$daemon_args{group} = $config{group} if ( exists $config{group} );
 
 my $daemon = Daemon::Control->new(%daemon_args);
 
-my ($command) = @{$cb->extra_argv};
+my ($command) = @{ $cb->extra_argv };
 
 defined $command || die "No command specified";
 
 my $exit_code;
 
-if ($command eq 'stop') {
-    $daemon->pretty_print("Shutting Down", "red") if(defined $cb->start_time && $cb->start_time ne '');
+if ( $command eq 'stop' ) {
+    $daemon->pretty_print( "Shutting Down", "red" )
+        if ( defined $cb->start_time && $cb->start_time ne '' );
 
-    $cb->stop(); # Clean disconnect.
+    $cb->stop();                                # Clean disconnect.
 
     $exit_code = $daemon->run_command('stop');
-    exit($exit_code || 0);
+    exit( $exit_code || 0 );
 }
 
-
-my $w = AnyEvent->signal(signal => "HUP", cb => \&on_reload_update);
-
+my $w = AnyEvent->signal( signal => "HUP", cb => \&on_reload_update );
 
 try {
     $exit_code = $daemon->run_command($command);
 }
-catch (Str $e where { $_ =~ /^Error: undefined action/i } ) {
+catch( Str $e where { $_ =~ /^Error: undefined action/i } ) {
     warn "You must specify an action.\n";
-}
-catch($e) {
-    warn $e,"\n";
-}
+    } catch($e) {
+    warn $e, "\n";
+    }
 
-
-exit(($exit_code || 0));
+    exit( ( $exit_code || 0 ) );
 
 sub on_config_update {
     my ($conf_data) = @_;
     my $encrypted = $cipher->encrypt($conf_data);
     $encrypted = encode_base64($encrypted);
     chomp($encrypted);
-    
+
     unlink $config_filename;
-    
+
     open FILE, ">$config_filename" or die "Error reading configuration file: $!";
     print FILE $encrypted;
     close FILE;
-}
+} ## ---------- end sub on_config_update
 
 sub on_reload_update {
 
-    $daemon->pretty_print("Reloading", "red"); # if(defined $cb->start_time && $cb->start_time ne '');
+    $daemon->pretty_print( "Reloading", "red" )
+        ;                                       # if(defined $cb->start_time && $cb->start_time ne '');
     $cb->stop();
+
     # TODO: Reload Hadouken.pm from disk.
     $cb->start();
-    $daemon->pretty_print("Reloaded", "green"); # if(defined $cb->start_time && $cb->start_time ne '');
-}
+    $daemon->pretty_print( "Reloaded", "green" )
+        ;                                       # if(defined $cb->start_time && $cb->start_time ne '');
+} ## ---------- end sub on_reload_update
 
 #sub reload_daemon {
 #    my $conf_encrypted = '';
-#    
+#
 #    open FILE, $config_filename or die "Error reading configuration file: $!";
 #    while (<FILE>){
 #        $conf_encrypted .= $_;
@@ -209,54 +213,58 @@ sub on_reload_update {
 
 sub createconf {
     open FILE, $config_filename or die "Error reading configuration file: $!";
-    while (<FILE>){
+    while (<FILE>) {
         $conf_plain .= $_;
     }
     close FILE;
-    
+
     unlink($config_filename);
 
     my $password = readcredentials();
-    
+
     exit(1337) unless defined $password && length $password;
- 
-    $cipher = Crypt::CBC->new({
-            key         => $password, # 256 bits
-        });
+
+    $cipher = Crypt::CBC->new(
+        {
+            key => $password,                   # 256 bits
+        }
+    );
 
     my $encrypted = $cipher->encrypt($conf_plain);
     $encrypted = encode_base64($encrypted);
     chomp($encrypted);
-    
+
     open FILE, ">$config_filename" or die "Error reading configuration file: $!";
     print FILE $encrypted;
     close FILE;
 
     print "\n\nSetup complete!\n\nYou can now run hadouken.\n";
     exit(0);
-}
+} ## ---------- end sub createconf
 
 sub readconf {
-    unless(defined $cipher) {
+    unless ( defined $cipher ) {
         my $password = readcredentials();
         exit(1337) unless defined $password && length $password;
 
-        $cipher = Crypt::CBC->new({
-                key         => $password, # 256 bits
-            });
+        $cipher = Crypt::CBC->new(
+            {
+                key => $password,               # 256 bits
+            }
+        );
     }
-    
+
     my $conf_encrypted = '';
     open FILE, $config_filename or die "Error reading configuration file: $!";
-    while (<FILE>){
+    while (<FILE>) {
         $conf_encrypted .= $_;
     }
     close FILE;
 
-    my $plaintext = $cipher->decrypt(decode_base64($conf_encrypted));
+    my $plaintext = $cipher->decrypt( decode_base64($conf_encrypted) );
 
     return $plaintext;
-}
+} ## ---------- end sub readconf
 
 sub showconf {
     my $plaintext = readconf();
@@ -272,23 +280,29 @@ sub readcredentials {
 
     return $arg_password if defined $arg_password && length $arg_password;
 
-    while(1) {
+    while (1) {
         $password = Term::ReadPassword::read_password('Enter password: ');
         redo unless defined $password && length $password;
 
         last unless $confirm;
-        
+
         $password_confirm = Term::ReadPassword::read_password('Repeat: ');
-        redo unless defined $password_confirm && length $password_confirm && $password eq $password_confirm;
-    
+        redo
+            unless defined $password_confirm
+            && length $password_confirm
+            && $password eq $password_confirm;
 
         last;
     }
 
     return $password;
-}
+} ## ---------- end sub readcredentials
 
 sub usage {
 
-    my $u = "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n",
-}
+    my $u =
+        "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n";
+
+    return $u;
+} ## ---------- end sub usage
+

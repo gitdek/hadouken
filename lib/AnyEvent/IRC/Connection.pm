@@ -71,14 +71,14 @@ sub new {
     my $this = shift;
     my $class = ref($this) || $this;
 
-    my $self = $class->SUPER::new (@_, heap => { });
+    my $self = $class->SUPER::new( @_, heap => {} );
 
     bless $self, $class;
 
-    $self->reg_cb (
+    $self->reg_cb(
         ext_after_send => sub {
-            my ($self, $mkmsg_args) = @_;
-            $self->send_raw (mk_msg (@$mkmsg_args));
+            my ( $self, $mkmsg_args ) = @_;
+            $self->send_raw( mk_msg(@$mkmsg_args) );
         }
     );
 
@@ -100,27 +100,25 @@ number which stands for a timeout.
 =cut
 
 sub connect {
-    my ($self, $host, $port, $prep, $iface, $bindaddr) = @_;
+    my ( $self, $host, $port, $prep, $iface, $bindaddr ) = @_;
 
-    if ($self->{socket}) {
-        $self->disconnect ("reconnect requested.");
+    if ( $self->{socket} ) {
+        $self->disconnect("reconnect requested.");
     }
 
-    $self->{con_guard} =
-    tcp_connect $host, $port, sub {
+    $self->{con_guard} = tcp_connect $host, $port, sub {
         my ($fh) = @_;
 
         delete $self->{socket};
 
         unless ($fh) {
-            $self->event (connect => $!);
+            $self->event( connect => $! );
             return;
         }
 
         #$fh->bind("localhost") or die("FUCK");
         $self->{host} = $host;
         $self->{port} = $port;
-
 
         #my $sock = IO::Socket::INET6->new(
         #PeerPort => $port,
@@ -129,56 +127,57 @@ sub connect {
 
         #my $sel = new IO::Select( $sock );
 
-        $self->{socket} =
-        AnyEvent::Handle->new (
+        $self->{socket} = AnyEvent::Handle->new(
             fh => $fh,
-            ($self->{enable_ssl} ? (tls => 'connect') : ()),
+            ( $self->{enable_ssl} ? ( tls => 'connect' ) : () ),
             on_eof => sub {
-                $self->disconnect ("EOF from server $host:$port");
+                $self->disconnect("EOF from server $host:$port");
             },
             on_error => sub {
-                $self->disconnect ("error in connection to server $host:$port: $!");
+                $self->disconnect("error in connection to server $host:$port: $!");
             },
             on_read => sub {
                 my ($hdl) = @_;
                 # \015* for some broken servers, which might have an extra
                 # carriage return in their MOTD.
-                $hdl->push_read (line => qr{\015*\012}, sub {
-                        $self->_feed_irc_data ($_[1]);
-                    });
+                $hdl->push_read(
+                    line => qr{\015*\012},
+                    sub {
+                        $self->_feed_irc_data( $_[1] );
+                    }
+                );
             },
             on_drain => sub {
-                $self->event ('buffer_empty'); 
+                $self->event('buffer_empty');
             },
         );
 
         $self->{connected} = 1;
-        $self->event ('connect');
-    }, 
-    sub {
+        $self->event('connect');
+      }, sub {
         my ($sock) = @_;
 
         my $ipn = AnyEvent::Socket::aton "$bindaddr";
 
-        setsockopt($sock, SOL_SOCKET, SO_REUSEPORT, 1)
-            or die "Cannot set sockopt SO_REUSEPORT: $!";
+        setsockopt( $sock, SOL_SOCKET, SO_REUSEPORT, 1 )
+          or die "Cannot set sockopt SO_REUSEPORT: $!";
 
-        if(defined $bindaddr && $bindaddr ne '' && defined $ipn && length $ipn) {
+        if ( defined $bindaddr && $bindaddr ne '' && defined $ipn && length $ipn ) {
             my $bind = AnyEvent::Socket::pack_sockaddr 43, $ipn;
             bind $sock, $bind
-                or die "Cannot bind to addr: $!";
+              or die "Cannot bind to addr: $!";
         }
 
-        #$sock->bind($bind) 
+        #$sock->bind($bind)
         #    or die "Cannot bind to addr: $!";
 
-        if(defined $iface && $iface ne '') {
-            setsockopt($sock, SOL_SOCKET, 25, pack("Z*", $iface)) 
-                or die "Cannot bind to interface: $!";
+        if ( defined $iface && $iface ne '' ) {
+            setsockopt( $sock, SOL_SOCKET, 25, pack( "Z*", $iface ) )
+              or die "Cannot bind to interface: $!";
         }
 
         return undef;
-    }; #(defined $prep ? (ref $prep ? $prep : sub { $prep }) : ());
+      }; #(defined $prep ? (ref $prep ? $prep : sub { $prep }) : ());
 }
 
 =item $con->enable_ssl ()
@@ -200,11 +199,11 @@ the sockets and send a 'disconnect' event with C<$reason> as argument.
 =cut
 
 sub disconnect {
-    my ($self, $reason) = @_;
+    my ( $self, $reason ) = @_;
 
     delete $self->{con_guard};
     delete $self->{socket};
-    $self->event (disconnect => $reason);
+    $self->event( disconnect => $reason );
 }
 
 =item $con->is_connected
@@ -216,7 +215,7 @@ Otherwise false.
 
 sub is_connected {
     my ($self) = @_;
-    $self->{socket} && $self->{connected}
+    $self->{socket} && $self->{connected};
 }
 
 =item $con->heap ()
@@ -239,10 +238,10 @@ further processing done.
 =cut
 
 sub send_raw {
-    my ($self, $ircline) = @_;
+    my ( $self, $ircline ) = @_;
 
     return unless $self->{socket};
-    $self->{socket}->push_write ($ircline . "\015\012");
+    $self->{socket}->push_write( $ircline . "\015\012" );
 }
 
 =item $con->send_msg ($command, @params)
@@ -253,25 +252,25 @@ for C<AnyEvent::IRC::Util::mk_msg (undef, $command, @params)>.
 =cut
 
 sub send_msg {
-    my ($self, @msg) = @_;
+    my ( $self, @msg ) = @_;
 
-    $self->event (send => [undef, @msg]);
-    $self->event (sent => undef, @msg);
+    $self->event( send => [ undef, @msg ] );
+    $self->event( sent => undef, @msg );
 }
 
 sub _feed_irc_data {
-    my ($self, $line) = @_;
+    my ( $self, $line ) = @_;
 
     #d# warn "LINE:[" . $line . "][".length ($line)."]";
 
-    my $m = parse_irc_msg ($line);
+    my $m = parse_irc_msg($line);
     #d# warn "MESSAGE{$m->{params}->[-1]}[".(length $m->{params}->[-1])."]\n";
     #d# warn "HEX:" . join ('', map { sprintf "%2.2x", ord ($_) } split //, $line)
     #d#     . "\n";
 
-    $self->event (read => $m);
-    $self->event ('irc_*' => $m);
-    $self->event ('irc_' . (lc $m->{command}), $m);
+    $self->event( read    => $m );
+    $self->event( 'irc_*' => $m );
+    $self->event( 'irc_' . ( lc $m->{command} ), $m );
 }
 
 =back

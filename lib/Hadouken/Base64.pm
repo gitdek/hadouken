@@ -4,20 +4,21 @@ use strict;
 use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
 
 require Exporter;
-@ISA = qw(Exporter);
+@ISA    = qw(Exporter);
 @EXPORT = qw(encode_base64 decode_base64);
-@EXPORT_OK = qw(encode_base64url decode_base64url encoded_base64_length decoded_base64_length);
+@EXPORT_OK =
+  qw(encode_base64url decode_base64url encoded_base64_length decoded_base64_length);
 
 $VERSION = '3.14';
 
 require XSLoader;
-XSLoader::load('Hadouken::Base64', $VERSION);
+XSLoader::load( 'Hadouken::Base64', $VERSION );
 
 *encode = \&encode_base64;
 *decode = \&decode_base64;
 
 sub encode_base64url {
-    my $e = encode_base64(shift, "");
+    my $e = encode_base64( shift, "" );
     $e =~ s/=+\z//;
     $e =~ tr[+/][-_];
     return $e;

@@ -12,10 +12,8 @@ BEGIN {
 
 # can_ok('Hadouken::Plugin::StockMarket', ('new'));
 
-diag( "Testing Plugins for Hadouken $Hadouken::VERSION, Perl $], $^X" );
+diag("Testing Plugins for Hadouken $Hadouken::VERSION, Perl $], $^X");
 #diag( "Testing Hadouken::Plugin::StockMarket $Hadouken::Plugin::StockMarket::VERSION, Perl $], $^X" );
 
-
 done_testing();
-
 
