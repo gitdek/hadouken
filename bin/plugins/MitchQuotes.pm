@@ -3,6 +3,7 @@ package Hadouken::Plugin::MitchQuotes;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
 use TryCatch;
 
 our $VERSION = '0.2';

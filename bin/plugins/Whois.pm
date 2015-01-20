@@ -3,6 +3,7 @@ package Hadouken::Plugin::Whois;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
 use AnyEvent::DNS;
 use AnyEvent::Whois::Raw;
 
@@ -124,4 +125,24 @@ sub command_run {
 
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::Whois - Whois plugin.
+
+=head1 DESCRIPTION
+
+Whois plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 

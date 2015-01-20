@@ -1,23 +1,9 @@
-#===============================================================================
-#
-#         FILE: StockTicker.pm
-#
-#  DESCRIPTION: Plugin for Hadouken which gets stock info by ticker symbol.
-#
-#        FILES: ---
-#         BUGS: ---
-#        NOTES: ---
-#       AUTHOR: YOUR NAME (), 
-# ORGANIZATION: 
-#      VERSION: 1.0
-#      CREATED: 04/26/2014 01:10:31 AM
-#     REVISION: ---
-#===============================================================================
-
 package Hadouken::Plugin::Boobs;
 
 use strict;
 use warnings;
+
+use Hadouken ':acl_modes';
 
 use TryCatch;
 

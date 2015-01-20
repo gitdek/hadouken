@@ -3,6 +3,7 @@ package Hadouken::Plugin::Dictionary;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
 use String::IRC;
 use TryCatch;
 use Encode qw( encode ); 

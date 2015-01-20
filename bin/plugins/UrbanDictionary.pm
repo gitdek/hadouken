@@ -3,6 +3,8 @@ package Hadouken::Plugin::UrbanDictionary;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
+
 use String::IRC;
 use URI::Escape;
 use HTML::TokeParser;
@@ -45,16 +47,21 @@ sub acl_check {
     #my $message = $aclentry{'message'};
 
 
-    # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.
-    if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
-        || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
-
-        return 1;
+    if($self->check_acl_bit($permissions, Hadouken::BIT_BLACKLIST)) {
+        return 0;
     }
 
-    return 0;
+    # Or you can do it with the function Hadouken exports.
+    # Make sure at least one of these flags is set.
+    #if($self->check_acl_bit($permissions, Hadouken::BIT_ADMIN) 
+    #    || $self->check_acl_bit($permissions, Hadouken::BIT_WHITELIST) 
+    #    || $self->check_acl_bit($permissions, Hadouken::BIT_OP)) {
+
+    #    return 1;
+    #}
+
+    return 1;
 }
 
 # Return 1 if OK (and then callback can be called)
@@ -68,6 +75,7 @@ sub command_run {
     $parg =~ s/stankdick/luchi/gi;
     
     if(defined($arg) && length($arg)) {
+        $arg =~ s/gnar/turd/gi;
         $arg =~ s/dave__/black american princess/gi;
         $arg =~ s/erb/homo/gi;
         $arg =~ s/luchinii/sword fight/gi;

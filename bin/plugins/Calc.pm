@@ -3,6 +3,7 @@ package Hadouken::Plugin::Calc;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
 use TryCatch;
 use Data::Dumper;
 use HTML::TokeParser;

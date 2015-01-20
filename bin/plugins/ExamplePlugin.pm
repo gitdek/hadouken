@@ -3,6 +3,8 @@ package Hadouken::Plugin::ExamplePlugin;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
+
 our $VERSION = '0.1';
 our $AUTHOR = 'dek';
 

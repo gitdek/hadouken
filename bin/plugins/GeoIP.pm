@@ -3,6 +3,8 @@ package Hadouken::Plugin::GeoIP;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
+
 use TryCatch;
 use Regexp::Common;
 use AnyEvent::DNS;

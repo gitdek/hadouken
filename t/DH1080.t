@@ -5,7 +5,7 @@ use Test::More tests => 3;
 
 BEGIN { use_ok('Hadouken::DH1080') };
 
-diag( "Testing Hadouken::DH1080, Perl $], $^X" );
+diag( "Testing Hadouken::DH1080 $Hadouken::DH1080::VERSION, Perl $], $^X" );
 
 my $msg = 'hello how are you';
 

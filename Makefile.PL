@@ -72,10 +72,15 @@ WriteMakefile(
         'REST::Google'          => 0,
         'Log::Log4perl'         => 0,
     },
-    PM => {
+    PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
         'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm',
-        'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm'
+        'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm',
+        'bin/plugins/StockMarket.pm' => '$(INST_LIB)/Hadouken/Plugin/StockMarket.pm',
+        'bin/plugins/IMDB.pm' => '$(INST_LIB)/Hadouken/Plugin/IMDB.pm',
+        'bin/plugins/Weather.pm' => '$(INST_LIB)/Hadouken/Plugin/Weather.pm',
+        'bin/plugins/Dictionary.pm' => '$(INST_LIB)/Hadouken/Plugin/Dictionary.pm',
+        'bin/plugins/Shorten.pm' => '$(INST_LIB)/Hadouken/Plugin/Shorten.pm',
     },
     # EXE_FILES => ['bin/hadouken'],
     PL_FILES => {'bin/createconfig.pl' => '/etc/hadouken.conf'},

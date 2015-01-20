@@ -43,3 +43,4 @@ data/new_questions_parsed
 data/scores.json
 bin/plugins/Shredder.pm
 clear.conf
+plain.conf

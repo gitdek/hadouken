@@ -2,6 +2,8 @@ package Hadouken::Plugin::StockMarket;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
+
 use TryCatch;
 use String::IRC;
 use Encode qw( encode ); 

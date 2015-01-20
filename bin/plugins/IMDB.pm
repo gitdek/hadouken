@@ -3,8 +3,10 @@ package Hadouken::Plugin::IMDB;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
+
 use TryCatch;
-use Data::Dumper;
+#use Data::Dumper;
 use IMDB::Film;
 
 our $VERSION = '0.2';

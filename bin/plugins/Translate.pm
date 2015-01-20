@@ -2,8 +2,10 @@ package Hadouken::Plugin::Translate;
 
 use strict;
 use warnings;
-
 use utf8;
+
+use Hadouken ':acl_modes';
+
 use Text::Unidecode;
 
 # use Data::Printer alias => 'Dumper', colored => 1;

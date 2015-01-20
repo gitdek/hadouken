@@ -32,7 +32,7 @@ use 5.014;
 
 use strict;
 use warnings;
-use diagnostics;
+# use diagnostics;
 
 #no strict "refs";
 #use experimental qw(smartmatch);
@@ -59,7 +59,10 @@ use constant CMODE_PLUGINS_ALLOWED => 'Z';
 use constant CMODE_FAST_OP => 'F'; # Do not create cookies when setting +o.
 # 
 
-our $VERSION = '0.8.7';
+our @EXPORT_OK = ('BIT_ADMIN', 'BIT_WHITELIST', 'BIT_BLACKLIST','BIT_OP','BIT_VOICE','BIT_BOT');
+our %EXPORT_TAGS = ( acl_modes => [ 'BIT_ADMIN', 'BIT_WHITELIST', 'BIT_BLACKLIST','BIT_OP','BIT_VOICE','BIT_BOT' ] );
+
+our $VERSION = '0.8.8';
 our $AUTHOR = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;

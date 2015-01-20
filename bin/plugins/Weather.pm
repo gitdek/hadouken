@@ -3,6 +3,9 @@ package Hadouken::Plugin::Weather;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
+
+
 use Yahoo::Weather;
 use TryCatch;
 # use Data::Dumper;

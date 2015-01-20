@@ -3,6 +3,9 @@ package Hadouken::Plugin::GoogleSearch;
 use strict;
 use warnings;
 
+use Hadouken ':acl_modes';
+
+
 use HTML::Strip;
 use String::IRC;
 use REST::Google::Search;
