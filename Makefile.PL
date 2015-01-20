@@ -83,7 +83,10 @@ WriteMakefile(
         'bin/plugins/Shorten.pm' => '$(INST_LIB)/Hadouken/Plugin/Shorten.pm',
     },
     # EXE_FILES => ['bin/hadouken'],
-    PL_FILES => {'bin/createconfig.pl' => '/etc/hadouken.conf'},
+    PL_FILES => {
+                'bin/createconfig.pl' => '/etc/hadouken.conf',
+                'bin/deflategeoip.pl' => 'hi',
+                },
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
 );
 
