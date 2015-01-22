@@ -95,6 +95,9 @@ sub _weather {
     my $summary = '';
     try {
         my $ret = $self->{weatherclient}->getWeatherByLocation($location,'F');
+
+        # warn Dumper($ret);
+
         if(exists $ret->{'CurrentObservation'} && $ret->{'LocationDetails'} )  {
             $summary = $ret->{'LocationDetails'}{'city'} if exists $ret->{'LocationDetails'}{'city'};
             $summary .= " ".$ret->{'LocationDetails'}{'region'} if exists $ret->{'LocationDetails'}{'region'};
@@ -108,6 +111,19 @@ sub _weather {
             }
 
             $summary .= " (".$ret->{'CurrentObservation'}{'text'}.")" if exists $ret->{'CurrentObservation'}{'text'};
+
+            if (exists $ret->{'TwoDayForecast'}[0]{'high'} && exists $ret->{'TwoDayForecast'}[0]{'low'}) {
+                if($do_celsius) {
+                    my $cel_low = ($ret->{'TwoDayForecast'}[0]{'low'} - 32) * 5/9;
+                    my $cel_high = ($ret->{'TwoDayForecast'}[0]{'high'} - 32) * 5/9;
+                    my $cel_low_rounded = sprintf "%.1f", $cel_low;
+                    my $cel_high_rounded = sprintf "%.1f", $cel_high;
+                    $summary .= " High: ".$cel_high_rounded."°C Low: ".$cel_low_rounded."°C";
+                } else {
+                    $summary .= " High: ".$ret->{'TwoDayForecast'}[0]{'high'}."°F Low: ".$ret->{'TwoDayForecast'}[0]{'low'}."°F";
+                }
+            }
+
             $summary .= " Visibility: ".$ret->{'Atmosphere'}{'visibility'}."mi" if exists $ret->{'Atmosphere'}{'visibility'} && $ret->{'Atmosphere'}{'visibility'} > 0;
             $summary .= " Humidity: ".$ret->{'Atmosphere'}{'humidity'}."%" if exists $ret->{'Atmosphere'}{'humidity'};
             $summary .= " Wind: ".$ret->{'WindDetails'}{'speed'}."mph" if exists $ret->{'WindDetails'}{'speed'};
