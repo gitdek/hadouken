@@ -99,8 +99,8 @@ sub acl_check {
         return 1;
     }
 
-    return 0; # Just let everyone use it :)
-}
+    return 0;                                   # Just let everyone use it :)
+} ## ---------- end sub acl_check
 
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
@@ -140,7 +140,27 @@ sub command_run {
     $self->send_server( PRIVMSG => $channel, "8ball: $response" );
 
     return 1;
-}
+} ## ---------- end sub command_run
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::MagicEight - Magic eight ball!
+
+=head1 DESCRIPTION
+
+Simple eight ball plugin for Hadouken.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 

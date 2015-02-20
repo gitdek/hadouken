@@ -49,14 +49,14 @@ sub acl_check {
     }
 
     return 0;
-}
+} ## ---------- end sub acl_check
 
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
     my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
 
-    my ( $cmd, $arg ) = split( / /, $message, 2 ); # DO NOT LC THE MESSAGE!
+    my ( $cmd, $arg ) = split( / /, $message, 2 );    # DO NOT LC THE MESSAGE!
 
     return unless defined $arg;
 
@@ -66,7 +66,7 @@ sub command_run {
 
     # Only grab title for admins.
     my ( $url, $title ) =
-      $self->{Owner}->_shorten( $uri, 1 );         # $self->{Owner}->is_admin($who));
+        $self->{Owner}->_shorten( $uri, 1 );    # $self->{Owner}->is_admin($who));
 
     if ( defined $url && $url ne '' ) {
         if ( defined $title && $title ne '' ) {
@@ -78,7 +78,7 @@ sub command_run {
     }
 
     return 1;
-}
+} ## ---------- end sub command_run
 
 1;
 

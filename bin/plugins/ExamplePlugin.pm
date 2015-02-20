@@ -27,7 +27,7 @@ sub command_regex {
 
     #return 'exampleplugin\s.+?' # if you want some arguments...
     return 'exampleplugin$';
-}
+} ## ---------- end sub command_regex
 
 # Return 1 if OK.
 # 0 if does not pass ACL.
@@ -56,7 +56,7 @@ sub acl_check {
     }
 
     return 0;
-}
+} ## ---------- end sub acl_check
 
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
@@ -67,6 +67,6 @@ sub command_run {
     #$self->send_server(PRIVMSG => '#thechannel', "plugin doing something weee");
 
     return 1;
-}
+} ## ---------- end sub command_run
 
 1;

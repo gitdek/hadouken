@@ -198,11 +198,11 @@ __END__
 
 =head1 NAME
 
-Hadouken::Plugin::Ticker - Crypto-currency ticker plugin.
+Hadouken::Plugin::Nmap - Nmap plugin.
 
 =head1 DESCRIPTION
 
-Crypto ticker plugin for Hadouken.
+Nmap plugin for Hadouken.
 
 =head1 AUTHOR
 

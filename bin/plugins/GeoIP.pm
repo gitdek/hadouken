@@ -48,14 +48,14 @@ sub acl_check {
     }
 
     return 0;
-}
+} ## ---------- end sub acl_check
 
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
     my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
 
-    my ( $cmd, $arg ) = split( / /, $message, 2 ); # DO NOT LC THE MESSAGE!
+    my ( $cmd, $arg ) = split( / /, $message, 2 );    # DO NOT LC THE MESSAGE!
 
     return unless defined $arg;
     if ( $arg =~ /$RE{net}{IPv4}/ ) {
@@ -66,11 +66,11 @@ sub command_run {
 
         my $ip_result = "$arg -> ";
         $ip_result .= " City:" . $record->city
-          if defined $record->city && $record->city ne '';
+            if defined $record->city && $record->city ne '';
         $ip_result .= " Region:" . $record->region
-          if defined $record->region && $record->region ne '';
+            if defined $record->region && $record->region ne '';
         $ip_result .= " Country:" . $record->country_code
-          if defined $record->country_code && $record->country_code ne '';
+            if defined $record->country_code && $record->country_code ne '';
 
         $self->send_server( PRIVMSG => $channel, $ip_result );
 
@@ -100,17 +100,20 @@ sub command_run {
                 my $record = $self->{Owner}->{geoip}->record_by_addr($ip_addr);
 
                 unless ( defined $record ) {
-                    $self->send_server( PRIVMSG => $channel, "$arg ($ip_addr) -> no results in db" );
+                    $self->send_server(
+                        PRIVMSG => $channel,
+                        "$arg ($ip_addr) -> no results in db"
+                    );
                     return;
                 }
 
                 my $dom_result = "$arg ($ip_addr) ->";
                 $dom_result .= " City:" . $record->city
-                  if defined $record->city && $record->city ne '';
+                    if defined $record->city && $record->city ne '';
                 $dom_result .= " Region:" . $record->region
-                  if defined $record->region && $record->region ne '';
+                    if defined $record->region && $record->region ne '';
                 $dom_result .= " Country:" . $record->country_code
-                  if defined $record->country_code && $record->country_code ne '';
+                    if defined $record->country_code && $record->country_code ne '';
 
                 $self->send_server( PRIVMSG => $channel, $dom_result );
             }
@@ -156,7 +159,27 @@ sub command_run {
     }
 
     return 1;
-}
+} ## ---------- end sub command_run
 
 1;
+
+__END__
+
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+Hadouken::Plugin::GeoIP - GeoIP Lookup plugin.
+
+=head1 DESCRIPTION
+
+Perform GeoIP lookup queries.
+
+=head1 AUTHOR
+
+dek - L<http://dek.codes/>
+
+=cut
 

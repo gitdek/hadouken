@@ -40,6 +40,7 @@ sub acl_check {
     my ( $self, %aclentry ) = @_;
 
     my $permissions = $aclentry{'permissions'};
+
     #my $who = $aclentry{'who'};
     #my $channel = $aclentry{'channel'};
     #my $message = $aclentry{'message'};
@@ -55,7 +56,7 @@ sub acl_check {
     }
 
     return 0;
-}
+} ## ---------- end sub acl_check
 
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
@@ -75,8 +76,8 @@ sub command_run {
                 next unless ( defined $ip && length $ip );
 
                 AnyEvent::Whois::Raw::get_whois $ip,
-                  timeout => 10,
-                  sub {
+                    timeout => 10,
+                    sub {
                     my $data = shift;
                     my %parsed;
                     if ($data) {
@@ -93,7 +94,9 @@ sub command_run {
                             $value =~ s/\s+$//;
 
                             $parsed{$key} =
-                              ref $parsed{$key} eq 'ARRAY' ? [ @{ $parsed{$key} }, $value ] : [$value];
+                                ref $parsed{$key} eq 'ARRAY'
+                                ? [ @{ $parsed{$key} }, $value ]
+                                : [$value];
 
                         }
 
@@ -112,7 +115,7 @@ sub command_run {
                         my $reason = shift;
                         warn "* WHOIS error: $reason";
                     }
-                  };
+                    };
 
                 last;
             }
@@ -121,7 +124,7 @@ sub command_run {
     );
 
     return 1;
-}
+} ## ---------- end sub command_run
 
 1;
 
