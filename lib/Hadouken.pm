@@ -2053,7 +2053,19 @@ sub _buildup {
 
             $cmd = lc($cmd);
 
+            if ( defined $arg && length $arg ) {
+                if($self->{con}->is_channel_name($arg)) {
+
+                }
+            }
+            
             if ( $cmd eq 'start' ) {
+                if ( defined $arg && length $arg ) {
+                    if($self->{con}->is_channel_name($arg)) {
+                        $self->_start_trivia($arg);
+                        return 1;
+                    }
+                }
                 $self->_start_trivia($channel);
             }
             elsif ( $cmd eq 'stop' ) {

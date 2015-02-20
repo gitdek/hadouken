@@ -9,10 +9,11 @@ use String::IRC;
 use Encode qw( encode );
 use JSON::XS qw( encode_json decode_json );
 
-# use Data::Printer alias => 'Dumper', colored => 1;
-# use Data::Dumper;
+use URI::Escape;
+use HTML::TokeParser;
+use Text::Unidecode;
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 our $AUTHOR  = 'dek';
 
 our $mktmovers_nasdaq =
@@ -29,7 +30,7 @@ sub command_comment {
     my $ret = '';
 
     $ret .=
-        'List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix.';
+        'List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe.';
     $ret .= '  Type \'.help <command>\' for help with a specify command.';
 
     return $ret;
@@ -68,9 +69,10 @@ sub command_regex {
     # b = bonds
     # bonds = alias for b
     # movers = top movers/losers of the S&P 500
+    # xe = XE.com Currency Converter
 
     return
-        '(movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|\.\s.+?)';
+        '(xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|\.\s.+?)';
 } ## ---------- end sub command_regex
 
 # Return 1 if OK.
@@ -116,6 +118,15 @@ sub command_run {
 
     $cmd = 'q' if $cmd eq '.';
     warn "Command: $cmd";
+
+    if ( $cmd eq 'xe' ) {
+
+        my ( $from, $dest, $amount ) = split( / /, lc($arg) );
+
+        my $ret = $self->currency_convert( $channel, $from, $dest, $amount );
+
+        return $ret;
+    }
 
     my $url =
         "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=0&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
@@ -459,6 +470,88 @@ sub command_run {
 
         return 1;
 } ## ---------- end sub command_run
+
+sub currency_convert {
+    my ( $self, $channel, $begin, $dst, $amount ) = @_;
+
+    return
+           unless defined $begin
+        && length $begin
+        && defined $dst
+        && length $dst
+        && defined $amount
+        && length $amount;
+
+    my $url = sprintf 'http://www.xe.com/currencyconverter/convert/?Amount=%s&From=%s&To=%s',
+        $amount, $begin, $dst;
+
+    my $summary = '';
+
+    try {
+        $self->asyncsock->get(
+            $url,
+            sub {
+                my ( $body, $header ) = @_;
+
+                return unless defined $body && defined $header;
+
+                my $parser = HTML::TokeParser->new( \$body );
+                while ( my $token = $parser->get_tag('tr') ) {
+                    next unless ( defined $token->[1] && exists $token->[1]{'class'} );
+
+                    my $c = $token->[1]{'class'};
+
+                    if ( $c =~ 'uccRes' ) {
+                        my $text = $parser->get_trimmed_text("/tr");
+                        $text =~ s/^\s+//;
+                        $text =~ s/([^[:ascii:]]+)/unidecode($1)/ge;
+
+                        return unless defined $text && length $text;
+
+                        my ( $asset_a,  $asset_b )    = split( / = /, $text );
+                        my ( $amount_a, $currency_a ) = split( / /,   $asset_a );
+                        my ( $amount_b, $currency_b ) = split( / /,   $asset_b );
+
+                        # warn "Raw result: [$text]";
+
+                        $amount_a =~ s/^\s+//;
+                        $amount_a =~ s/^\s+//;
+                        $amount_b =~ s/\s+$//;
+                        $amount_b =~ s/\s+$//;
+
+                        return
+                               unless defined $amount_a
+                            && length $amount_a
+                            && $amount_a > 0
+                            && defined $amount_b
+                            && length $amount_b
+                            && $amount_b > 0;
+
+                        return
+                               unless defined $currency_a
+                            && defined $currency_b
+                            && length $currency_a
+                            && length $currency_b;
+
+                        $summary = '';
+                        $summary .= String::IRC->new($amount_a)->light_green;
+                        $summary .= ' ' . $currency_a . ' = ';
+                        $summary .= String::IRC->new($amount_b)->light_green;
+                        $summary .= ' ' . $currency_b;
+
+                        $self->send_server( PRIVMSG => $channel, $summary );
+
+                        return 1;
+                    }
+                }
+
+            }
+        );
+    }
+    catch($e) {
+        warn("An error occured while currency_convert was executing: $e");
+    };
+} ## ---------- end sub currency_convert
 
 sub market_movers {
     my $self    = shift;
