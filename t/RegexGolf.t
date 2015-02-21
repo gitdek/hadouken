@@ -55,7 +55,7 @@ sub verify {
     }
 
     return not( $missed_winners or $matched_losers );
-}
+} ## ---------- end sub verify
 
 # Return components that match at least one winner, but no loser.
 sub regex_components {
@@ -83,7 +83,7 @@ sub regex_components {
     }
 
     return uniq @p;
-}
+} ## ---------- end sub regex_components
 
 sub dotify {
     my ($part) = @_;
@@ -95,7 +95,7 @@ sub dotify {
         }
     }
     return @list;
-}
+} ## ---------- end sub dotify
 
 sub replacements {
     my ($char) = @_;
@@ -105,7 +105,7 @@ sub replacements {
     else {
         return $char . '.';
     }
-}
+} ## ---------- end sub replacements
 
 sub subparts {
     my ($word) = @_;
@@ -118,7 +118,7 @@ sub subparts {
     }
 
     return uniq @list;
-}
+} ## ---------- end sub subparts
 
 sub largest_value {
     my $hash = shift;
@@ -133,7 +133,7 @@ sub largest_value {
         }
     }
     return $large_key;
-}
+} ## ---------- end sub largest_value
 
 # Find a regex to match A but not B, and vice-versa.  Print summary.
 sub findboth {
@@ -143,14 +143,14 @@ sub findboth {
     is( verify( $solution, $A, $B ), 1, 'findboth verify W-L' );
     my $ratio = length( "\^(" . join( "\|", @$A ) . ")\$" ) / ( length($solution) );
     printf "%3d chars, %4.1f ratio, %2d winners %s: %s\n", length($solution), $ratio,
-      length($A), "W-L", $solution;
+        length($A), "W-L", $solution;
 
     $solution = findregex( $B, $A );
     is( verify( $solution, $B, $A ), 1, 'findboth verify L-W' );
     $ratio = length( "\^(" . join( "\|", @$B ) . ")\$" ) / ( length($solution) );
     printf "%3d chars, %4.1f ratio, %2d winners %s: %s\n", length($solution), $ratio,
-      length($B), "L-W", $solution;
-}
+        length($B), "L-W", $solution;
+} ## ---------- end sub findboth
 
 # Find regex that matches all winners and no losers.
 sub findregex {
@@ -191,7 +191,7 @@ sub findregex {
     }
 
     return join( "\|", @solution );
-}
+} ## ---------- end sub findregex
 
 sub genregex {
     my ($list) = @_;
@@ -205,7 +205,7 @@ sub genregex {
     $_ = $r->as_string;
     s/\(\?:/(/g;
     return $_;
-}
+} ## ---------- end sub genregex
 
 say "winners: " . join( ', ', @winners );
 say "losers: " . join( ', ', @losers );

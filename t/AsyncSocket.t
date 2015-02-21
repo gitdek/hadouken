@@ -1,6 +1,6 @@
 use strict;
 
-use Test::More; # qw(no_plan);
+use Test::More;                                 # qw(no_plan);
 use ExtUtils::MakeMaker qw/prompt/;
 
 use vars qw/$REMOTE_TESTS/;
@@ -10,11 +10,12 @@ BEGIN {
     use_ok('AnyEvent');
 
     require_ok('HTTP::Cookies');
-}
+} ## ---------- end BEGIN
 
 #get_network_permission();
 
 $REMOTE_TESTS = 'y';
+
 #$REMOTE_TESTS ||='';
 
 diag("Testing AsyncSocket $AsyncSocket::VERSION, Perl $], $^X");
@@ -27,7 +28,7 @@ $asock->timeout(5);
 
 cmp_ok( $asock->timeout, '==', '5', 'timeout set' );
 
-my $cv; # = AE::cv;
+my $cv;                                         # = AE::cv;
 
 SKIP: {
     skip "REMOTE TESTS", 2 unless $REMOTE_TESTS eq "y";
@@ -42,7 +43,7 @@ SKIP: {
 
     isnt( $response, undef, "Response" );
     isnt( $header,   undef, "Header" );
-}
+} ## ---------- end SKIP:
 
 sub test_network {
     $asock->get(
@@ -54,7 +55,7 @@ sub test_network {
     );
 
     return 1;
-}
+} ## ---------- end sub test_network
 
 sub get_network_permission {
     print <<EOB;
@@ -66,7 +67,7 @@ EOB
 
     $REMOTE_TESTS = prompt( "Test with a network connection", "y" );
 
-}
+} ## ---------- end sub get_network_permission
 
 done_testing();
 

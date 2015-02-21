@@ -28,10 +28,13 @@ sub command_comment {
     my $self = shift;
 
     my $ret = '';
-    $ret .= "List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe.\n";
-    $ret .= "  movers [exchange] - exchanges: sp500, dow, nasdaq - See biggest gainers/losers of the day.\n";
+    $ret .=
+        "List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe.\n";
+    $ret .=
+        "  movers [exchange] - exchanges: sp500, dow, nasdaq - See biggest gainers/losers of the day.\n";
     $ret .= "  xe [currency_a] [currency_b] [amount] - xe.com currency conversion.\n";
     $ret .= "  fforex/ffx - Forex futures.\n";
+
     #$ret .= "  Type \'.help <command>\' for help with a specify command.";
 
     return $ret;
