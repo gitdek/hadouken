@@ -5,7 +5,29 @@ by Jason Costello, @jsncostello
 
 @import url(pygment_trac.css);
 
-/*******************************************************************************
+/***************************************
+ * Image resizing
+ * *************************************/
+ 
+
+.img-100 img {
+    max-width: 100%;
+}
+
+.img-75 img {
+    max-width: 75%;
+}
+
+.img-50 img {
+    max-width: 50%;
+}
+
+.img-25 img {
+    max-width: 25%;
+}
+ 
+ 
+ /*******************************************************************************
 MeyerWeb Reset
 *******************************************************************************/
 
@@ -309,7 +331,9 @@ Full-Width Styles
 
 #project_tagline {
   color: #fff;
-  font-size: 24px;
+  font-size: 16px;
+  right: 300px;
+  position: absolute;
   font-weight: 300;
   background: none;
   text-shadow: #111 0px 0px 10px;
