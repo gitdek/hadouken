@@ -1,6 +1,6 @@
 use strict;
 
-use Test::More qw(no_plan);
+use Test::More; # qw(no_plan);
 
 BEGIN {
     use_ok('Hadouken::Plugin::StockMarket');
@@ -10,11 +10,9 @@ BEGIN {
     use_ok('Hadouken::Plugin::Shorten');
 } ## ---------- end BEGIN
 
-# can_ok('Hadouken::Plugin::StockMarket', ('new'));
+# can_ok('Hadouken::Plugin::IMDB', ('new'));
 
 diag("Testing Plugins for Hadouken $Hadouken::VERSION, Perl $], $^X");
-
-#diag( "Testing Hadouken::Plugin::StockMarket $Hadouken::Plugin::StockMarket::VERSION, Perl $], $^X" );
 
 done_testing();
 

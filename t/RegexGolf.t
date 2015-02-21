@@ -3,11 +3,11 @@
 use strict;
 use warnings;
 use diagnostics;
-
 use feature 'say';
 
 use Test::More qw(no_plan);
-use Data::Printer alias => 'Dumper';
+
+#use Data::Printer alias => 'Dumper';
 use Regexp::Assemble;
 use List::MoreUtils ':all';
 
