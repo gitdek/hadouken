@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Hadouken : debugthug.com">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Hadouken</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/gitdek/hadouken">View on GitHub</a>
+
+          <h1 id="project_title">Hadouken</h1>
+          <h2 id="project_tagline">debugthug.com</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/gitdek/hadouken/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/gitdek/hadouken/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <p><a name="toc1-4" title="Hadouken"></a></p>
+
+<h1>
+<a id="hadouken" class="anchor" href="#hadouken" aria-hidden="true"><span class="octicon octicon-link"></span></a>Hadouken</h1>
+
+<p>By Joe P <a href="mailto:dek@dek.codes">dek@dek.codes</a></p>
+
+<p><a name="toc2-9" title="Introduction"></a></p>
+
+<h2>
+<a id="introduction" class="anchor" href="#introduction" aria-hidden="true"><span class="octicon octicon-link"></span></a>Introduction</h2>
+
+<hr>
+
+<p><img src="http://i.imgur.com/5Q35cIy.jpg" alt="hadouken"></p>
+
+<p><a href="http://github.com/gitdek/hadouken/">Hadouken</a> is an irc bot which aims to provide fun, information, and
+channel management. The main goal is a simple plugin design so others can 
+contribute even with limited time. There are many useful, and some not so
+useful plugins included to begin with.</p>
+
+<p><a name="toc2-16" title="Getting Started"></a></p>
+
+<h2>
+<a id="getting-started" class="anchor" href="#getting-started" aria-hidden="true"><span class="octicon octicon-link"></span></a>Getting Started</h2>
+
+<hr>
+
+<p>This is straight forward and will take just a few minutes. I recommend using
+perlbrew for a newer version of perl and to keep things seperated from the
+system.</p>
+
+<p>It's <code>perl Makefile.PL; make; sudo make install</code>.</p>
+
+<p>Now modify your configuration. By default it is in /etc/hadouken.conf.
+Once completed we're going to run <code>hadouken --setup</code> to encrypt the config
+file on disk. This requires you to set a password, so don't forget it.</p>
+
+<p>Now you are able to run hadouken with <code>hadouken start</code> to run it as a daemon.</p>
+
+<p>If you would like to setup hadouken as a service you can generate the init file
+by running <code>hadouken get_init_file &gt; /etc/init.d/hadouken</code>.</p>
+
+<p><a name="toc2-103" title="Command-line options"></a></p>
+
+<h2>
+<a id="command-line-options" class="anchor" href="#command-line-options" aria-hidden="true"><span class="octicon octicon-link"></span></a>Command-line Options</h2>
+
+<hr>
+
+<p>Make sure you make a backup of your configuration. It's possibly you might
+encrypt it twice by accident, rendering it useless.</p>
+
+<ul>
+<li>
+<p>Run service:</p>
+
+<blockquote>
+<p>hadouken start</p>
+</blockquote>
+</li>
+<li>
+<p>Stop service:</p>
+
+<blockquote>
+<p>hadouken stop</p>
+</blockquote>
+</li>
+<li>
+<p>Restart service:</p>
+
+<blockquote>
+<p>hadouken restart</p>
+</blockquote>
+</li>
+<li>
+<p>Get service status:</p>
+
+<blockquote>
+<p>hadouken status</p>
+</blockquote>
+</li>
+<li>
+<p>Specify another configuration:</p>
+
+<blockquote>
+<p>hadouken --config=[file]</p>
+</blockquote>
+</li>
+<li>
+<p>Run in foreground:</p>
+
+<blockquote>
+<p>hadouken foreground</p>
+</blockquote>
+</li>
+<li>
+<p>Encrypt configuration file:</p>
+
+<blockquote>
+<p>hadouken --setup</p>
+</blockquote>
+</li>
+<li>
+<p>Display encrypted configuration file:</p>
+
+<blockquote>
+<p>hadouken --showconfig</p>
+</blockquote>
+</li>
+<li>
+<p>Provide password as an argument:</p>
+
+<blockquote>
+<p>hadouken --password=[passwd]</p>
+</blockquote>
+</li>
+<li>
+<p>Generate init file for Hadouken</p>
+
+<blockquote>
+<p>hadouken get_init_file
+`</p>
+</blockquote>
+</li>
+</ul>
+
+<p><a name="toc2-139" title="Core Commands"></a></p>
+
+<h2>
+<a id="core-commands" class="anchor" href="#core-commands" aria-hidden="true"><span class="octicon octicon-link"></span></a>Core Commands</h2>
+
+<hr>
+
+<p>These are the core commands of Hadouken. There are many plugin-ins as well so
+make yourself familiar with those.</p>
+
+<blockquote>
+<h3>
+<a id="common-command-aliases" class="anchor" href="#common-command-aliases" aria-hidden="true"><span class="octicon octicon-link"></span></a>Common command aliases</h3>
+
+<hr>
+
+<ol>
+<li>
+<p>Command: <code>remove</code>.</p>
+
+<blockquote>
+<p><code>Alias</code>: <code>rm</code>, <code>rem</code>, <code>del</code>, <code>delete</code>.</p>
+</blockquote>
+</li>
+<li>
+<p>Command: <code>list</code>.</p>
+
+<blockquote>
+<p><code>Alias</code>: <code>ls</code>.</p>
+</blockquote>
+</li>
+<li>
+<p>Command: <code>all</code>.</p>
+
+<blockquote>
+<p><code>Alias</code>: <code>*</code>.</p>
+</blockquote>
+</li>
+</ol>
+
+<h3>
+<a id="command-prefixes" class="anchor" href="#command-prefixes" aria-hidden="true"><span class="octicon octicon-link"></span></a>Command Prefixes</h3>
+
+<hr>
+
+<ol>
+<li>
+<p>Prefix: <code>.</code></p>
+
+<blockquote>
+<p>eg .admin add <a href="mailto:dek@dek.org">dek@dek.org</a></p>
+</blockquote>
+</li>
+<li>
+<p>Prefix: <code>hadouken</code></p>
+
+<blockquote>
+<p>eg hadouken admin ls</p>
+</blockquote>
+</li>
+<li>
+<p>Prefix: <code>hadouken,</code></p>
+
+<blockquote>
+<p>eg hadouken, weather jfk</p>
+</blockquote>
+</li>
+</ol>
+</blockquote>
+
+<h3>
+<a id="administrative-commands" class="anchor" href="#administrative-commands" aria-hidden="true"><span class="octicon octicon-link"></span></a>Administrative commands</h3>
+
+<hr>
+
+<p>Commands for management of admin users:</p>
+
+<ul>
+<li>admin add [<a href="mailto:ident@host.com">ident@host.com</a>]</li>
+<li>admin rm [<a href="mailto:ident@host.com">ident@host.com</a>]</li>
+<li>admin ls</li>
+<li>admin grep [string]</li>
+<li>admin key [password] - Set a password used for admin communication or optionally perform a Diffie-Hellman key exchange.</li>
+<li>admin reload - Reload hadouken.</li>
+</ul>
+
+<p>Commands for management of whitelisted users:</p>
+
+<ul>
+<li>whitelist add [<a href="mailto:ident@host.com">ident@host.com</a>]</li>
+<li>whitelist rm [<a href="mailto:ident@host.com">ident@host.com</a>]</li>
+<li>whitelist ls</li>
+</ul>
+
+<p>Commands for management of blacklisted users:</p>
+
+<ul>
+<li>blacklist add [<a href="mailto:ident@host.com">ident@host.com</a>]</li>
+<li>blacklist rm [<a href="mailto:ident@host.com">ident@host.com</a>]</li>
+<li>blacklist ls</li>
+</ul>
+
+<p>Commands for management of channels:</p>
+
+<ul>
+<li>channel add [#channel]</li>
+<li>channel rm [#channel]</li>
+<li>channel ls</li>
+<li>channel mode [#channel]</li>
+<li>channel mode [#channel] [modes]</li>
+</ul>
+
+<h4>
+<a id="channel-modes" class="anchor" href="#channel-modes" aria-hidden="true"><span class="octicon octicon-link"></span></a>Channel Modes:</h4>
+
+<hr>
+
+<p><code>+O</code>    Automatically op admins when they join a channel.</p>
+
+<p><code>+W</code>    Automatically op whitelisted user when they join a channel.</p>
+
+<p><code>+P</code>    Protect admin users from de-op/kick/ban.</p>
+
+<p><code>+V</code>    Protect whitelisted users.</p>
+
+<p><code>+U</code>    Automatically shorten url displayed.</p>
+
+<p><code>+A</code>    Aggressive mode if protection is triggered.</p>
+
+<p><code>+Z</code>    Allow plugins to be used in the specified channel.</p>
+
+<p><code>+F</code>    Fast op mode. No verification of op mode changes.</p>
+
+<h4>
+<a id="plugin-commands" class="anchor" href="#plugin-commands" aria-hidden="true"><span class="octicon octicon-link"></span></a>Plugin commands</h4>
+
+<hr>
+
+<ul>
+<li><p>plugin [arg] status - Get status of plugin or use wildcard for status of all available plugins.</p></li>
+<li><p>plugin [arg] load - Load plugin or use wildcard to load all available plugins.</p></li>
+<li><p>plugin [arg] unload - Unload plugin or use wildcard to unload all available plugins.</p></li>
+<li><p>plugin [arg] reload - Reload plugin or use wildcard to reload all available plugins.</p></li>
+<li><p>plugin [arg] autoload on - Set autoload on for plugin, or use wildcard for every available plugin.</p></li>
+<li><p>plugin [arg] autoload off - Set autoload off for plugin, or use wildcard for every available plugin.</p></li>
+</ul>
+
+<h4>
+<a id="miscellaneous-commands" class="anchor" href="#miscellaneous-commands" aria-hidden="true"><span class="octicon octicon-link"></span></a>Miscellaneous commands</h4>
+
+<hr>
+
+<ul>
+<li>commands - Get a list of commands you are able to access determined by your ACL.</li>
+<li>plugins - Get a list of available plugins you can access determined by your ACL.</li>
+<li>raw - Send raw command to server. eg: .raw privmsg dek hello.</li>
+<li>stats - Get version info and uptime.</li>
+<li>powerup - If the bot is oped, it will op you.</li>
+<li>trivia start - Start trivia game.</li>
+<li>trivia stop - Stop trivia game.</li>
+</ul>
+
+<hr>
+
+<p><a name="toc2-159" title="Issues"></a></p>
+
+<h2>
+<a id="issues" class="anchor" href="#issues" aria-hidden="true"><span class="octicon octicon-link"></span></a>Issues</h2>
+
+<hr>
+
+<p>Hadouken has been tested on the following versions of perl:</p>
+
+<ul>
+<li> perl-5.16.3</li>
+<li> perl-5.19.0</li>
+<li> perl-5.19.8</li>
+<li> perl-5.20.1</li>
+<li> perl-5.21.0</li>
+<li> perl-5.21.6</li>
+</ul>
+
+<p>These dependencies may not be satisfied, but this is very rare.</p>
+
+<p>If you have issues with Math::Pari and Digest::MD2 follow the directions below. If you have issues with Digest::MD2 only, jump to step 10.</p>
+
+<ol>
+<li>wget <a href="http://search.cpan.org/CPAN/authors/id/I/IL/ILYAZ/modules/Math-Pari-2.01080605.tar.gz">http://search.cpan.org/CPAN/authors/id/I/IL/ILYAZ/modules/Math-Pari-2.01080605.tar.gz</a>
+</li>
+<li>wget <a href="http://search.cpan.org/CPAN/authors/id/I/IL/ILYAZ/modules/pari/pari-2.1.7.tgz">http://search.cpan.org/CPAN/authors/id/I/IL/ILYAZ/modules/pari/pari-2.1.7.tgz</a>
+</li>
+<li>tar -zxvf Math-Pari-2.01080605.tar.gz</li>
+<li>tar -zxvf pari-2.1.7.tgz</li>
+<li>cd Math-Pari-2.01080605</li>
+<li>Edit Makefile.PL</li>
+<li>Change $paridir = "../pari-2.1.7";</li>
+<li>perl Makefile.PL machine=none</li>
+<li>make install</li>
+<li>apt-get install libdigest-md2-perl</li>
+</ol>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Hadouken maintained by <a href="https://github.com/gitdek">gitdek</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
