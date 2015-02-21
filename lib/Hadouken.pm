@@ -2513,9 +2513,22 @@ sub _buildup {
                     my $ver     = $p->VERSION || '0.0';
 
                     my $si = String::IRC->new($name)->bold;
-                    $command_summary .= '[' . $si . '] ' . $ver . ' -> ' . $comment . " ";
+                    $command_summary .= "$si $ver"; # ' . $comment . " ";
 
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $command_summary );
+                    my $cnt = 0;
+                    #if($comment =~ /\n/) {
+                        my @lines = split( /\n/, $comment );
+                        foreach my $l (@lines) {
+                            next unless defined $l && length $l;
+
+                            $cnt++;
+
+                            my $sum = sprintf("%-15s %-15s %-10s", $si, $ver, $l);
+                            $self->send_server( PRIVMSG => $nickname, $cnt > 1 ? $l : $sum );
+                        }
+                        #}
+
+                    # $self->send_server_unsafe( PRIVMSG => $nickname, $command_summary );
                 }
             }
             catch($e) {
@@ -5401,6 +5414,16 @@ sub usage_blacklist {
 
     return $h;
 } ## ---------- end sub usage_blacklist
+
+
+# This should really be confined to StockMarket.pm but I will make an exception
+# until 'usage' for plugins is implemented.
+sub usage_stockmarket {
+
+    my ( $self, $subkey ) = @_;
+
+}
+
 
 1;
 
