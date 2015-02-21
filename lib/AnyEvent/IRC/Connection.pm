@@ -83,7 +83,7 @@ sub new {
     );
 
     return $self;
-}
+} ## ---------- end sub new
 
 =item $con->connect ($host, $port [, $prepcb_or_timeout])
 
@@ -138,6 +138,7 @@ sub connect {
             },
             on_read => sub {
                 my ($hdl) = @_;
+
                 # \015* for some broken servers, which might have an extra
                 # carriage return in their MOTD.
                 $hdl->push_read(
@@ -154,18 +155,18 @@ sub connect {
 
         $self->{connected} = 1;
         $self->event('connect');
-      }, sub {
+        }, sub {
         my ($sock) = @_;
 
         my $ipn = AnyEvent::Socket::aton "$bindaddr";
 
         setsockopt( $sock, SOL_SOCKET, SO_REUSEPORT, 1 )
-          or die "Cannot set sockopt SO_REUSEPORT: $!";
+            or die "Cannot set sockopt SO_REUSEPORT: $!";
 
         if ( defined $bindaddr && $bindaddr ne '' && defined $ipn && length $ipn ) {
             my $bind = AnyEvent::Socket::pack_sockaddr 43, $ipn;
             bind $sock, $bind
-              or die "Cannot bind to addr: $!";
+                or die "Cannot bind to addr: $!";
         }
 
         #$sock->bind($bind)
@@ -173,12 +174,12 @@ sub connect {
 
         if ( defined $iface && $iface ne '' ) {
             setsockopt( $sock, SOL_SOCKET, 25, pack( "Z*", $iface ) )
-              or die "Cannot bind to interface: $!";
+                or die "Cannot bind to interface: $!";
         }
 
         return undef;
-      }; #(defined $prep ? (ref $prep ? $prep : sub { $prep }) : ());
-}
+        };                                      #(defined $prep ? (ref $prep ? $prep : sub { $prep }) : ());
+} ## ---------- end sub connect
 
 =item $con->enable_ssl ()
 
@@ -204,7 +205,7 @@ sub disconnect {
     delete $self->{con_guard};
     delete $self->{socket};
     $self->event( disconnect => $reason );
-}
+} ## ---------- end sub disconnect
 
 =item $con->is_connected
 
@@ -242,7 +243,7 @@ sub send_raw {
 
     return unless $self->{socket};
     $self->{socket}->push_write( $ircline . "\015\012" );
-}
+} ## ---------- end sub send_raw
 
 =item $con->send_msg ($command, @params)
 
@@ -256,7 +257,7 @@ sub send_msg {
 
     $self->event( send => [ undef, @msg ] );
     $self->event( sent => undef, @msg );
-}
+} ## ---------- end sub send_msg
 
 sub _feed_irc_data {
     my ( $self, $line ) = @_;
@@ -264,6 +265,7 @@ sub _feed_irc_data {
     #d# warn "LINE:[" . $line . "][".length ($line)."]";
 
     my $m = parse_irc_msg($line);
+
     #d# warn "MESSAGE{$m->{params}->[-1]}[".(length $m->{params}->[-1])."]\n";
     #d# warn "HEX:" . join ('', map { sprintf "%2.2x", ord ($_) } split //, $line)
     #d#     . "\n";
@@ -271,7 +273,7 @@ sub _feed_irc_data {
     $self->event( read    => $m );
     $self->event( 'irc_*' => $m );
     $self->event( 'irc_' . ( lc $m->{command} ), $m );
-}
+} ## ---------- end sub _feed_irc_data
 
 =back
 

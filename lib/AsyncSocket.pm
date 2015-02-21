@@ -20,7 +20,7 @@ has agent => (
     is      => 'rw',
     isa     => 'Str',
     default => sub { 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)' }
-); #join "/", __PACKAGE__, $VERSION });
+);                                              #join "/", __PACKAGE__, $VERSION });
 has cookie_jar => (
     is      => 'rw',
     isa     => 'HTTP::Cookies',
@@ -40,7 +40,7 @@ sub _request {
     no strict 'refs';
     my $req = &{"HTTP::Request::Common::$method"}(@_);
     $self->request( $req, $cb );
-}
+} ## ---------- end sub _request
 
 sub request {
     my ( $self, $request, $cb ) = @_;
@@ -66,7 +66,7 @@ sub request {
                 my $t1 = shift @tmp;
                 my $t2 = shift @tmp;
 
-                push @cookies, "$t1,$t2"; # if defined $t1 && defined $t2;
+                push @cookies, "$t1,$t2";       # if defined $t1 && defined $t2;
             }
 
             $header->{'set-cookie'} = \@cookies;
@@ -78,7 +78,7 @@ sub request {
         $self->cookie_jar->extract_cookies($res);
         $cb->( $body, $header );
     };
-}
+} ## ---------- end sub request
 
 no Any::Moose;
 __PACKAGE__->meta->make_immutable;

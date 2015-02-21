@@ -10,8 +10,8 @@ use Encode;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
 use AnyEvent::IRC::Util qw/prefix_nick decode_ctcp split_prefix
-  is_nick_prefix join_prefix encode_ctcp
-  split_unicode_string mk_msg/;
+    is_nick_prefix join_prefix encode_ctcp
+    split_unicode_string mk_msg/;
 
 use base AnyEvent::IRC::Connection::;
 
@@ -394,7 +394,7 @@ sub new {
     $self->cleanup;
 
     return $self;
-}
+} ## ---------- end sub new
 
 sub cleanup {
     my ($self) = @_;
@@ -427,7 +427,7 @@ sub cleanup {
     delete $self->{real};
     delete $self->{server_pass};
     delete $self->{register_cb_guard};
-}
+} ## ---------- end sub cleanup
 
 =item $cl->connect ($host, $port)
 
@@ -465,7 +465,8 @@ sub connect {
                 my ( $self, $err ) = @_;
 
                 unless ($err) {
-                    $self->register( $info->{nick}, $info->{user}, $info->{real}, $info->{password} );
+                    $self->register( $info->{nick}, $info->{user}, $info->{real},
+                        $info->{password} );
                 }
 
                 delete $self->{register_cb_guard};
@@ -474,7 +475,7 @@ sub connect {
     }
 
     $self->SUPER::connect( $host, $port, $timeout, $iface, $bindaddr );
-}
+} ## ---------- end sub connect
 
 =item $cl->register ($nick, $user, $real, $server_pass)
 
@@ -498,7 +499,7 @@ sub register {
     $self->send_msg( "PASS", $pass ) if defined $pass;
     $self->send_msg( "NICK", $nick );
     $self->send_msg( "USER", $user || $nick, "*", "0", $real || $nick );
-}
+} ## ---------- end sub register
 
 =item $cl->set_nick_change_cb ($callback)
 
@@ -578,7 +579,7 @@ sub channel_list {
     else {
         return $self->{channel_list} || {};
     }
-}
+} ## ---------- end sub channel_list
 
 =item $cl->nick_modes ($channel, $nick)
 
@@ -592,11 +593,11 @@ sub nick_modes {
     my ( $self, $channel, $nick ) = @_;
 
     my $c = $self->channel_list($channel)
-      or return undef;
+        or return undef;
 
     my (%lcc) = map { $self->lower_case($_) => $c->{$_} } keys %$c;
     return $lcc{ $self->lower_case($nick) };
-}
+} ## ---------- end sub nick_modes
 
 =item $cl->send_msg (...)
 
@@ -649,7 +650,7 @@ sub send_srv {
     else {
         push @{ $self->{con_queue} }, \@msg;
     }
-}
+} ## ---------- end sub send_srv
 
 =item $cl->clear_srv_queue ()
 
@@ -690,7 +691,7 @@ sub send_chan {
     else {
         push @{ $self->{chan_queue}->{ $self->lower_case($chan) } }, \@msg;
     }
-}
+} ## ---------- end sub send_chan
 
 =item $cl->clear_chan_queue ($channel)
 
@@ -751,16 +752,16 @@ sub send_long_message {
 
     my $id = $self->nick_ident( $self->nick );
     if ( $id eq '' ) {
-        $id = "X" x 60; # just in case the ident is not available...
+        $id = "X" x 60;                         # just in case the ident is not available...
     }
 
-    my $init_len = length mk_msg( $id, $cmd, @params, " " ); # i know off by 1
+    my $init_len = length mk_msg( $id, $cmd, @params, " " );    # i know off by 1
 
     if ( $ctcp ne '' ) {
-        $init_len += length($ctcp) + 3;                      # CTCP cmd + " " + "\001" x 2
+        $init_len += length($ctcp) + 3;         # CTCP cmd + " " + "\001" x 2
     }
 
-    my $max_len = 500;                                       # give 10 bytes extra margin
+    my $max_len = 500;                          # give 10 bytes extra margin
 
     my $line_len = $max_len - $init_len;
 
@@ -769,7 +770,7 @@ sub send_long_message {
 
     # splitup long lines into multiple ones:
     @lines =
-      map split_unicode_string( $encoding, $_, $line_len ), @lines;
+        map split_unicode_string( $encoding, $_, $line_len ), @lines;
 
     # send lines line-by-line:
     for my $line (@lines) {
@@ -783,7 +784,7 @@ sub send_long_message {
     }
 
     @lines;
-}
+} ## ---------- end sub send_long_message
 
 =item $cl->enable_ping ($interval, $cb)
 
@@ -821,7 +822,7 @@ sub enable_ping {
             $self->enable_ping( $int, $cb );
         }
     };
-}
+} ## ---------- end sub enable_ping
 
 =item $cl->lower_case ($str)
 
@@ -835,7 +836,7 @@ sub lower_case {
     local $_ = $str;
     $self->{casemap_func}->();
     return $_;
-}
+} ## ---------- end sub lower_case
 
 =item $cl->eq_str ($str1, $str2)
 
@@ -867,7 +868,7 @@ sub isupport {
     else {
         return $self->{isupport};
     }
-}
+} ## ---------- end sub isupport
 
 =item $cl->split_nick_mode ($prefixed_nick)
 
@@ -910,7 +911,7 @@ sub split_nick_mode {
     else {
         return ( \%mode_map, $nick, undef );
     }
-}
+} ## ---------- end sub split_nick_mode
 
 =item $cl->map_prefix_to_mode ($prefix)
 
@@ -938,7 +939,7 @@ sub map_mode_to_prefix {
     }
 
     return undef;
-}
+} ## ---------- end sub map_mode_to_prefix
 
 =item $cl->available_nick_modes ()
 
@@ -964,7 +965,7 @@ sub is_channel_name {
 
     my $cchrs = $self->{channel_chars};
     $string =~ /^([\Q$cchrs\E]+)(.+)$/;
-}
+} ## ---------- end sub is_channel_name
 
 =item $cl->nick_ident ($nick)
 
@@ -1122,7 +1123,7 @@ sub _setup_internal_dcc_handlers {
             }
         }
     );
-}
+} ## ---------- end sub _setup_internal_dcc_handlers
 
 =item $cl->dcc_initiate ($dest, $type, $timeout, $local_ip, $local_port)
 
@@ -1188,7 +1189,7 @@ sub dcc_initiate {
         delete $dcc->{listener};
         delete $dcc->{timeout};
 
-      }, sub {
+        }, sub {
         my ( $fh, $host, $port ) = @_;
         return unless $dcc && $self;
 
@@ -1199,10 +1200,10 @@ sub dcc_initiate {
         $dcc->{local_port} = $local_port;
 
         $self->event( dcc_ready => $id, $dest, $type, $local_ip, $local_port );
-      };
+        };
 
     $id;
-}
+} ## ---------- end sub dcc_initiate
 
 =item $cl->dcc_disconnect ($id, $reason)
 
@@ -1222,7 +1223,7 @@ sub dcc_disconnect {
         delete $dcc->{handle};
         $self->event( dcc_close => $id, $dcc->{type}, $reason );
     }
-}
+} ## ---------- end sub dcc_disconnect
 
 =item $cl->dcc_accept ($id, $timeout)
 
@@ -1238,7 +1239,7 @@ sub dcc_accept {
     my ( $self, $id, $timeout ) = @_;
 
     my $dcc = $self->{dcc}->{$id}
-      or return;
+        or return;
 
     weaken $dcc;
     weaken $self;
@@ -1278,7 +1279,7 @@ sub dcc_accept {
     };
 
     $id;
-}
+} ## ---------- end sub dcc_accept
 
 sub dcc_handle {
     my ( $self, $id ) = @_;
@@ -1287,7 +1288,7 @@ sub dcc_handle {
         return $dcc->{handle};
     }
     return;
-}
+} ## ---------- end sub dcc_handle
 
 sub send_dcc_chat {
     my ( $self, $id, $msg ) = @_;
@@ -1297,7 +1298,7 @@ sub send_dcc_chat {
             $dcc->{handle}->push_write("$msg\015\012");
         }
     }
-}
+} ## ---------- end sub send_dcc_chat
 
 ################################################################################
 # Private utility functions
@@ -1316,8 +1317,9 @@ sub update_ident {
     if ( $old ne $ident ) {
         $self->event( ident_change => $n, $ident );
     }
+
     #d# warn "IDENTS:\n".(join "\n", map { "\t$_\t=>\t$self->{idents}->{$_}" } keys %{$self->{idents}})."\n";
-}
+} ## ---------- end sub update_ident
 
 ################################################################################
 # Channel utility functions
@@ -1336,7 +1338,7 @@ sub channel_remove {
             delete $self->{channel_list}->{ $self->lower_case($chan) }->{$nick};
         }
     }
-}
+} ## ---------- end sub channel_remove
 
 sub channel_add {
     my ( $self, $msg, $chan, $nicks, $modes ) = @_;
@@ -1364,7 +1366,7 @@ sub channel_add {
             $ch->{$nick} = {} unless defined $ch->{$nick};
         }
     }
-}
+} ## ---------- end sub channel_add
 
 sub channel_mode_change {
     my ( $self, $chan, $op, $mode, $nick ) = @_;
@@ -1373,9 +1375,9 @@ sub channel_mode_change {
     defined $nickmode or return;
 
     $op eq '+'
-      ? $nickmode->{$mode} = 1
-      : delete $nickmode->{$mode};
-}
+        ? $nickmode->{$mode} = 1
+        : delete $nickmode->{$mode};
+} ## ---------- end sub channel_mode_change
 
 sub _filter_new_nicks_from_channel {
     my ( $self, $chan, @nicks ) = @_;
@@ -1401,7 +1403,7 @@ sub anymsg_cb {
             $msg
         );
     }
-}
+} ## ---------- end sub anymsg_cb
 
 sub privmsg_cb {
     my ( $self, $msg ) = @_;
@@ -1432,7 +1434,7 @@ sub privmsg_cb {
             $self->event( privatemsg => $targ, $msg );
         }
     }
-}
+} ## ---------- end sub privmsg_cb
 
 sub welcome_cb {
     my ( $self, $msg ) = @_;
@@ -1443,19 +1445,19 @@ sub welcome_cb {
 
     $self->{registered} = 1;
     $self->event('registered');
-}
+} ## ---------- end sub welcome_cb
 
 sub registered_cb {
     my ( $self, $msg ) = @_;
 
     $self->send_srv( WHOIS => $self->nick )
-      if $self->{send_initial_whois};
+        if $self->{send_initial_whois};
 
     for ( @{ $self->{con_queue} } ) {
         $self->send_msg(@$_);
     }
     $self->clear_srv_queue();
-}
+} ## ---------- end sub registered_cb
 
 sub isupport_cb {
     my ( $self, $msg ) = @_;
@@ -1504,7 +1506,7 @@ sub isupport_cb {
     if ( defined( my $chan_prefixes = $self->{isupport}->{CHANTYPES} ) ) {
         $self->{channel_chars} = $chan_prefixes;
     }
-}
+} ## ---------- end sub isupport_cb
 
 sub ping_cb {
     my ( $self, $msg ) = @_;
@@ -1540,7 +1542,7 @@ sub nick_cb {
     for (@chans) {
         $self->event( channel_change => $msg, $_, $nick, $newnick, $wasme );
     }
-}
+} ## ---------- end sub nick_cb
 
 sub namereply_cb {
     my ( $self, $msg ) = @_;
@@ -1555,13 +1557,13 @@ sub endofnames_cb {
     my @modes        = map { ( $self->split_nick_mode($_) )[0] } @names_result;
     my @nicks        = map { ( $self->split_nick_mode($_) )[1] } @names_result;
     my @idents =
-      grep { defined } map { ( $self->split_nick_mode($_) )[2] } @names_result;
+        grep { defined } map { ( $self->split_nick_mode($_) )[2] } @names_result;
     my @new_nicks = $self->_filter_new_nicks_from_channel( $chan, @nicks );
 
     $self->channel_add( $msg, $chan, \@nicks, \@modes );
     $self->update_ident($_) for @idents;
     $self->event( channel_add => $msg, $chan, @new_nicks ) if @new_nicks;
-}
+} ## ---------- end sub endofnames_cb
 
 sub whoreply_cb {
     my ( $self, $msg ) = @_;
@@ -1589,7 +1591,7 @@ sub join_cb {
     if ( $self->_was_me($msg) && !$self->isupport('UHNAMES') ) {
         $self->send_srv( WHO => $chan );
     }
-}
+} ## ---------- end sub join_cb
 
 sub part_cb {
     my ( $self, $msg ) = @_;
@@ -1599,7 +1601,7 @@ sub part_cb {
     $self->event( part => $nick, $chan, $self->_was_me($msg), $msg->{params}->[1] );
     $self->channel_remove( $msg, $chan, [$nick] );
     $self->event( channel_remove => $msg, $chan, $nick );
-}
+} ## ---------- end sub part_cb
 
 sub kick_cb {
     my ( $self, $msg ) = @_;
@@ -1613,7 +1615,7 @@ sub kick_cb {
     );
     $self->channel_remove( $msg, $chan, [$kicked_nick] );
     $self->event( channel_remove => $msg, $chan, $kicked_nick );
-}
+} ## ---------- end sub kick_cb
 
 sub quit_cb {
     my ( $self, $msg ) = @_;
@@ -1627,7 +1629,7 @@ sub quit_cb {
             $self->event( channel_remove => $msg, $_, $nick );
         }
     }
-}
+} ## ---------- end sub quit_cb
 
 sub mode_cb {
     my ( $self, $msg ) = @_;
@@ -1644,20 +1646,20 @@ sub mode_cb {
             }
         }
     }
-}
+} ## ---------- end sub mode_cb
 
 sub away_change_cb {
     my ( $self, $msg ) = @_;
 
-    if ( $msg->{command} eq '305' ) { # no longer away
+    if ( $msg->{command} eq '305' ) {           # no longer away
         delete $self->{away_status};
     }
-    else {                            # away
+    else {                                      # away
         $self->{away_status} = 1;
     }
 
     $self->event( away_status_change => $self->{away_status} );
-}
+} ## ---------- end sub away_change_cb
 
 sub debug_cb {
     my ( $self, $msg ) = @_;
@@ -1682,7 +1684,7 @@ sub change_nick_login_cb {
         $self->{nick} = $newnick;
         $self->send_msg( "NICK", $newnick );
     }
-}
+} ## ---------- end sub change_nick_login_cb
 
 sub disconnect_cb {
     my ($self) = @_;
@@ -1693,7 +1695,7 @@ sub disconnect_cb {
     }
 
     $self->cleanup;
-}
+} ## ---------- end sub disconnect_cb
 
 sub rpl_topic_cb {
     my ( $self, $msg ) = @_;
@@ -1701,7 +1703,7 @@ sub rpl_topic_cb {
     my $topic = $msg->{params}->[-1];
 
     $self->event( channel_topic => $chan, $topic );
-}
+} ## ---------- end sub rpl_topic_cb
 
 sub topic_change_cb {
     my ( $self, $msg ) = @_;
@@ -1710,7 +1712,7 @@ sub topic_change_cb {
     my $topic = $msg->{params}->[-1];
 
     $self->event( channel_topic => $chan, $topic, $who );
-}
+} ## ---------- end sub topic_change_cb
 
 sub update_ident_cb {
     my ( $self, $msg ) = @_;
@@ -1718,7 +1720,7 @@ sub update_ident_cb {
     if ( is_nick_prefix( $msg->{prefix} ) ) {
         $self->update_ident( $msg->{prefix} );
     }
-}
+} ## ---------- end sub update_ident_cb
 
 sub update_ident_nick_change_cb {
     my ( $self, $old, $new ) = @_;
@@ -1729,7 +1731,7 @@ sub update_ident_nick_change_cb {
     my ( $n, $u, $h ) = split_prefix($oldid);
 
     $self->update_ident( join_prefix( $new, $u, $h ) );
-}
+} ## ---------- end sub update_ident_nick_change_cb
 
 sub ctcp_auto_reply_cb {
     my ( $self, $src, $targ, $tag, $msg, $type ) = @_;
@@ -1737,14 +1739,14 @@ sub ctcp_auto_reply_cb {
     return if $type ne 'PRIVMSG';
 
     my $ctcprepl = $self->{ctcp_auto_replies}->{$tag}
-      or return;
+        or return;
 
     if ( ref( $ctcprepl->[0] ) eq 'CODE' ) {
         $ctcprepl = [ $ctcprepl->[0]->( $self, $src, $targ, $tag, $msg, $type ) ];
     }
 
     $self->send_msg( NOTICE => $src, encode_ctcp(@$ctcprepl) );
-}
+} ## ---------- end sub ctcp_auto_reply_cb
 
 =back
 

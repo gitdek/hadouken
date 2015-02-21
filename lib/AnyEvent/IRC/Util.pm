@@ -4,9 +4,9 @@ use Exporter;
 use Encode;
 our @ISA       = qw/Exporter/;
 our @EXPORT_OK = qw(mk_msg parse_irc_msg split_prefix prefix_nick
-  decode_ctcp encode_ctcp filter_ctcp_text_attr prefix_user prefix_host
-  rfc_code_to_name filter_colors is_nick_prefix join_prefix
-  split_unicode_string);
+    decode_ctcp encode_ctcp filter_ctcp_text_attr prefix_user prefix_host
+    rfc_code_to_name filter_colors is_nick_prefix join_prefix
+    split_unicode_string);
 
 =head1 NAME
 
@@ -60,7 +60,7 @@ sub parse_irc_msg {
     my ($msg) = @_;
 
     $msg =~ s/^(?::([^ ]+)[ ])?([A-Za-z]+|\d{3})//
-      or return undef;
+        or return undef;
     my %msg;
     ( $msg{prefix}, $msg{command}, $msg{params} ) = ( $1, $2, [] );
 
@@ -83,7 +83,7 @@ sub parse_irc_msg {
     }
 
     \%msg;
-}
+} ## ---------- end sub parse_irc_msg
 
 =item B<mk_msg ($prefix, $command, @params)>
 
@@ -134,24 +134,23 @@ sub mk_msg {
     $msg .= defined $trail ? " :$trail" : "";
 
     return $msg;
-}
+} ## ---------- end sub mk_msg
 
-my @_ctcp_lowlevel_escape =
-  ( "\000", "0", "\012", "n", "\015", "r", "\020", "\020" );
+my @_ctcp_lowlevel_escape = ( "\000", "0", "\012", "n", "\015", "r", "\020", "\020" );
 
 sub unescape_lowlevel {
     my ($data) = @_;
     my %map = reverse @_ctcp_lowlevel_escape;
     $data =~ s/\020(.)/defined $map{$1} ? $map{$1} : $1/ge;
     $data;
-}
+} ## ---------- end sub unescape_lowlevel
 
 sub escape_lowlevel {
     my ($data) = @_;
     my %map = @_ctcp_lowlevel_escape;
     $data =~ s/([\000\012\015\020])/"\020$map{$1}"/ge;
     $data;
-}
+} ## ---------- end sub escape_lowlevel
 
 sub unescape_ctcp {
     my ($data) = @_;
@@ -200,7 +199,7 @@ sub decode_ctcp {
     }
 
     return ( $line, \@ctcp );
-}
+} ## ---------- end sub decode_ctcp
 
 =item B<encode_ctcp (@msg)>
 
@@ -233,26 +232,25 @@ function may destroy the message in some occasions a bit.
 
 sub filter_colors($) {
     my ($line) = @_;
-    $line =~ s/\x1B\[.*?[\x00-\x1F\x40-\x7E]//g; # see ECMA-48 + advice by urxvt author
-    $line =~ s/\x03\d\d?(?:,\d\d?)?//g;   # see http://www.mirc.co.uk/help/color.txt
-    $line =~ s/[\x03\x16\x02\x1f\x0f]//g; # see some undefined place :-)
+    $line =~ s/\x1B\[.*?[\x00-\x1F\x40-\x7E]//g;    # see ECMA-48 + advice by urxvt author
+    $line =~ s/\x03\d\d?(?:,\d\d?)?//g;         # see http://www.mirc.co.uk/help/color.txt
+    $line =~ s/[\x03\x16\x02\x1f\x0f]//g;       # see some undefined place :-)
     $line;
-}
+} ## ---------- end sub filter_colors($)
 
 # implemented after the below CTCP spec, but
 # doesnt seem to be used by anyone... so it's untested.
 sub filter_ctcp_text_attr_bogus {
     my ( $line, $cb ) = @_;
     return unless $cb;
-    $line
-      =~ s/\006([BVUSI])/{warn "FIL\n"; my $c = $cb->($1); defined $c ? $c : "\006$1"}/ieg;
-    $line
-      =~ s/\006CA((?:I[0-9A-F]|#[0-9A-F]{3}){2})/{my $c = $cb->($1); defined $c ? $c : "\006CA$1"}/ieg;
-    $line
-      =~ s/\006C([FB])(I[0-9A-F]|#[0-9A-F]{3})/{my $c = $cb->($1, $2); defined $c ? $c : "\006C$1$2"}/ieg;
+    $line =~ s/\006([BVUSI])/{warn "FIL\n"; my $c = $cb->($1); defined $c ? $c : "\006$1"}/ieg;
+    $line =~
+        s/\006CA((?:I[0-9A-F]|#[0-9A-F]{3}){2})/{my $c = $cb->($1); defined $c ? $c : "\006CA$1"}/ieg;
+    $line =~
+        s/\006C([FB])(I[0-9A-F]|#[0-9A-F]{3})/{my $c = $cb->($1, $2); defined $c ? $c : "\006C$1$2"}/ieg;
     $line =~ s/\006CX([AFB])/{my $c = $cb->($1); defined $c ? $c : "\006CX$1"}/ieg;
     return $line;
-}
+} ## ---------- end sub filter_ctcp_text_attr_bogus
 
 =item B<split_prefix ($prefix)>
 
@@ -275,7 +273,7 @@ sub split_prefix {
     # is no way for a client to distinguish.
     $prfx =~ m/^\s*([^!]*)(?:!([^@]*))?(?:@(.*?))?\s*$/;
     return ( $1, $2, $3 );
-}
+} ## ---------- end sub split_prefix
 
 =item B<is_nick_prefix ($prefix)>
 
@@ -529,7 +527,7 @@ sub split_unicode_string {
     }
 
     @lines;
-}
+} ## ---------- end sub split_unicode_string
 
 =back
 
