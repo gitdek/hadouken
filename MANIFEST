@@ -16,7 +16,6 @@ bin/plugins/Nmap.pm
 bin/plugins/Shorten.pm
 bin/plugins/StockMarket.pm
 bin/plugins/StockTicker.pm
-bin/plugins/Ticker.pm
 bin/plugins/Translate.pm
 bin/plugins/UrbanDictionary.pm
 bin/plugins/Weather.pm
@@ -123,4 +122,3 @@ t/DH1080.t
 t/Hadouken.t
 t/Plugins.t
 t/RegexGolf.t
-
