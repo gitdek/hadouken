@@ -2059,7 +2059,8 @@ sub _buildup {
                         $self->_start_trivia($arg);
                         return 1;
                     }
-                } else {
+                }
+                else {
                     $self->_start_trivia($channel);
                     return 1;
                 }
@@ -2067,13 +2068,15 @@ sub _buildup {
             elsif ( $cmd eq 'stop' ) {
                 $self->_stop_trivia;
 
-            } elsif ($cmd eq 'next') {
+            }
+            elsif ( $cmd eq 'next' ) {
                 if ( $self->{triviarunning} ) {
                     $self->{_clue_number} = 0;
                     $self->_get_new_question();
                     return 1;
                 }
-            } elsif ($cmd eq 'repeat') {
+            }
+            elsif ( $cmd eq 'repeat' ) {
                 if ( $self->{triviarunning} ) {
                     my $msg = String::IRC->new('  * QUESTION *  ')->white('black');
                     $msg .= String::IRC->new("Worth ")->yellow('black');
@@ -3860,22 +3863,26 @@ sub _buildup {
                             }
 
                             $self->{_trivia_last_winner} = $nickname;
-                            $self->{_masked_answer} = '';
+                            $self->{_masked_answer}      = '';
 
                             # Some points for being super fast.
                             #
 
-                            $self->{_current_points} +=20 if $answer_elapsed le 5;
+                            $self->{_current_points} += 20 if $answer_elapsed le 5;
 
-                            my $msg_t = "Yes! $nickname GOT IT! -> "
-                            . $self->{_answer}
-                            . " <- in $answer_elapsed seconds and receives --> "
-                            . $self->{_current_points}
-                            . " <-- points!";
+                            my $msg_t =
+                                  "Yes! $nickname GOT IT! -> "
+                                . $self->{_answer}
+                                . " <- in $answer_elapsed seconds and receives --> "
+                                . $self->{_current_points}
+                                . " <-- points!";
 
                             $msg_t .= " (bonus points for speed)" if $answer_elapsed le 5;
 
-                            $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel}, $msg_t);
+                            $self->send_server_unsafe(
+                                PRIVMSG => $self->{trivia_channel},
+                                $msg_t
+                            );
 
                             if ( !exists $self->{_scores}{$nickname}{score} ) {
                                 $self->{_scores}{$nickname}{score} = 0;
@@ -3887,24 +3894,30 @@ sub _buildup {
 
                             if ( $in_a_row > 0 && $in_a_row % 10 == 0 ) {
 
-                                my $msg_t = String::IRC->new(" $nickname")->blue; 
+                                my $msg_t = String::IRC->new(" $nickname")->blue;
                                 $msg_t .= " has won ";
                                 $msg_t .= String::IRC->new("$in_a_row")->red;
                                 $msg_t .= " in a row, and received a --> ";
                                 $msg_t .= String::IRC->new("500")->red;
                                 $msg_t .= " <-- point bonus!";
 
-                                $self->send_server_unsafe(PRIVMSG => $self->{trivia_channel},$msg_t);
+                                $self->send_server_unsafe(
+                                    PRIVMSG => $self->{trivia_channel},
+                                    $msg_t
+                                );
 
                                 $self->{_scores}{$nickname}{score} += 500;
 
-                            } elsif( $in_a_row gt 2 ) {
-                                my $msg_t = String::IRC->new(" $nickname")->blue; 
+                            }
+                            elsif ( $in_a_row gt 2 ) {
+                                my $msg_t = String::IRC->new(" $nickname")->blue;
                                 $msg_t .= " has won ";
                                 $msg_t .= String::IRC->new("$in_a_row")->red;
                                 $msg_t .= " times in a row! Break his streak!";
                                 $self->send_server_unsafe(
-                                    PRIVMSG => $self->{trivia_channel}, $msg_t);
+                                    PRIVMSG => $self->{trivia_channel},
+                                    $msg_t
+                                );
                             }
 
                             my $point_msg =
@@ -3960,7 +3973,10 @@ sub _buildup {
                             my $msg_t = "Get ready for the next question!  Jackpot is ";
                             $msg_t .= String::IRC->new( $self->{_trivia_jackpot} )->red;
                             $msg_t .= " points";
-                            $self->send_server_unsafe( PRIVMSG => $self->{trivia_channel}, $msg_t );
+                            $self->send_server_unsafe(
+                                PRIVMSG => $self->{trivia_channel},
+                                $msg_t
+                            );
 
                         }
                         else {
@@ -4864,30 +4880,31 @@ sub _trivia_func {
         $self->_get_new_question();
 
         my $starting_points = 60;
-        my $rollover = 12;
+        my $rollover        = 12;
 
-        if(length($self->{_answer}) ge 8 && length($self->{_answer}) le 15) {
-            
-            $starting_points = length($self->{_answer}) * 10;
-            $rollover = floor($starting_points / 5);
+        if ( length( $self->{_answer} ) ge 8 && length( $self->{_answer} ) le 15 ) {
 
-        } elsif(length($self->{_answer}) gt 15) {
+            $starting_points = length( $self->{_answer} ) * 10;
+            $rollover        = floor( $starting_points / 5 );
 
-            $starting_points = length($self->{_answer}) * 20;
-            $rollover = floor($starting_points / 5);
+        }
+        elsif ( length( $self->{_answer} ) gt 15 ) {
+
+            $starting_points = length( $self->{_answer} ) * 20;
+            $rollover        = floor( $starting_points / 5 );
         }
 
-        push(@points, $starting_points);
+        push( @points, $starting_points );
 
         my $p = $starting_points;
 
         for my $i ( 1 .. 3 ) {
-            $p = floor($p - $rollover);
-            push(@points, $p);
+            $p = floor( $p - $rollover );
+            push( @points, $p );
         }
 
-        $self->{points_scale} = \@points;
-        $self->{_current_points} = $points[$self->{_clue_number}];
+        $self->{points_scale}    = \@points;
+        $self->{_current_points} = $points[ $self->{_clue_number} ];
 
         warn "Answer is: " . $self->{_answer} . "\n";
 
@@ -4914,11 +4931,11 @@ sub _trivia_func {
     }
     elsif ( $self->{_clue_number} lt 4 ) {
 
-        my @points = @{$self->{points_scale}};
-        $self->{_current_points} = $points[$self->{_clue_number}];
+        my @points = @{ $self->{points_scale} };
+        $self->{_current_points} = $points[ $self->{_clue_number} ];
 
         my $clue = $self->give_clue;
-        
+
         # my $msg = "  Down to ".$self->{_current_points}." points: ".$clue;
         my $msg = String::IRC->new("  Down to ")->yellow('black');
         $msg .= String::IRC->new( $self->{_current_points} )->red('black');
@@ -4930,7 +4947,7 @@ sub _trivia_func {
 
     }
     else {
-        
+
         # Should serialize these to disk so we can keep track of a users highest streaking count.
         $self->{streak} = ();
 
@@ -4942,7 +4959,7 @@ sub _trivia_func {
         my $msg = String::IRC->new("  Time's up!  The answer was: ")->cyan('black');
         $msg .= String::IRC->new( " " . $self->{_answer} . " " )->white('black');
         $self->send_server_unsafe( PRIVMSG => $self->{trivia_channel}, $msg );
-        
+
         my $msg_t = "Get ready for the next question!  Jackpot is ";
         $msg_t .= String::IRC->new( $self->{_trivia_jackpot} )->red;
         $msg_t .= " points";

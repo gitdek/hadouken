@@ -260,7 +260,7 @@ sub command_run {
                         && exists $c->{change_pct};
 
                     warn Dumper($c);
-                    
+
                     my $name = $cmd eq 'tech' ? $c->{name} : $c->{shortName};
 
                     $name =~ s/DJIA/DOW/;
