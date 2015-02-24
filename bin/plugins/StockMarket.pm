@@ -13,6 +13,8 @@ use URI::Escape;
 use HTML::TokeParser;
 use Text::Unidecode;
 
+use Data::Dumper;
+
 our $VERSION = '0.4';
 our $AUTHOR  = 'dek';
 
@@ -257,6 +259,8 @@ sub command_run {
                         && exists $c->{change}
                         && exists $c->{change_pct};
 
+                    warn Dumper($c);
+                    
                     my $name = $cmd eq 'tech' ? $c->{name} : $c->{shortName};
 
                     $name =~ s/DJIA/DOW/;
@@ -315,10 +319,10 @@ sub command_run {
                         my $daily_range  = $low . '-'
                             . $high;            #$open > $last ? $open.'-'.$last : $last.'-'.$open;
 
-                        my $beta           = sprintf '%.2f', $c->{FundamentalData}{beta};
-                        my $eps            = sprintf '%.2f', $c->{FundamentalData}{eps};
-                        my $price_earnings = sprintf '%.3f', $c->{FundamentalData}{pe};
-                        my $roe_ttm        = sprintf '%.2f', $c->{FundamentalData}{ROETTM};
+                        my $beta           = sprintf '%g', $c->{FundamentalData}{beta};
+                        my $eps            = sprintf '%g', $c->{FundamentalData}{eps};
+                        my $price_earnings = sprintf '%g', $c->{FundamentalData}{pe};
+                        my $roe_ttm        = sprintf '%g', $c->{FundamentalData}{ROETTM};
                         my $mktcapView     = $c->{FundamentalData}{mktcapView}     || 0;
                         my $revenuettmView = $c->{FundamentalData}{revenuettmView} || 0;
                         my $sharesoutView  = $c->{FundamentalData}{sharesoutView}  || 0;
