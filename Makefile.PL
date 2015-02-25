@@ -71,6 +71,7 @@ WriteMakefile(
         'Text::Unidecode'       => 0,
         'REST::Google'          => 0,
         'Log::Log4perl'         => 0,
+        'IMDB::Film'            => 0
     },
     PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
