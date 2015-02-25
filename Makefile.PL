@@ -85,7 +85,7 @@ WriteMakefile(
     },
     # EXE_FILES => ['bin/hadouken'],
     PL_FILES => {
-                'bin/createconfig.pl' => '/etc/hadouken.conf',
+                #'bin/createconfig.pl' => '/etc/hadouken.conf',
                 'bin/deflategeoip.pl' => 'hi',
                 },
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },

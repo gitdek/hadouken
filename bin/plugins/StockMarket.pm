@@ -99,13 +99,9 @@ sub acl_check {
     # Hadouken::VOICE
     # Hadouken::BIT_BLACKLIST
 
-    my @disabled_channels = ( '#stocks', '#trading' );
-
-    return 0 if /$channel/i ~~ @disabled_channels;
-
-    #if ( $channel eq '#stocks' || $channel eq '#trading' ) {
-    #    return 0;
-    #}
+    if ( $channel eq '#stocks' || $channel eq '#trading' ) {
+        return 0;
+    }
 
     # Make sure at least one of these flags is set.
     if ( $self->check_acl_bit( $permissions, Hadouken::BIT_BLACKLIST ) ) {
