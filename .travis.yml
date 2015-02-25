@@ -10,8 +10,6 @@ perl:
     
 before_install:
 - cpanm Test::Pod inc::Module::Install # optional dependency
-install:
-- cpanm -v --installdeps --notest .
 script: "perl Makefile.PL; make test"
 branches:
  only:
