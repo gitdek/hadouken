@@ -3,6 +3,10 @@
 
 By Joe P <dek@dek.codes>
 
+
+<A name="toc1-50" title="Status" />
+#### Current Status ![Build Status](https://travis-ci.org/gitdek/hadouken.svg?branch=master)
+
 <A name="toc2-9" title="Introduction" />
 ## Introduction
 ***
@@ -217,3 +221,4 @@ If you have issues with Math::Pari and Digest::MD2 follow the directions below. 
 
 [Hadouken]: http://github.com/gitdek/hadouken/
 [Dekcodes]: http://dek.codes/
+
