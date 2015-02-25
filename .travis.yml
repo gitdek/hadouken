@@ -1,16 +1,45 @@
 language: perl
-#script: prove -b t
-install:
-    - cpanm -n -q --skip-satisfied --installdeps .
 perl:
-    - "5.21.0"
-    - "5.20.1"
-    - "5.19.8"
-    - "5.16.3"
-    
+    #- dev
+    - "blead"
+    #- stable
+    - "5.20"
+    - "5.18"
+    - "5.16"
+    - "5.14"
+    - "5.12"
+    - "5.10"
+    - "5.8"
+env:
+  global:
+    - TEST_PARTITIONS=4
+    - RELEASE_TESTING=1
+matrix:
+  include:
+    - perl: "5.20"
+      env: COVERAGE=1 TEST_PARTITION=1
+    - perl: "5.20"
+      env: COVERAGE=1 TEST_PARTITION=2
+    - perl: "5.20"
+      env: COVERAGE=1 TEST_PARTITION=3
+    - perl: "5.20"
+      env: COVERAGE=1 TEST_PARTITION=4
 before_install:
-- cpanm Test::Pod inc::Module::Install # optional dependency
-script: "perl Makefile.PL; make test"
-branches:
- only:
- - master
+  - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
+  - source ~/travis-perl-helpers/init
+  - build-perl
+  - perl -V
+  - build-dist
+  - cd $BUILD_DIR
+install:
+  - cpan-install ExtUtils::MakeMaker~6.68 --deps
+  - cpan-install --coverage
+before_script:
+  - coverage-setup
+script:
+  - perl Makefile.PL
+  - make
+  - prove -b -r -s -j$(test-jobs) $(test-files)
+after_success:
+  - coverage-report
+
