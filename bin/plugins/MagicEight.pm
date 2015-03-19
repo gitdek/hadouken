@@ -89,17 +89,21 @@ sub acl_check {
     #    return 1;
     #}
 
+    # Make sure at least one of these flags is set.
+    if ( $self->check_acl_bit( $permissions, Hadouken::BIT_BLACKLIST ) ) {
+        return 0;
+    }
     # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.
-    if (   $self->check_acl_bit( $permissions, Hadouken::BIT_ADMIN )
-        || $self->check_acl_bit( $permissions, Hadouken::BIT_WHITELIST )
-        || $self->check_acl_bit( $permissions, Hadouken::BIT_OP ) )
-    {
+    #if (   $self->check_acl_bit( $permissions, Hadouken::BIT_ADMIN )
+    #    || $self->check_acl_bit( $permissions, Hadouken::BIT_WHITELIST )
+    #    || $self->check_acl_bit( $permissions, Hadouken::BIT_OP ) )
+    #{
 
-        return 1;
-    }
+    #    return 1;
+    #}
 
-    return 0;                                   # Just let everyone use it :)
+    return 1;                                   # Just let everyone use it :)
 } ## ---------- end sub acl_check
 
 # Return 1 if OK (and then callback can be called)

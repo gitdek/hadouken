@@ -78,7 +78,7 @@ sub command_regex {
     # xe = XE.com Currency Converter
 
     return
-        '(xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|\.\s.+?)';
+        '(return|btc|xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|\.\s.+?)';
 } ## ---------- end sub command_regex
 
 # Return 1 if OK.
@@ -99,9 +99,9 @@ sub acl_check {
     # Hadouken::VOICE
     # Hadouken::BIT_BLACKLIST
 
-    if ( $channel eq '#stocks' || $channel eq '#trading' ) {
-        return 0;
-    }
+    #if ( $channel eq '#stocks' || $channel eq '#trading' ) {
+    #    return 0;
+    #}
 
     # Make sure at least one of these flags is set.
     if ( $self->check_acl_bit( $permissions, Hadouken::BIT_BLACKLIST ) ) {
@@ -119,17 +119,41 @@ sub command_run {
     my ( $cmd, $arg ) = split( / /, lc($message), 2 );
 
     $cmd = 'q' if $cmd eq '.';
+    
+    if($cmd eq 'btc') {
+        $arg = 'btc=';
+        $cmd = 'q';
+    }
+
     warn "Command: $cmd";
 
     if ( $cmd eq 'xe' ) {
 
         my ( $from, $dest, $amount ) = split( / /, lc($arg) );
 
+        $amount = 1 unless defined $amount;
+
         my $ret = $self->currency_convert( $channel, $from, $dest, $amount );
 
         return $ret;
     }
 
+    if ( $cmd eq 'return' ) {
+        my ( $x, $y ) = split( / /, lc($arg) );
+
+        my $ret = (($y - $x) / $x) * 100;
+
+        return 0 unless defined $ret;
+
+        warn "return $ret";
+
+        my $ret_clean    = sprintf '%g%%', $ret;
+
+        $self->send_server( PRIVMSG => $channel, $ret_clean );
+
+        return 1;
+    }
+    
     my $url =
         "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=0&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
 
@@ -288,7 +312,7 @@ sub command_run {
                         $change_pretty->red;
                     }
                     else {
-                        $change_pretty->grey;
+                        $change_pretty->pink;
                     }
 
                     if ( $change_pct > 0 ) {
@@ -298,7 +322,7 @@ sub command_run {
                         $change_pct_pretty->red;
                     }
                     else {
-                        $change_pct_pretty->grey;    # neutral
+                        $change_pct_pretty->pink;    # neutral
                     }
 
                     $summary .= "$name: $last $change_pretty ($change_pct_pretty)  ";
@@ -397,7 +421,7 @@ sub command_run {
                                     $change_pretty->red;
                                 }
                                 else {
-                                    $change_pretty->grey;
+                                    $change_pretty->pink;
                                 }
 
                                 if ( $change_pct > 0 ) {
@@ -407,7 +431,7 @@ sub command_run {
                                     $change_pct_pretty->red;
                                 }
                                 else {
-                                    $change_pct_pretty->grey;    # neutral
+                                    $change_pct_pretty->pink;    # neutral
                                 }
                                 $quote .=
                                     " PreMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
@@ -437,7 +461,7 @@ sub command_run {
                                     $change_pretty->red;
                                 }
                                 else {
-                                    $change_pretty->grey;
+                                    $change_pretty->pink;
                                 }
 
                                 if ( $change_pct > 0 ) {
@@ -447,7 +471,7 @@ sub command_run {
                                     $change_pct_pretty->red;
                                 }
                                 else {
-                                    $change_pct_pretty->grey;    # neutral
+                                    $change_pct_pretty->pink;    # neutral
                                 }
                                 $quote .=
                                     " PostMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
@@ -611,9 +635,9 @@ sub market_movers {
     }
     catch($e) {
         warn $e;
-        }
+    }
 
-        return 1;
+    return 1;
 } ## ---------- end sub market_movers
 
 sub _jsonify {

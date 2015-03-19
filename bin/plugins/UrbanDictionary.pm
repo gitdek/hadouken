@@ -93,6 +93,8 @@ sub command_run {
         $arg =~ s/adminmike/nigger/gi;
         $arg =~ s/frosty/el jefe/gi;
         $arg =~ s/yak/canadian hot pocket/gi;
+        $arg =~ s/a\|sex/canadian hot pocket/gi;
+        $arg =~ s/a\|xx/canadian hot pocket/gi;
         $arg =~ s/r0ach/canadian hot pocket/gi;
         $arg =~ s/subz/habitual bungler/gi;
         $arg =~ s/goalie/farthead/gi;
