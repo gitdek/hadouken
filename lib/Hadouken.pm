@@ -67,7 +67,7 @@ our %EXPORT_TAGS =
     ( acl_modes =>
         [ 'BIT_ADMIN', 'BIT_WHITELIST', 'BIT_BLACKLIST', 'BIT_OP', 'BIT_VOICE', 'BIT_BOT' ] );
 
-our $VERSION = '0.8.8';
+our $VERSION = '0.8.9';
 our $AUTHOR  = 'dek';
 
 use Data::Printer alias => 'Dumper', colored => 1;
@@ -3732,19 +3732,21 @@ sub _buildup {
                     {                           #m{($RE{URI})}gos ) {
                         warn "* Matched a URL $uri\n";
 
-                        # warn "* shorten_urls IS set for this channel";
-                        # Only get titles if admin, since we trust admins.
-                        my $get_title = $self->is_admin($who);
-                        my ( $shrt_url, $shrt_title ) = $self->_shorten( $uri, $get_title );
-                        if ( defined($shrt_url) && $shrt_url ne '' ) {
-                            if ( defined($shrt_title) && $shrt_title ne '' ) {
-                                $self->send_server_unsafe(
-                                    PRIVMSG => $channel,
-                                    "$shrt_url ($shrt_title)"
-                                );
-                            }
-                            else {
-                                $self->send_server_unsafe( PRIVMSG => $channel, "$shrt_url" );
+                        if(length $uri ge 21 ) {
+                            # warn "* shorten_urls IS set for this channel";
+                            # Only get titles if admin, since we trust admins.
+                            my $get_title = $self->is_admin($who);
+                            my ( $shrt_url, $shrt_title ) = $self->_shorten( $uri, $get_title );
+                            if ( defined($shrt_url) && $shrt_url ne '' ) {
+                                if ( defined($shrt_title) && $shrt_title ne '' ) {
+                                    $self->send_server_unsafe(
+                                        PRIVMSG => $channel,
+                                        "$shrt_url ($shrt_title)"
+                                    );
+                                }
+                                else {
+                                    $self->send_server_unsafe( PRIVMSG => $channel, "$shrt_url" );
+                                }
                             }
                         }
                     }

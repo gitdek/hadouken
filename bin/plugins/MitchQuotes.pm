@@ -76,28 +76,28 @@ sub command_run {
 
         # Max of 4 lines(90width) or it looks odd.
         #
-        #if(length($line) <= 360) {
+        if(length($line) <= 360) {
 
-        #   $line .= "\n";
+           $line .= "\n";
 
-        #   $line =~ s/\"/\'/g;
-        ##   #$line =~ s/@/\@/g;
+           $line =~ s/\"/\'/g;
+        #   #$line =~ s/@/\@/g;
 
-        #  my $visual_opts = scalar @visuals;
-        #   my $rand_idx = int(rand($visual_opts));
-        #   my $visual = $visuals[$rand_idx];
+          my $visual_opts = scalar @visuals;
+           my $rand_idx = int(rand($visual_opts));
+           my $visual = $visuals[$rand_idx];
 
-        #   my $binfile = int(rand(2)) % 2 ? "cowthink" : "cowsay";
-        #   my $cow = qx(/usr/games/$binfile -f $visual -W 90 "$line");
+           my $binfile = int(rand(2)) % 2 ? "cowthink" : "cowsay";
+           my $cow = qx(/usr/games/$binfile -f $visual -W 90 "$line");
 
-        #   my @c = split(/\n/,$cow);
+           my @c = split(/\n/,$cow);
 
-        #   foreach my $crap (@c) {
-        #       $self->send_server(PRIVMSG => $channel, "$crap");
-        #   }
+           foreach my $crap (@c) {
+               $self->send_server(PRIVMSG => $channel, "$crap");
+           }
 
-        #   return 1;
-        #}
+           return 1;
+        }
 
         my $wrapped;
         ( $wrapped = $line ) =~ s/(.{0,300}(?:\s|$))/$1\n/g;

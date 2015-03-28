@@ -47,7 +47,7 @@ sub acl_check {
         return 1;
     }
 
-    return 0;
+    return 1;
 } ## ---------- end sub acl_check
 
 # Return 1 if OK (and then callback can be called)

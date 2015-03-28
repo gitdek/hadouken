@@ -15,7 +15,7 @@ use Text::Unidecode;
 
 use Data::Dumper;
 
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 our $AUTHOR  = 'dek';
 
 our $mktmovers_nasdaq =
@@ -31,7 +31,7 @@ sub command_comment {
 
     my $ret = '';
     $ret .=
-        "List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe.\n";
+        "List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe, book.\n";
     $ret .=
         "  movers [exchange] - exchanges: sp500, dow, nasdaq - See biggest gainers/losers of the day.\n";
     $ret .= "  xe [currency_a] [currency_b] [amount] - xe.com currency conversion.\n";
@@ -76,9 +76,10 @@ sub command_regex {
     # bonds = alias for b
     # movers = top movers/losers of the S&P 500
     # xe = XE.com Currency Converter
-
-    return
-        '(return|btc|xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|\.\s.+?)';
+    # book = get order book information of stock.
+    #
+    #
+    return '(return|xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|book|\.(?!\.))';
 } ## ---------- end sub command_regex
 
 # Return 1 if OK.
@@ -99,10 +100,6 @@ sub acl_check {
     # Hadouken::VOICE
     # Hadouken::BIT_BLACKLIST
 
-    #if ( $channel eq '#stocks' || $channel eq '#trading' ) {
-    #    return 0;
-    #}
-
     # Make sure at least one of these flags is set.
     if ( $self->check_acl_bit( $permissions, Hadouken::BIT_BLACKLIST ) ) {
         return 0;
@@ -118,12 +115,15 @@ sub command_run {
     my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
     my ( $cmd, $arg ) = split( / /, lc($message), 2 );
 
+    return unless defined $cmd && length $cmd;
+
+
     $cmd = 'q' if $cmd eq '.';
     
-    if($cmd eq 'btc') {
-        $arg = 'btc=';
-        $cmd = 'q';
-    }
+    #if($cmd eq 'btc') {
+    #    $arg = 'btc=';
+    #    $cmd = 'q';
+    #}
 
     warn "Command: $cmd";
 
@@ -154,20 +154,39 @@ sub command_run {
         return 1;
     }
     
+    if ( $cmd eq 'book' ) {
+
+        return unless defined $arg;
+
+        my $ret = $self->stock_book($channel, uc($arg));
+
+        return $ret;
+    }
+
+    if ( $cmd eq 'movers' ) {
+        my $mkt = '';
+        $mkt = $mktmovers_dow    if lc $arg eq 'dow';
+        $mkt = $mktmovers_nasdaq if lc $arg eq 'nasdaq';
+        $mkt = $mktmovers_sp500  if lc $arg eq 'sp500' || lc $arg eq 'es';
+
+        return $self->market_movers( $channel, $mkt );
+    }
+
+
     my $url =
-        "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=0&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
+        "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=1&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
 
     if ( $cmd eq 'us' ) {
-        $url = sprintf "$url", '.IXIC|.SPX|.DJI|.NYA|.NDX';
+        $url = sprintf "$url", '.IXIC|.SPX|.DJI|.NYA|.NDX|.RUT';
     }
     elsif ( $cmd eq 'fus' ) {                   # US Futures.
-        $url = sprintf "$url", '@DJ.1|@SP.1|@ND.1|@MD.1';
+        $url = sprintf "$url", '@DJ.1|@SP.1|@ND.1|@MD.1|@TFS.1';
     }
     elsif ( $cmd eq 'etfs' ) {
         $url = sprintf "$url", 'SPY|QQQ|DIA|EEM|VTI|IVV|MDY|EFA';
     }
     elsif ( $cmd eq 'asia' ) {
-        $url = sprintf "$url", '.N225|.HSI|.SSEC|.FTFCNBCA';
+        $url = sprintf "$url", '.N225|.HSI|.SSEC|.AXJO|.FTSTI';
     }
     elsif ( $cmd eq 'eu' || $cmd eq 'europe' ) {
         $url = sprintf "$url", '.GDAXI|.FTSE|.FCHI';
@@ -198,10 +217,10 @@ sub command_run {
         $url = sprintf "$url", '@KC.1|@C.1|@CT.1|@S.1|@SB.1|@W.1|@CC.1';
     }
     elsif ( $cmd eq 'forex' || $cmd eq 'fx' ) {
-        $url = sprintf "$url", 'EUR=|GBP=|JPY=|USDCAD|CHF=|AUD=|EURJPY=|EURCHF=|EURGBP=';
+        $url = sprintf "$url", 'EUR=|GBP=|JPY=|CNY=|CAD=|CHF=|AUD=|EURJPY=|EURCHF=|EURGBP=';
     }
     elsif ( $cmd eq 'fforex' || $cmd eq 'ffx' ) {
-        $url = sprintf "$url", '@JY.1|@BP.1|@AD.1|@CD.1|@SF.1';
+        $url = sprintf "$url", '@DX.1|@URO.1|@JY.1|@BP.1|@AD.1|@CD.1|@SF.1';
     }
     elsif ( $cmd eq 'q' || $cmd eq 'quote' || $cmd eq 'fun' ) {
 
@@ -221,7 +240,12 @@ sub command_run {
         return unless length $q_string;
 
         $url = sprintf "$url", "$q_string";
+    } else {
+
+
+        return 0;
     }
+
 
     try {
         $self->asyncsock->get(
@@ -330,9 +354,9 @@ sub command_run {
                     if ( $cmd eq 'fun' ) {
                         my $company_name = $c->{name};
                         my $volume       = $c->{volume};
-                        my $open         = $c->{open};
-                        my $low          = $c->{low};
-                        my $high         = $c->{high};
+                        my $open         = $c->{open} || 0;
+                        my $low          = $c->{low} || 0;
+                        my $high         = $c->{high} || 0;
                         my $year_high    = sprintf '%g', $c->{FundamentalData}{yrhiprice};
                         my $year_low     = sprintf '%g', $c->{FundamentalData}{yrloprice};
                         my $yearly_range = $year_low . '-' . $year_high;
@@ -374,10 +398,11 @@ sub command_run {
                         my $company_name = $c->{name};
                         my $volume       = $c->{volume};
                         my $open         = $c->{open};
-                        my $low          = $c->{low};
-                        my $high         = $c->{high};
-                        my $year_high    = sprintf '%g', $c->{FundamentalData}{yrhiprice};
-                        my $year_low     = sprintf '%g', $c->{FundamentalData}{yrloprice};
+                        my $low          = $c->{low} || 0;
+                        my $high         = $c->{high} || 0;
+                        my $year_high    = sprintf '%g', $c->{FundamentalData}{yrhiprice} || 0;
+                        my $year_low     = sprintf '%g', $c->{FundamentalData}{yrloprice} || 0;
+
                         my $yearly_range = $year_low . '-' . $year_high;
                         my $daily_range  = $low . '-'
                             . $high;            #$open > $last ? $open.'-'.$last : $last.'-'.$open;
@@ -390,11 +415,13 @@ sub command_run {
                             $quote .= "(Vol: $volume) ";
                         }
 
+                        
                         $quote .=
                               "Daily Range: ("
                             . $daily_range
                             . ") Yearly Range: ("
-                            . $yearly_range . ")";
+                            . $yearly_range . ")" unless $yearly_range eq '0-0' && $daily_range eq '0-0';
+
 
                         my $curmktstatus = exists $c->{curmktstatus} ? $c->{curmktstatus} : '';
 
@@ -498,6 +525,73 @@ sub command_run {
 
         return 1;
 } ## ---------- end sub command_run
+
+sub stock_book {
+
+    my ( $self, $channel, $symbol ) = @_;
+
+    return unless defined $symbol;
+
+    my $url = sprintf 'http://www.batstrading.com/json/edgx/book/%s', $symbol;
+
+    try {
+        $self->asyncsock->get(
+            $url,
+            sub {
+                my ( $body, $header ) = @_;
+
+                return unless defined $body && defined $header;
+
+                my $json_object = $body;
+                my $j = $self->_jsonify($json_object);
+                my $json = $j->{data};
+
+                return
+                unless defined $json
+                && exists $json->{company}
+                && length $json->{company}
+                && exists $json->{last}
+                && exists $json->{change}
+                && exists $json->{orders}
+                && exists $json->{asks}
+                && exists $json->{bids}
+                && exists $json->{high}
+                && exists $json->{volume};
+                
+                # warn Dumper($json);
+
+                my $name = $json->{company};
+                my $symbol = $json->{symbol};
+                my $last       = commify( $json->{last} );
+                my $change     = sprintf "%.3f", $json->{change};
+                my $orders      = commify( $json->{orders} );
+                my $volume       = commify( $json->{volume} );
+                my $open         = sprintf "%.3f", $json->{open};
+                my $low          = sprintf "%.3f", $json->{low};
+                my $high         = sprintf "%.3f", $json->{high};
+                my $prev         = sprintf "%.3f", $json->{prev};
+                my $asks = $json->{asks};
+                my $bids = $json->{bids};
+                
+                my $change_pretty = String::IRC->new( $change )->pink;
+
+                $change_pretty->light_green if substr($change,1,1) == '+';
+
+                my $quote = "$symbol ($name) Last: $last ($change_pretty) Orders: $orders Volume: $volume Open: $open High: $high Low: $low Prev: $prev ";
+
+                $self->send_server( PRIVMSG => $channel, $quote );
+
+
+                return 1;
+
+            }
+        );
+    }
+    catch($e) {
+        warn("An error occured while currency_convert was executing: $e");
+    };
+
+}
 
 sub currency_convert {
     my ( $self, $channel, $begin, $dst, $amount ) = @_;

@@ -10,7 +10,7 @@ use Data::Dumper;
 use Regexp::Common;
 use AnyEvent::DNS;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR  = 'dek';
 
 # Description of this command.
@@ -40,15 +40,19 @@ sub acl_check {
 
     my $permissions = $aclentry{'permissions'};
 
-    if (   $self->check_acl_bit( $permissions, Hadouken::BIT_ADMIN )
-        || $self->check_acl_bit( $permissions, Hadouken::BIT_WHITELIST )
-        || $self->check_acl_bit( $permissions, Hadouken::BIT_OP ) )
-    {
-
-        return 1;
+    if ( $self->check_acl_bit( $permissions, Hadouken::BIT_BLACKLIST ) ) {
+        return 0;
     }
+    
+    #if (   $self->check_acl_bit( $permissions, Hadouken::BIT_ADMIN )
+    #    || $self->check_acl_bit( $permissions, Hadouken::BIT_WHITELIST )
+    #    || $self->check_acl_bit( $permissions, Hadouken::BIT_OP ) )
+    #{
+    #
+    #    return 1;
+    #}
 
-    return 0;
+    return 1;
 } ## ---------- end sub acl_check
 
 # Return 1 if OK (and then callback can be called)
