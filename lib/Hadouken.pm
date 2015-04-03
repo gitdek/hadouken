@@ -1,7 +1,8 @@
 ##############################################
 # Hadouken
+# http://hadouken.pw
 #
-#
+
 
 #package Hadouken::Configuration;
 #
@@ -5433,7 +5434,9 @@ sub usage_general {
     $h .= "Use .commands for a list of available commands.\n";
     $h .= "Use .help <command> for help on a specific command.\n";
     $h .= "  Command arguments include help information also, eg .help channel mode.\n";
-    $h .= "Use .plugins for a list of active plugins.";
+    $h .= "Use .plugins for a list of active plugins.\n";
+    $h .= "documentation and source code: http://hadouken.pw";
+
     return $h;
 } ## ---------- end sub usage_general
 
