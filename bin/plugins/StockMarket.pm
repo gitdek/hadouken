@@ -37,7 +37,7 @@ sub command_comment {
     $ret .= "  xe [currency_a] [currency_b] [amount] - xe.com currency conversion.\n";
     $ret .= "  fforex/ffx - Forex futures.\n";
     $ret .= "  nfo [symbol] - Financial information in long form.\n";
-    $ret .= "  nfo [symbol] - Financial information in even longer form.\n";
+    $ret .= "  info [symbol] - Financial information in even longer form.\n";
     #$ret .= "  Type \'.help <command>\' for help with a specify command.";
 
     return $ret;
@@ -631,7 +631,7 @@ sub finances {
                     $level++;
                     if($level == 6) {
                         warn $summary;
-                        $self->send_server( PRIVMSG => $channel, $summary );
+                        $self->send_server( PRIVMSG => $long ? $nick : $channel, $summary );
                         $summary = '';
                         $level = 0;
                     }
