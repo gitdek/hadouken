@@ -43,7 +43,7 @@ sub acl_check {
     if ( $self->check_acl_bit( $permissions, Hadouken::BIT_BLACKLIST ) ) {
         return 0;
     }
-    
+
     #if (   $self->check_acl_bit( $permissions, Hadouken::BIT_ADMIN )
     #    || $self->check_acl_bit( $permissions, Hadouken::BIT_WHITELIST )
     #    || $self->check_acl_bit( $permissions, Hadouken::BIT_OP ) )

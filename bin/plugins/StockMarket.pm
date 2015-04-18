@@ -19,11 +19,11 @@ our $VERSION = '0.5';
 our $AUTHOR  = 'dek';
 
 our $mktmovers_nasdaq =
-'B64ENCeyJzeW1ib2wiOiJVUztDT01QIiwiY291bnQiOiIyMCIsImNoYXJ0IjoiYm90aCIsInJlZ2lvbiI6IiJ9';
+    'B64ENCeyJzeW1ib2wiOiJVUztDT01QIiwiY291bnQiOiIyMCIsImNoYXJ0IjoiYm90aCIsInJlZ2lvbiI6IiJ9';
 our $mktmovers_sp500 =
-'B64ENCeyJzeW1ib2wiOiJVUztTUFgiLCJjb3VudCI6IjIwIiwiY2hhcnQiOiJib3RoIiwicmVnaW9uIjoiIn0=';
+    'B64ENCeyJzeW1ib2wiOiJVUztTUFgiLCJjb3VudCI6IjIwIiwiY2hhcnQiOiJib3RoIiwicmVnaW9uIjoiIn0=';
 our $mktmovers_dow =
-'B64ENCeyJzeW1ib2wiOiJVUyZESkkiLCJjb3VudCI6IjIwIiwiY2hhcnQiOiJib3RoIiwicmVnaW9uIjoiIn0=';
+    'B64ENCeyJzeW1ib2wiOiJVUyZESkkiLCJjb3VudCI6IjIwIiwiY2hhcnQiOiJib3RoIiwicmVnaW9uIjoiIn0=';
 
 # Description of this command.
 sub command_comment {
@@ -31,13 +31,14 @@ sub command_comment {
 
     my $ret = '';
     $ret .=
-    "List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe, book, nfo, info.\n";
+        "List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe, book, nfo, info.\n";
     $ret .=
-    "  movers [exchange] - exchanges: sp500, dow, nasdaq - See biggest gainers/losers of the day.\n";
+        "  movers [exchange] - exchanges: sp500, dow, nasdaq - See biggest gainers/losers of the day.\n";
     $ret .= "  xe [currency_a] [currency_b] [amount] - xe.com currency conversion.\n";
     $ret .= "  fforex/ffx - Forex futures.\n";
     $ret .= "  nfo [symbol] - Financial information in long form.\n";
     $ret .= "  info [symbol] - Financial information in even longer form.\n";
+
     #$ret .= "  Type \'.help <command>\' for help with a specify command.";
 
     return $ret;
@@ -80,7 +81,8 @@ sub command_regex {
     # book = get order book information of stock.
     # nfo = Financial summary in long form.
     # info = Financial summary in longer form.
-    return '(return|xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|book|nfo|info|\.(?!\.))';
+    return
+        '(return|xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|book|nfo|info|\.(?!\.))';
 } ## ---------- end sub command_regex
 
 # Return 1 if OK.
@@ -118,7 +120,6 @@ sub command_run {
 
     return unless defined $cmd && length $cmd;
 
-
     $cmd = 'q' if $cmd eq '.';
 
     #if($cmd eq 'btc') {
@@ -134,10 +135,10 @@ sub command_run {
         my @z = split( / /, uc($arg) );
 
         foreach my $nfo (@z) {
-            
+
             next unless length $nfo;
-            
-            my $ret = $self->finances($channel,$nick, uc($nfo), $cmd eq 'info');
+
+            my $ret = $self->finances( $channel, $nick, uc($nfo), $cmd eq 'info' );
 
         }
 
@@ -158,13 +159,13 @@ sub command_run {
     if ( $cmd eq 'return' ) {
         my ( $x, $y ) = split( / /, lc($arg) );
 
-        my $ret = (($y - $x) / $x) * 100;
+        my $ret = ( ( $y - $x ) / $x ) * 100;
 
         return 0 unless defined $ret;
 
         warn "return $ret";
 
-        my $ret_clean    = sprintf '%g%%', $ret;
+        my $ret_clean = sprintf '%g%%', $ret;
 
         $self->send_server( PRIVMSG => $channel, $ret_clean );
 
@@ -175,7 +176,7 @@ sub command_run {
 
         return unless defined $arg;
 
-        my $ret = $self->stock_book($channel, uc($arg));
+        my $ret = $self->stock_book( $channel, uc($arg) );
 
         return $ret;
     }
@@ -189,9 +190,8 @@ sub command_run {
         return $self->market_movers( $channel, $mkt );
     }
 
-
     my $url =
-    "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=1&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
+        "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=1&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
 
     if ( $cmd eq 'us' ) {
         $url = sprintf "$url", '.IXIC|.SPX|.DJI|.NYA|.NDX|.RUT';
@@ -257,12 +257,11 @@ sub command_run {
         return unless length $q_string;
 
         $url = sprintf "$url", "$q_string";
-    } else {
-
+    }
+    else {
 
         return 0;
     }
-
 
     try {
         $self->asyncsock->get(
@@ -312,13 +311,13 @@ sub command_run {
                 for my $c (@r) {
 
                     next
-                    unless defined $c
-                    && exists $c->{name}
-                    && length $c->{name}
-                    && exists $c->{shortName}
-                    && exists $c->{last}
-                    && exists $c->{change}
-                    && exists $c->{change_pct};
+                        unless defined $c
+                        && exists $c->{name}
+                        && length $c->{name}
+                        && exists $c->{shortName}
+                        && exists $c->{last}
+                        && exists $c->{change}
+                        && exists $c->{change_pct};
 
                     warn Dumper($c);
 
@@ -342,7 +341,7 @@ sub command_run {
                     my $change     = $c->{change} || 0;
                     my $change_pct = sprintf '%.2f', $c->{change_pct} || 0;
                     my $change_pretty =
-                    String::IRC->new( $change > 0 ? '+' . $change : $change );
+                        String::IRC->new( $change > 0 ? '+' . $change : $change );
                     my $change_pct_pretty = String::IRC->new(
                         $change_pct > 0 ? '+' . $change_pct . '%' : $change_pct . '%' );
 
@@ -378,7 +377,7 @@ sub command_run {
                         my $year_low     = sprintf '%g', $c->{FundamentalData}{yrloprice};
                         my $yearly_range = $year_low . '-' . $year_high;
                         my $daily_range  = $low . '-'
-                        . $high;            #$open > $last ? $open.'-'.$last : $last.'-'.$open;
+                            . $high;            #$open > $last ? $open.'-'.$last : $last.'-'.$open;
 
                         my $beta           = sprintf '%g', $c->{FundamentalData}{beta};
                         my $eps            = sprintf '%g', $c->{FundamentalData}{eps};
@@ -404,9 +403,9 @@ sub command_run {
                         $fun .= String::IRC->new("ROETTM:")->cyan;
                         $fun .= " $roe_ttm ";
                         $fun .= String::IRC->new("DIV:")->cyan
-                        if exists $c->{FundamentalData}{dividend};
+                            if exists $c->{FundamentalData}{dividend};
                         $fun .= " " . sprintf '%g%%', $c->{FundamentalData}{dividend}
-                        if exists $c->{FundamentalData}{dividend};
+                            if exists $c->{FundamentalData}{dividend};
 
                         $self->send_server( PRIVMSG => $channel, $fun );
                     }
@@ -422,23 +421,22 @@ sub command_run {
 
                         my $yearly_range = $year_low . '-' . $year_high;
                         my $daily_range  = $low . '-'
-                        . $high;            #$open > $last ? $open.'-'.$last : $last.'-'.$open;
+                            . $high;            #$open > $last ? $open.'-'.$last : $last.'-'.$open;
 
                         my $quote =
-                        "$name ($company_name) Last: $last $change_pretty $change_pct_pretty "
-                        ;                   #(Vol: $volume) ";
+                            "$name ($company_name) Last: $last $change_pretty $change_pct_pretty "
+                            ;                   #(Vol: $volume) ";
 
                         if ( defined $volume && $volume ne '' && $volume gt 0 ) {
                             $quote .= "(Vol: $volume) ";
                         }
 
-
                         $quote .=
-                        "Daily Range: ("
-                        . $daily_range
-                        . ") Yearly Range: ("
-                        . $yearly_range . ")" unless $yearly_range eq '0-0' && $daily_range eq '0-0';
-
+                              "Daily Range: ("
+                            . $daily_range
+                            . ") Yearly Range: ("
+                            . $yearly_range . ")"
+                            unless $yearly_range eq '0-0' && $daily_range eq '0-0';
 
                         my $curmktstatus = exists $c->{curmktstatus} ? $c->{curmktstatus} : '';
 
@@ -451,7 +449,7 @@ sub command_run {
                                 my $change     = $c->{ExtendedMktQuote}{change};
                                 my $change_pct = $c->{ExtendedMktQuote}{change_pct};
                                 my $change_pretty =
-                                String::IRC->new( $change > 0 ? '+' . $change : $change );
+                                    String::IRC->new( $change > 0 ? '+' . $change : $change );
                                 my $change_pct_pretty = String::IRC->new(
                                     $change_pct > 0
                                     ? '+' . $change_pct . '%'
@@ -478,7 +476,7 @@ sub command_run {
                                     $change_pct_pretty->pink;    # neutral
                                 }
                                 $quote .=
-                                " PreMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
+                                    " PreMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
                             }
                         }
 
@@ -491,7 +489,7 @@ sub command_run {
                                 my $change     = $c->{ExtendedMktQuote}{change};
                                 my $change_pct = $c->{ExtendedMktQuote}{change_pct};
                                 my $change_pretty =
-                                String::IRC->new( $change > 0 ? '+' . $change : $change );
+                                    String::IRC->new( $change > 0 ? '+' . $change : $change );
                                 my $change_pct_pretty = String::IRC->new(
                                     $change_pct > 0
                                     ? '+' . $change_pct . '%'
@@ -518,7 +516,7 @@ sub command_run {
                                     $change_pct_pretty->pink;    # neutral
                                 }
                                 $quote .=
-                                " PostMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
+                                    " PostMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
                             }
                         }
 
@@ -530,7 +528,7 @@ sub command_run {
                 if ( $cmd ne 'q' && $cmd ne 'quote' && $cmd ne 'fun' ) {
                     $summary =~ s/\s+$//;
                     $self->send_server( PRIVMSG => $channel, $summary )
-                    if defined $summary && length $summary;
+                        if defined $summary && length $summary;
                 }
             }
         );
@@ -538,9 +536,9 @@ sub command_run {
     catch($e) {
 
         #warn $e;
-    }
+        }
 
-    return 1;
+        return 1;
 } ## ---------- end sub command_run
 
 sub finances {
@@ -570,7 +568,7 @@ sub finances {
                 my $p = undef;
 
                 my $parser = HTML::TokeParser->new( \$body );
-                
+
                 $title = $parser->get_trimmed_text('/title');
                 $title =~ s/Stock Quote //;
                 warn "TITLE: $title";
@@ -582,31 +580,34 @@ sub finances {
 
                     if ( $c =~ 'snapshot-td2-cp' || $c =~ 'snapshot-td2' ) {
                         my $text = $parser->get_text("/td");
-                        if(defined $p) {
+                        if ( defined $p ) {
                             warn "$p : $text";
                             $f{$p} = $text;
                             $p = undef;
-                        } else {
+                        }
+                        else {
                             $p = $text;
                         }
 
                     }
                 }
 
-
-                my $len = 0;
+                my $len    = 0;
                 my $keylen = 0;
                 my $vallen = 0;
                 my %fun;
 
-                
                 foreach my $key ( keys %f ) {
-                
-                    next unless($long == 1 || $key =~ '^(Market Cap|Dividend|Dividend \%|Payout|Sales|Income|Book\/sh|Cash\/sh|P\/E|P\/C|EPS \(ttm\)|P\/FCF|Debt\/Eq|ROA|ROE|ROI|Shs Outstand|Beta|Perf YTD|ATR|Volatility|Volume|RSI \(14\)|52W Range)$');
-                    
+
+                    next
+                        unless ( $long == 1
+                        || $key =~
+                        '^(Market Cap|Dividend|Dividend \%|Payout|Sales|Income|Book\/sh|Cash\/sh|P\/E|P\/C|EPS \(ttm\)|P\/FCF|Debt\/Eq|ROA|ROE|ROI|Shs Outstand|Beta|Perf YTD|ATR|Volatility|Volume|RSI \(14\)|52W Range)$'
+                        );
+
                     my $val = $f{$key};
-                    my $kl = (length $key) + 1;
-                    my $vl = (length $val) + 1;
+                    my $kl  = ( length $key ) + 1;
+                    my $vl  = ( length $val ) + 1;
                     $keylen = $kl if $kl > $keylen;
                     $vallen = $vl if $vl > $vallen;
 
@@ -614,29 +615,29 @@ sub finances {
                     warn "$key $val";
                 }
 
-                return unless (scalar keys %fun) > 4;
+                return unless ( scalar keys %fun ) > 4;
 
                 my $level = 0;
                 my $summary;
 
-                my $title_pretty = "[" . String::IRC->new("$nick")->purple ."]";
+                my $title_pretty = "[" . String::IRC->new("$nick")->purple . "]";
                 $title_pretty .= " $title ";
-                $title_pretty .= String::IRC->new($f{Price})->bold;
+                $title_pretty .= String::IRC->new( $f{Price} )->bold;
 
                 $self->send_server( PRIVMSG => $channel, $title_pretty );
 
-                foreach my $k (keys %fun) {
-                    my $sum = sprintf( "%-".$keylen."s %-".$vallen."s", $k, $fun{$k}); # %-15s %-10s", $si, $ver, $l );
+                foreach my $k ( keys %fun ) {
+                    my $sum = sprintf( "%-" . $keylen . "s %-" . $vallen . "s", $k, $fun{$k} )
+                        ;                       # %-15s %-10s", $si, $ver, $l );
                     $summary .= $sum;
                     $level++;
-                    if($level == 6) {
+                    if ( $level == 6 ) {
                         warn $summary;
                         $self->send_server( PRIVMSG => $long ? $nick : $channel, $summary );
                         $summary = '';
-                        $level = 0;
+                        $level   = 0;
                     }
                 }
-
 
             }
         );
@@ -644,7 +645,7 @@ sub finances {
     catch($e) {
         warn("An error occured while finances() was executing: $e");
     };
-}
+} ## ---------- end sub finances
 
 sub stock_book {
 
@@ -663,44 +664,44 @@ sub stock_book {
                 return unless defined $body && defined $header;
 
                 my $json_object = $body;
-                my $j = $self->_jsonify($json_object);
-                my $json = $j->{data};
+                my $j           = $self->_jsonify($json_object);
+                my $json        = $j->{data};
 
                 return
-                unless defined $json
-                && exists $json->{company}
-                && length $json->{company}
-                && exists $json->{last}
-                && exists $json->{change}
-                && exists $json->{orders}
-                && exists $json->{asks}
-                && exists $json->{bids}
-                && exists $json->{high}
-                && exists $json->{volume};
+                       unless defined $json
+                    && exists $json->{company}
+                    && length $json->{company}
+                    && exists $json->{last}
+                    && exists $json->{change}
+                    && exists $json->{orders}
+                    && exists $json->{asks}
+                    && exists $json->{bids}
+                    && exists $json->{high}
+                    && exists $json->{volume};
 
                 # warn Dumper($json);
 
-                my $name = $json->{company};
+                my $name   = $json->{company};
                 my $symbol = $json->{symbol};
-                my $last       = commify( $json->{last} );
-                my $change     = sprintf "%.3f", $json->{change};
-                my $orders      = commify( $json->{orders} );
-                my $volume       = commify( $json->{volume} );
-                my $open         = sprintf "%.3f", $json->{open};
-                my $low          = sprintf "%.3f", $json->{low};
-                my $high         = sprintf "%.3f", $json->{high};
-                my $prev         = sprintf "%.3f", $json->{prev};
-                my $asks = $json->{asks};
-                my $bids = $json->{bids};
+                my $last   = commify( $json->{last} );
+                my $change = sprintf "%.3f", $json->{change};
+                my $orders = commify( $json->{orders} );
+                my $volume = commify( $json->{volume} );
+                my $open   = sprintf "%.3f", $json->{open};
+                my $low    = sprintf "%.3f", $json->{low};
+                my $high   = sprintf "%.3f", $json->{high};
+                my $prev   = sprintf "%.3f", $json->{prev};
+                my $asks   = $json->{asks};
+                my $bids   = $json->{bids};
 
-                my $change_pretty = String::IRC->new( $change )->pink;
+                my $change_pretty = String::IRC->new($change)->pink;
 
-                $change_pretty->light_green if substr($change,1,1) == '+';
+                $change_pretty->light_green if substr( $change, 1, 1 ) == '+';
 
-                my $quote = "$symbol ($name) Last: $last ($change_pretty) Orders: $orders Volume: $volume Open: $open High: $high Low: $low Prev: $prev ";
+                my $quote =
+                    "$symbol ($name) Last: $last ($change_pretty) Orders: $orders Volume: $volume Open: $open High: $high Low: $low Prev: $prev ";
 
                 $self->send_server( PRIVMSG => $channel, $quote );
-
 
                 return 1;
 
@@ -711,21 +712,21 @@ sub stock_book {
         warn("An error occured while currency_convert was executing: $e");
     };
 
-}
+} ## ---------- end sub stock_book
 
 sub currency_convert {
     my ( $self, $channel, $begin, $dst, $amount ) = @_;
 
     return
-    unless defined $begin
-    && length $begin
-    && defined $dst
-    && length $dst
-    && defined $amount
-    && length $amount;
+           unless defined $begin
+        && length $begin
+        && defined $dst
+        && length $dst
+        && defined $amount
+        && length $amount;
 
     my $url = sprintf 'http://www.xe.com/currencyconverter/convert/?Amount=%s&From=%s&To=%s',
-    $amount, $begin, $dst;
+        $amount, $begin, $dst;
 
     my $summary = '';
 
@@ -762,18 +763,18 @@ sub currency_convert {
                         $amount_b =~ s/\s+$//;
 
                         return
-                        unless defined $amount_a
-                        && length $amount_a
-                        && $amount_a > 0
-                        && defined $amount_b
-                        && length $amount_b
-                        && $amount_b > 0;
+                               unless defined $amount_a
+                            && length $amount_a
+                            && $amount_a > 0
+                            && defined $amount_b
+                            && length $amount_b
+                            && $amount_b > 0;
 
                         return
-                        unless defined $currency_a
-                        && defined $currency_b
-                        && length $currency_a
-                        && length $currency_b;
+                               unless defined $currency_a
+                            && defined $currency_b
+                            && length $currency_a
+                            && length $currency_b;
 
                         $summary = '';
                         $summary .= String::IRC->new($amount_a)->light_green;
@@ -821,7 +822,7 @@ sub market_movers {
 
                 for my $x ( @{ $json->{gainers} } ) {
                     my $change_pretty =
-                    String::IRC->new( '+' . $x->{change} . '%' )->light_green;
+                        String::IRC->new( '+' . $x->{change} . '%' )->light_green;
                     my $company = $x->{company};
                     my $ticker  = $x->{ticker};
                     $summary .= "$ticker($company) $change_pretty  ";
@@ -849,9 +850,9 @@ sub market_movers {
     }
     catch($e) {
         warn $e;
-    }
+        }
 
-    return 1;
+        return 1;
 } ## ---------- end sub market_movers
 
 sub _jsonify {

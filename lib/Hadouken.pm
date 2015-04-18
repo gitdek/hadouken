@@ -3,7 +3,6 @@
 # http://hadouken.pw
 #
 
-
 #package Hadouken::Configuration;
 #
 #use strict;
@@ -3733,7 +3732,8 @@ sub _buildup {
                     {                           #m{($RE{URI})}gos ) {
                         warn "* Matched a URL $uri\n";
 
-                        if(length $uri ge 21 ) {
+                        if ( length $uri ge 21 ) {
+
                             # warn "* shorten_urls IS set for this channel";
                             # Only get titles if admin, since we trust admins.
                             my $get_title = $self->is_admin($who);
@@ -3746,7 +3746,10 @@ sub _buildup {
                                     );
                                 }
                                 else {
-                                    $self->send_server_unsafe( PRIVMSG => $channel, "$shrt_url" );
+                                    $self->send_server_unsafe(
+                                        PRIVMSG => $channel,
+                                        "$shrt_url"
+                                    );
                                 }
                             }
                         }
