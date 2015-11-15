@@ -57,7 +57,8 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
+        = @_;
 
     my ( $cmd, $arg ) = split( / /, $message, 2 );    # DO NOT LC THE MESSAGE!
 
@@ -67,11 +68,13 @@ sub command_run {
     my $title   = $arg;
 
     try {
-        my $imdb = new IMDB::Film( crit => $title );    #, search => 'find?tt=on;mx=20;q=');
+        my $imdb = new IMDB::Film( crit => $title )
+            ;                                   #, search => 'find?tt=on;mx=20;q=');
 
         # Try searching if we do not get a result.
         unless ( $imdb->status ) {
-            $imdb = new IMDB::Film( crit => $title, search => 'find?tt=on;mx=20;q=' );
+            $imdb = new IMDB::Film( crit => $title,
+                search => 'find?tt=on;mx=20;q=' );
         }
 
         if ( $imdb->status ) {
@@ -101,7 +104,10 @@ sub command_run {
                 next if $l eq 'Add Full Plot | Add Synopsis';
 
                 $cnt++;
-                $self->send_server( PRIVMSG => $channel, $cnt > 1 ? $l : "Summary - $l" );
+                $self->send_server(
+                    PRIVMSG => $channel,
+                    $cnt > 1 ? $l : "Summary - $l"
+                );
             }
         }
         else {

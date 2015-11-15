@@ -1,4 +1,4 @@
-package Hadouken::Plugin::Portfolio;
+jpackage Hadouken::Plugin::Portfolio;
 use strict;
 use warnings;
 
@@ -8,15 +8,15 @@ use TryCatch;
 use String::IRC;
 use Encode qw( encode );
 use JSON::XS qw( encode_json decode_json );
-
 use URI::Escape;
 use HTML::TokeParser;
 use Text::Unidecode;
-
 # use Data::Dumper;
 use Data::Printer alias => 'Dumper', colored => 1;
+# use Finance::QuoteHist::Yahoo;
+use CHI;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR  = 'dek';
 
 # Description of this command.
@@ -28,7 +28,9 @@ sub command_comment {
     $ret .=
         "  portfolio add [symbol] [shares] [optional:price] - If price is left empty, uses current. Shares can be negative for short position.\n";
     $ret .= "  portfolio remove [symbol]\n";
-    $ret .= "  portfolio link - Get a link to a pretty chart of your portfolio.\n";
+    $ret .= "  portfolio summary - Summary of your portfolio - alias to .portfolio\n";
+
+    #$ret .= "  portfolio link - Get a link to a pretty chart of your portfolio.\n";
 
     return $ret;
 } ## ---------- end sub command_comment
@@ -45,8 +47,8 @@ sub command_regex {
 
     # portfolio add <symbol> <shares> <optional:price> - if price is empty, adds current price.
     # portfolio remove <symbol>
-    #
-    return 'portfolio(\sadd\s.+?|\sremove\s.+?|\ssummary)$';
+    # portfolio summary
+    return 'portfolio(\sadd\s.+?|\sremove\s.+?|\ssummary)?';
 } ## ---------- end sub command_regex
 
 # Return 1 if OK.
@@ -86,40 +88,61 @@ sub command_run {
     my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
     my ( $cmd, $subcmd, $arg ) = split( / /, lc($message), 3 );
 
-    warn "Command: $cmd";
-    warn "Sub-command: $subcmd";
+    $subcmd = 'summary' if ( !defined($subcmd) );
 
-    warn "Arguments:" . ( defined $arg ? $arg : "None" );
+    warn "Command: $cmd Sub-command: $subcmd";
+    warn "  Arguments:" . ( defined $arg ? $arg : "None" );
 
     $self->_load_portfolio() unless $self->{_portfolio_initialized} == 1;
 
     if ( lc $subcmd eq 'add' ) {
         $self->_portfolio_add( $channel, $nick, split( / /, $arg ) );
     }
+    elsif ( lc $subcmd eq 'remove' ) {
+        $self->_portfolio_remove( $channel, $nick, $arg );
+    }
     elsif ( lc $subcmd eq 'summary' ) {
         $self->_portfolio_summary( $nick, $channel );
+    }
+    else {
+        return 0;
     }
 
     return 1;
 } ## ---------- end sub command_run
 
+sub _portfolio_remove {
+    my ( $self, $channel, $nick, $symbol ) = @_;
+
+    return unless exists $self->{_portfolio}{$nick}{$symbol};
+
+    delete $self->{_portfolio}{$nick}{$symbol};
+
+    my $header = sprintf "[%s]", String::IRC->new($nick)->purple;
+    $self->send_server(
+        PRIVMSG => $channel,
+        "$header Removed $symbol from portfolio."
+    );
+
+    $self->_update_portfolio($nick);
+
+    return 1;
+} ## ---------- end sub _portfolio_remove
+
 sub _portfolio_add {
     my ( $self, $channel, $nick, $symbol, $shares, $price ) = @_;
 
-    return unless defined $shares && $shares ne '0';
+    return if !defined $shares || $shares == 0;
 
     if ( !defined $price || $price le '0' ) {
 
-        my $open_price = $self->price_lookup($symbol);
+        my $open_price = $self->quote($symbol);
 
-        warn "Returned price: $open_price";
+        #warn "Returned price: $open_price";
 
-        return unless defined $open_price && $open_price ne 0;
+        return unless defined $open_price;      # && $open_price != 0;
 
         $price = $open_price;
-
-        # Lookup price here.
-        #$price = '100';
     }
 
     #if ( !exists $self->{_portfolio}{$nick}{$symbol} ) {
@@ -132,24 +155,19 @@ sub _portfolio_add {
     $self->{_portfolio}{$nick}{$key}{holdings} = $price * $shares;
     $self->{_portfolio}{$nick}{$key}{date}     = time();
 
-    $self->send_server( PRIVMSG => $channel, "Added $shares shares of $symbol at $price." );
+    my $header = sprintf "[%s]", String::IRC->new($nick)->purple;
+    $self->send_server(
+        PRIVMSG => $channel,
+        "$header Added $shares shares of $symbol at $price."
+    );
 
-    #}# else {
+    # my %portfolio = %{ $self->{_portfolio} };
 
-    #  if($shares < 0) {
-
-    #   }
-
-    #}
-
-    # Then update the entire users portfolio earnings;
-
-    my %portfolio = %{ $self->{_portfolio} };
-
-    warn "Dumping portfolio:";
-    warn Dumper(%portfolio);
+    #warn Dumper(%portfolio);
 
     $self->_update_portfolio($nick);
+
+    return 1;
 
 } ## ---------- end sub _portfolio_add
 
@@ -167,9 +185,9 @@ sub _update_portfolio {
         next if $symbol eq 'summary';
 
         my ( $actual_symbol, $symbol_epoch ) = split( /-/, $symbol );
-        my $open_price = $self->price_lookup($actual_symbol);
-        my $s          = $self->{_portfolio}{$nick}{$symbol}{shares};
-        my $p          = $self->{_portfolio}{$nick}{$symbol}{price};
+        my $open_price = $self->quote($actual_symbol);    #$self->price_lookup($actual_symbol);
+        my $s = $self->{_portfolio}{$nick}{$symbol}{shares};
+        my $p = $self->{_portfolio}{$nick}{$symbol}{price};
 
         my $h;
         my $bc;
@@ -188,14 +206,15 @@ sub _update_portfolio {
 
         my $pl = $s < 0 ? $bc - $h : $h - $bc;
 
-        $self->{_portfolio}{$nick}{$symbol}{pl} = $pl;
+        $self->{_portfolio}{$nick}{$symbol}{pl} = $pl || '0';
+
+        my $pl_pct = ( ( $h - $bc ) / $bc ) * 100;
+
+        $self->{_portfolio}{$nick}{$symbol}{pl_percent} = abs($pl_pct) || '0';
 
         $total_holdings += $h;
-        $total_buy_cost += $bc;                 #$self->{_portfolio}{$nick}{$symbol}{buy_cost};
-
-        $total_pl += $pl;
-
-        #warn "KEY: $key";
+        $total_buy_cost += $bc;
+        $total_pl       += $pl;
 
     }
 
@@ -205,18 +224,15 @@ sub _update_portfolio {
 
     my $ct = ( $total_holdings - $total_buy_cost );
 
-    #my $ct = $s < 0 ? $total_buy_cost - $total_holdings : $total_holdings - $total_buy_cost;
-
     $self->{_portfolio}{$nick}{summary}{change_total} = $ct;
 
     my $pct = ( ( $total_holdings - $total_buy_cost ) / $total_buy_cost ) * 100;
 
     $self->{_portfolio}{$nick}{summary}{change_percent} = abs($pct);
 
-    warn Dumper( $self->{_portfolio} );
-
     $self->_save_portfolio();
 
+    return 1;
 
 } ## ---------- end sub _update_portfolio
 
@@ -224,6 +240,8 @@ sub _portfolio_summary {
     my ( $self, $nick, $channel ) = @_;
 
     return unless exists $self->{_portfolio}{$nick};
+
+    $self->_update_portfolio($nick);
 
     foreach my $symbol ( keys %{ $self->{_portfolio}{$nick} } ) {
         next if $symbol eq 'summary';
@@ -234,19 +252,29 @@ sub _portfolio_summary {
         my $price    = $self->{_portfolio}{$nick}{$symbol}{price};
         my $holdings = $self->{_portfolio}{$nick}{$symbol}{holdings};
         my $buy_cost = $self->{_portfolio}{$nick}{$symbol}{buy_cost};
-        my $pl       = $self->{_portfolio}{$nick}{$symbol}{pl};
+        my $pl       = $self->{_portfolio}{$nick}{$symbol}{pl} || '0.0';
         my $ppl      = $self->format_color($pl);
+        my $cp       = sprintf '%.2f', $self->{_portfolio}{$nick}{$symbol}{pl_percent};
 
-        #my $ppl = $pl > 0 ? String::IRC->new($pl)->light_green : String::IRC->new($pl)->red;
+        my $pct = '';
+
+        if ( $pl > 0 ) {
+            $pct = String::IRC->new( '+' . $cp . '%' )->light_green;
+        }
+        elsif ( $pl < 0 ) {
+            $pct = String::IRC->new( '-' . $cp . '%' )->red;
+        }
+        else {
+            $pct = String::IRC->new( $cp . '%' )->grey;
+        }
 
         my $header = sprintf "[%s] %s-%s", String::IRC->new($nick)->purple,
             String::IRC->new( uc $actual_symbol )->fuchsia, $symbol_epoch;
-        my $line = sprintf "%s Shares: %s Price: %s Holdings: %s Buy Cost: %s P\/L: %s",
+        my $line = sprintf "%s Shares: %s Price: %s Holdings: %s Buy Cost: %s P\/L: %s %s",
             $header, $self->format_units($shares), $price, $self->format_units($holdings),
-            $self->format_units($buy_cost), $self->format_color($pl);
+            $self->format_units($buy_cost), $ppl, $pct;
 
-        warn $line;
-
+        #warn $line;
         $self->send_server( PRIVMSG => $channel, $line );
 
     }
@@ -265,17 +293,16 @@ sub _portfolio_summary {
         $pct = String::IRC->new( '-' . $tcp . '%' )->red;
     }
     else {
-        $pct = String::IRC->new( '-' . $tcp . '%' )->grey;
+        $pct = String::IRC->new( $tcp . '%' )->grey;
     }
 
-    #my $pct = sprintf $tpl > 0 ? '+%s%%' : '-%s%%', $self->{_portfolio}{$nick}{summary}{change_percent};
-
     my $total_summary = sprintf "[%s] Total holdings: %s Total buy cost %s P\/L: %s %s",
-        String::IRC->new($nick)->purple, $self->format_units($th), $self->format_units($tbc), $self->format_color($tpl), $pct;
+        String::IRC->new($nick)->purple, $self->format_units($th), $self->format_units($tbc),
+        $self->format_color($tpl), $pct;
 
     $self->send_server( PRIVMSG => $channel, $total_summary );
 
-    warn $total_summary;
+    #warn $total_summary;
 
     return 1;
 } ## ---------- end sub _portfolio_summary
@@ -284,8 +311,6 @@ sub _save_portfolio {
     my ($self) = @_;
 
     return unless defined $self->{_portfolio};
-
-    # $self->_calc_trivia_rankings;
 
     open( my $fh, ">" . $self->{Owner}->{ownerdir} . '/../data/portfolio.json' );
     my %portfolio = %{ $self->{_portfolio} };
@@ -299,9 +324,14 @@ sub _save_portfolio {
 sub _load_portfolio {
     my ($self) = @_;
 
-    warn "* Loading portfolio...";
+    if ( !defined $self->{cache} ) {
+        $self->{cache} = CHI->new( driver => 'RawMemory', global => 1 );
+    }
+
+    return if $self->{_portfolio_initialized} == 1;
 
     if ( -e $self->{Owner}->{ownerdir} . '/../data/portfolio.json' ) {
+        warn "* Loading portfolio...";
         open( my $fh, $self->{Owner}->{ownerdir} . '/../data/portfolio.json' ) or die $!;
         my $json_data;
         read( $fh, $json_data, -s $fh );        # Suck in the whole file
@@ -315,18 +345,38 @@ sub _load_portfolio {
     }
 
     return 1;
-}
+} ## ---------- end sub _load_portfolio
+
+sub quote {
+    my ( $self, $key ) = @_;
+
+    # Expire in 5 minutes
+    my $value = $self->{cache}->compute(
+        $key, '5m',
+        sub {
+
+            warn "Caching $key for 5 minutes.";
+
+            return $self->price_lookup($key);
+        }
+    );
+
+    return $value if defined $value;
+
+    warn "Try another data source for quote.";
+} ## ---------- end sub quote
 
 sub price_lookup {
-
     my ( $self, $symbol ) = @_;
+
+    warn "price_lookup for $symbol\n";
 
     my $url =
         "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=0&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
 
     $url = sprintf "$url", "$symbol";
 
-    my $open_price = undef;
+    my $open_price;                             # = undef;
 
     try {
         my $body = $self->{Owner}->_webclient->get($url)->decoded_content;
@@ -368,9 +418,9 @@ sub price_lookup {
                 && exists $c->{change}
                 && exists $c->{change_pct};
 
-            warn Dumper($c);
+            #warn Dumper($c);
 
-            warn "Last price: " . $c->{last};
+            #warn "Last price: " . $c->{last};
 
             $open_price = $c->{last};
 
@@ -493,11 +543,11 @@ sub format_units {
 
     if ( $value >= 1000000 ) {
         my $n = $value / 1000000;
-        $ret = sprintf '%.6gM', $n;
+        $ret = sprintf '%.4gM', $n;
     }
     elsif ( $value <= 1000000 && $value >= 1000 ) {
         my $n = $value / 1000;
-        $ret = sprintf '%.5gK', $n;
+        $ret = sprintf '%.3gK', $n;
     }
     else {
         $ret = $value;
@@ -507,8 +557,8 @@ sub format_units {
 } ## ---------- end sub format_units
 
 sub format_color {
-    my $self = shift;
-    my $value = shift || 0;
+    my $self  = shift;
+    my $value = shift;                          # || 0;
 
     my $ret = String::IRC->new($value);
 
@@ -518,8 +568,11 @@ sub format_color {
     elsif ( $value < 0 ) {
         $ret->red;
     }
-    else {
+    elsif ( $value == 0 ) {
         $ret->pink;
+    }
+    else {
+        $ret->black;
     }
 
     return $ret;

@@ -134,7 +134,8 @@ sub connect {
                 $self->disconnect("EOF from server $host:$port");
             },
             on_error => sub {
-                $self->disconnect("error in connection to server $host:$port: $!");
+                $self->disconnect(
+                    "error in connection to server $host:$port: $!");
             },
             on_read => sub {
                 my ($hdl) = @_;
@@ -163,7 +164,11 @@ sub connect {
         setsockopt( $sock, SOL_SOCKET, SO_REUSEPORT, 1 )
             or die "Cannot set sockopt SO_REUSEPORT: $!";
 
-        if ( defined $bindaddr && $bindaddr ne '' && defined $ipn && length $ipn ) {
+        if (   defined $bindaddr
+            && $bindaddr ne ''
+            && defined $ipn
+            && length $ipn )
+        {
             my $bind = AnyEvent::Socket::pack_sockaddr 43, $ipn;
             bind $sock, $bind
                 or die "Cannot bind to addr: $!";

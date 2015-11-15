@@ -53,7 +53,8 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
+        = @_;
 
     my ( $cmd, $arg ) = split( / /, $message, 2 );    # DO NOT LC THE MESSAGE!
 
@@ -77,7 +78,8 @@ sub command_run {
 
         return unless ( defined $res_calc ) || ( defined $res_usable );
 
-        my $out_msg = "[ipcalc] $arg -> netmask: $res_calc - usable addresses: $res_usable";
+        my $out_msg
+            = "[ipcalc] $arg -> netmask: $res_calc - usable addresses: $res_usable";
 
         $self->send_server( PRIVMSG => $channel, $out_msg );
     }
@@ -101,7 +103,8 @@ sub calc_netmask {
 
     my $bit = ( 2**( 32 - $netbit ) ) - 1;
 
-    my ($full_mask) = unpack( "N", pack( 'C4', split( /\./, '255.255.255.255' ) ) );
+    my ($full_mask)
+        = unpack( "N", pack( 'C4', split( /\./, '255.255.255.255' ) ) );
 
     return join( '.', unpack( 'C4', pack( "N", ( $full_mask ^ $bit ) ) ) );
 } ## ---------- end sub calc_netmask

@@ -136,7 +136,8 @@ sub mk_msg {
     return $msg;
 } ## ---------- end sub mk_msg
 
-my @_ctcp_lowlevel_escape = ( "\000", "0", "\012", "n", "\015", "r", "\020", "\020" );
+my @_ctcp_lowlevel_escape
+    = ( "\000", "0", "\012", "n", "\015", "r", "\020", "\020" );
 
 sub unescape_lowlevel {
     my ($data) = @_;
@@ -218,9 +219,12 @@ what the lowlevel quoting allows).
 
 sub encode_ctcp {
     my (@args) = @_;
-    escape_lowlevel( join "",
-        map { ref $_ ? "\001" . escape_ctcp( join " ", @$_ ) . "\001" : $_ } @args );
-}
+    escape_lowlevel(
+        join "",
+        map { ref $_ ? "\001" . escape_ctcp( join " ", @$_ ) . "\001" : $_ }
+            @args
+    );
+} ## ---------- end sub encode_ctcp
 
 =item B<filter_colors ($line)>
 
@@ -232,8 +236,10 @@ function may destroy the message in some occasions a bit.
 
 sub filter_colors($) {
     my ($line) = @_;
-    $line =~ s/\x1B\[.*?[\x00-\x1F\x40-\x7E]//g;    # see ECMA-48 + advice by urxvt author
-    $line =~ s/\x03\d\d?(?:,\d\d?)?//g;         # see http://www.mirc.co.uk/help/color.txt
+    $line =~ s/\x1B\[.*?[\x00-\x1F\x40-\x7E]//g
+        ;                                       # see ECMA-48 + advice by urxvt author
+    $line =~ s/\x03\d\d?(?:,\d\d?)?//g
+        ;                                       # see http://www.mirc.co.uk/help/color.txt
     $line =~ s/[\x03\x16\x02\x1f\x0f]//g;       # see some undefined place :-)
     $line;
 } ## ---------- end sub filter_colors($)
@@ -243,12 +249,14 @@ sub filter_colors($) {
 sub filter_ctcp_text_attr_bogus {
     my ( $line, $cb ) = @_;
     return unless $cb;
-    $line =~ s/\006([BVUSI])/{warn "FIL\n"; my $c = $cb->($1); defined $c ? $c : "\006$1"}/ieg;
-    $line =~
-        s/\006CA((?:I[0-9A-F]|#[0-9A-F]{3}){2})/{my $c = $cb->($1); defined $c ? $c : "\006CA$1"}/ieg;
-    $line =~
-        s/\006C([FB])(I[0-9A-F]|#[0-9A-F]{3})/{my $c = $cb->($1, $2); defined $c ? $c : "\006C$1$2"}/ieg;
-    $line =~ s/\006CX([AFB])/{my $c = $cb->($1); defined $c ? $c : "\006CX$1"}/ieg;
+    $line
+        =~ s/\006([BVUSI])/{warn "FIL\n"; my $c = $cb->($1); defined $c ? $c : "\006$1"}/ieg;
+    $line
+        =~ s/\006CA((?:I[0-9A-F]|#[0-9A-F]{3}){2})/{my $c = $cb->($1); defined $c ? $c : "\006CA$1"}/ieg;
+    $line
+        =~ s/\006C([FB])(I[0-9A-F]|#[0-9A-F]{3})/{my $c = $cb->($1, $2); defined $c ? $c : "\006C$1$2"}/ieg;
+    $line
+        =~ s/\006CX([AFB])/{my $c = $cb->($1); defined $c ? $c : "\006CX$1"}/ieg;
     return $line;
 } ## ---------- end sub filter_ctcp_text_attr_bogus
 

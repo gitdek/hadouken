@@ -61,7 +61,8 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
+        = @_;
 
     # You can call send_server. The symbol table was rewritten.
     #$self->send_server(PRIVMSG => '#thechannel', "plugin doing something weee");

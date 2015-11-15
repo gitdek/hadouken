@@ -53,7 +53,8 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
+        = @_;
 
     my ( $cmd, $arg ) = split( / /, $message, 2 );    # DO NOT LC THE MESSAGE!
 
@@ -91,13 +92,16 @@ sub command_run {
                 }
                 @_;
 
-                return unless ( defined $row ) || ( @$row[4] =~ /$RE{net}{IPv4}/ );
+                return
+                    unless ( defined $row )
+                    || ( @$row[4] =~ /$RE{net}{IPv4}/ );
 
                 my $ip_addr = @$row[4];
 
                 return unless ( $ip_addr =~ /$RE{net}{IPv4}/ );
 
-                my $record = $self->{Owner}->{geoip}->record_by_addr($ip_addr);
+                my $record
+                    = $self->{Owner}->{geoip}->record_by_addr($ip_addr);
 
                 unless ( defined $record ) {
                     $self->send_server(
@@ -113,7 +117,8 @@ sub command_run {
                 $dom_result .= " Region:" . $record->region
                     if defined $record->region && $record->region ne '';
                 $dom_result .= " Country:" . $record->country_code
-                    if defined $record->country_code && $record->country_code ne '';
+                    if defined $record->country_code
+                    && $record->country_code ne '';
 
                 $self->send_server( PRIVMSG => $channel, $dom_result );
             }

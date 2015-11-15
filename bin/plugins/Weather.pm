@@ -61,7 +61,8 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
+        = @_;
 
     my ( $cmd, $arg ) = split( / /, $message, 2 );    # DO NOT LC THE MESSAGE!
 
@@ -96,24 +97,29 @@ sub _weather {
 
     my $summary = '';
     try {
-        my $ret = $self->{weatherclient}->getWeatherByLocation( $location, 'F' );
+        my $ret
+            = $self->{weatherclient}->getWeatherByLocation( $location, 'F' );
 
         # warn Dumper($ret);
 
-        if ( exists $ret->{'CurrentObservation'} && $ret->{'LocationDetails'} ) {
+        if ( exists $ret->{'CurrentObservation'}
+            && $ret->{'LocationDetails'} )
+        {
             $summary = $ret->{'LocationDetails'}{'city'}
                 if exists $ret->{'LocationDetails'}{'city'};
             $summary .= " " . $ret->{'LocationDetails'}{'region'}
                 if exists $ret->{'LocationDetails'}{'region'};
 
             if ($do_celsius) {
-                my $cel = ( $ret->{'CurrentObservation'}{'temp'} - 32 ) * 5 / 9;
+                my $cel
+                    = ( $ret->{'CurrentObservation'}{'temp'} - 32 ) * 5 / 9;
                 my $cel_rounded = sprintf "%.1f", $cel;
                 $summary .= "  " . $cel_rounded . "°C"
                     if defined $cel_rounded && $cel_rounded ne '';
             }
             else {
-                $summary .= "  " . $ret->{'CurrentObservation'}{'temp'} . "°F"
+                $summary
+                    .= "  " . $ret->{'CurrentObservation'}{'temp'} . "°F"
                     if exists $ret->{'CurrentObservation'}{'temp'};
             }
 
@@ -124,23 +130,31 @@ sub _weather {
                 && exists $ret->{'TwoDayForecast'}[0]{'low'} )
             {
                 if ($do_celsius) {
-                    my $cel_low          = ( $ret->{'TwoDayForecast'}[0]{'low'} - 32 ) * 5 / 9;
-                    my $cel_high         = ( $ret->{'TwoDayForecast'}[0]{'high'} - 32 ) * 5 / 9;
+                    my $cel_low
+                        = ( $ret->{'TwoDayForecast'}[0]{'low'} - 32 ) * 5 / 9;
+                    my $cel_high
+                        = ( $ret->{'TwoDayForecast'}[0]{'high'} - 32 )
+                        * 5 / 9;
                     my $cel_low_rounded  = sprintf "%.1f", $cel_low;
                     my $cel_high_rounded = sprintf "%.1f", $cel_high;
-                    $summary .=
-                        " High: " . $cel_high_rounded . "°C Low: " . $cel_low_rounded . "°C";
+                    $summary
+                        .= " High: "
+                        . $cel_high_rounded
+                        . "°C Low: "
+                        . $cel_low_rounded . "°C";
                 }
                 else {
-                    $summary .=
-                          " High: "
+                    $summary
+                        .= " High: "
                         . $ret->{'TwoDayForecast'}[0]{'high'}
                         . "°F Low: "
                         . $ret->{'TwoDayForecast'}[0]{'low'} . "°F";
                 }
             }
 
-            $summary .= " Visibility: " . $ret->{'Atmosphere'}{'visibility'} . "mi"
+            $summary
+                .= " Visibility: "
+                . $ret->{'Atmosphere'}{'visibility'} . "mi"
                 if exists $ret->{'Atmosphere'}{'visibility'}
                 && $ret->{'Atmosphere'}{'visibility'} > 0;
             $summary .= " Humidity: " . $ret->{'Atmosphere'}{'humidity'} . "%"
@@ -156,22 +170,30 @@ sub _weather {
                         if defined $cel_rounded && $cel_rounded ne '';
                 }
                 else {
-                    $summary .= " Wind Chill: " . $ret->{'WindDetails'}{'chill'} . "°F"
+                    $summary
+                        .= " Wind Chill: "
+                        . $ret->{'WindDetails'}{'chill'} . "°F"
                         if exists $ret->{'WindDetails'}{'chill'};
                 }
             }
 
-            my $pretty_second = String::IRC->new( $ret->{'TwoDayForecast'}[1]{'day'} )->navy;
+            my $pretty_second
+                = String::IRC->new( $ret->{'TwoDayForecast'}[1]{'day'} )
+                ->navy;
             if (   exists $ret->{'TwoDayForecast'}[1]{'high'}
                 && exists $ret->{'TwoDayForecast'}[1]{'low'} )
             {
 
                 if ($do_celsius) {
-                    my $cel_low          = ( $ret->{'TwoDayForecast'}[1]{'low'} - 32 ) * 5 / 9;
-                    my $cel_high         = ( $ret->{'TwoDayForecast'}[1]{'high'} - 32 ) * 5 / 9;
+                    my $cel_low
+                        = ( $ret->{'TwoDayForecast'}[1]{'low'} - 32 ) * 5 / 9;
+                    my $cel_high
+                        = ( $ret->{'TwoDayForecast'}[1]{'high'} - 32 )
+                        * 5 / 9;
                     my $cel_low_rounded  = sprintf "%.1f", $cel_low;
                     my $cel_high_rounded = sprintf "%.1f", $cel_high;
-                    $summary .= "  "
+                    $summary
+                        .= "  "
                         . $pretty_second
                         . ": High: "
                         . $cel_high_rounded
@@ -179,7 +201,8 @@ sub _weather {
                         . $cel_low_rounded . "°C";
                 }
                 else {
-                    $summary .= "  "
+                    $summary
+                        .= "  "
                         . $pretty_second
                         . ": High: "
                         . $ret->{'TwoDayForecast'}[1]{'high'}
@@ -191,17 +214,23 @@ sub _weather {
                     if exists $ret->{'TwoDayForecast'}[1]{'text'};
             }
 
-            my $pretty_third = String::IRC->new( $ret->{'TwoDayForecast'}[2]{'day'} )->navy;
+            my $pretty_third
+                = String::IRC->new( $ret->{'TwoDayForecast'}[2]{'day'} )
+                ->navy;
             if (   exists $ret->{'TwoDayForecast'}[2]{'high'}
                 && exists $ret->{'TwoDayForecast'}[2]{'low'} )
             {
 
                 if ($do_celsius) {
-                    my $cel_low          = ( $ret->{'TwoDayForecast'}[2]{'low'} - 32 ) * 5 / 9;
-                    my $cel_high         = ( $ret->{'TwoDayForecast'}[2]{'high'} - 32 ) * 5 / 9;
+                    my $cel_low
+                        = ( $ret->{'TwoDayForecast'}[2]{'low'} - 32 ) * 5 / 9;
+                    my $cel_high
+                        = ( $ret->{'TwoDayForecast'}[2]{'high'} - 32 )
+                        * 5 / 9;
                     my $cel_low_rounded  = sprintf "%.1f", $cel_low;
                     my $cel_high_rounded = sprintf "%.1f", $cel_high;
-                    $summary .= "  "
+                    $summary
+                        .= "  "
                         . $pretty_second
                         . ": High: "
                         . $cel_high_rounded
@@ -209,7 +238,8 @@ sub _weather {
                         . $cel_low_rounded . "°C";
                 }
                 else {
-                    $summary .= "  "
+                    $summary
+                        .= "  "
                         . $pretty_third
                         . ": High: "
                         . $ret->{'TwoDayForecast'}[2]{'high'}

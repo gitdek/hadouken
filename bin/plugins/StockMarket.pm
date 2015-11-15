@@ -8,14 +8,14 @@ use TryCatch;
 use String::IRC;
 use Encode qw( encode );
 use JSON::XS qw( encode_json decode_json );
-
 use URI::Escape;
 use HTML::TokeParser;
 use Text::Unidecode;
+use Data::Printer alias => 'Dumper', colored => 1;
 
-use Data::Dumper;
+use CHI;
 
-our $VERSION = '0.5';
+our $VERSION = '0.6';
 our $AUTHOR  = 'dek';
 
 our $mktmovers_nasdaq =
@@ -25,21 +25,23 @@ our $mktmovers_sp500 =
 our $mktmovers_dow =
     'B64ENCeyJzeW1ib2wiOiJVUyZESkkiLCJjb3VudCI6IjIwIiwiY2hhcnQiOiJib3RoIiwicmVnaW9uIjoiIn0=';
 
+our $USE_NOTICE = 0;
+our $SEND_CMD = $USE_NOTICE ? 'NOTICE' : 'PRIVMSG';
+
 # Description of this command.
 sub command_comment {
     my $self = shift;
 
     my $ret = '';
     $ret .=
-        "List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe, book, nfo, info.\n";
+        "List of commands: agcom, asia, b, bonds, etfs, eu, europe, fforex, footsie, forex, ftse, fun, fus, fx, movers, oil, q, quote, rtcom, tech, us, vix, xe, book, nfo, info, news.\n";
     $ret .=
         "  movers [exchange] - exchanges: sp500, dow, nasdaq - See biggest gainers/losers of the day.\n";
     $ret .= "  xe [currency_a] [currency_b] [amount] - xe.com currency conversion.\n";
     $ret .= "  fforex/ffx - Forex futures.\n";
     $ret .= "  nfo [symbol] - Financial information in long form.\n";
     $ret .= "  info [symbol] - Financial information in even longer form.\n";
-
-    #$ret .= "  Type \'.help <command>\' for help with a specify command.";
+    $ret .= "  news [symbol] - Search news headlines for symbol.\n";
 
     return $ret;
 } ## ---------- end sub command_comment
@@ -81,8 +83,9 @@ sub command_regex {
     # book = get order book information of stock.
     # nfo = Financial summary in long form.
     # info = Financial summary in longer form.
+    # news = Search for news headlines.
     return
-        '(return|xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|book|nfo|info|\.(?!\.))';
+        '(test|news|return|xe|movers|us|fus|etfs|eu|europe|asia|ftse|footsie|rtcom|oil|tech|agcom|fx|forex|ffx|fforex|q|quote|fun|vix|b|bonds|book|nfo|info|\.(?!\.))';
 } ## ---------- end sub command_regex
 
 # Return 1 if OK.
@@ -122,12 +125,29 @@ sub command_run {
 
     $cmd = 'q' if $cmd eq '.';
 
-    #if($cmd eq 'btc') {
-    #    $arg = 'btc=';
-    #    $cmd = 'q';
-    #}
+    warn "* StockMarket command: $cmd";
 
-    warn "Command: $cmd";
+    #$self->quoteminimal($channel,$nick,$arg) if cmd eq 'test';
+
+    if ( $cmd eq 'test' ) {
+
+        my $ret = $self->quoteminimal( $channel, $nick, ['AAPL','YHOO'] );
+
+        return 1;
+    }
+
+    if ( $cmd eq 'news' ) {
+
+        return unless defined $arg;
+
+        my @z = split( / /, uc($arg) );
+        my $symbols = join( ',', @z );
+
+        #my $ret = $self->quoteminimal($channel,$nick,$arg);
+        my $ret = $self->news_search( $channel, $nick, $symbols );
+
+        return 1;
+    }
 
     if ( $cmd eq 'nfo' || $cmd eq 'info' ) {
         return unless defined $arg && length $arg;
@@ -167,7 +187,7 @@ sub command_run {
 
         my $ret_clean = sprintf '%g%%', $ret;
 
-        $self->send_server( PRIVMSG => $channel, $ret_clean );
+        $self->send_server( $SEND_CMD => $channel, $ret_clean );
 
         return 1;
     }
@@ -176,9 +196,18 @@ sub command_run {
 
         return unless defined $arg;
 
-        my $ret = $self->stock_book( $channel, uc($arg) );
+        my @z = split( / /, uc($arg) );
 
-        return $ret;
+        foreach my $b (@z) {
+
+            next unless length $b;
+
+            my $ret = $self->stock_book( $channel, uc($b) );
+        }
+
+        return 1;
+
+        #return $ret;
     }
 
     if ( $cmd eq 'movers' ) {
@@ -407,7 +436,7 @@ sub command_run {
                         $fun .= " " . sprintf '%g%%', $c->{FundamentalData}{dividend}
                             if exists $c->{FundamentalData}{dividend};
 
-                        $self->send_server( PRIVMSG => $channel, $fun );
+                        $self->send_server( $SEND_CMD => $channel, $fun );
                     }
 
                     if ( $cmd eq 'q' || $cmd eq 'quote' ) {
@@ -424,11 +453,11 @@ sub command_run {
                             . $high;            #$open > $last ? $open.'-'.$last : $last.'-'.$open;
 
                         my $quote =
-                            "$name ($company_name) Last: $last $change_pretty $change_pct_pretty "
-                            ;                   #(Vol: $volume) ";
+                            "$name ($company_name) Last: $last $change_pretty $change_pct_pretty ";
 
                         if ( defined $volume && $volume ne '' && $volume gt 0 ) {
-                            $quote .= "(Vol: $volume) ";
+                            my $v = $self->format_units($volume);
+                            $quote .= "(Vol: $v) ";
                         }
 
                         $quote .=
@@ -444,8 +473,8 @@ sub command_run {
                             if ( exists $c->{ExtendedMktQuote}{type}
                                 && $c->{ExtendedMktQuote}{type} eq 'PRE_MKT' )
                             {
-                                my $last       = commify( $c->{ExtendedMktQuote}{last} );
-                                my $v          = $c->{ExtendedMktQuote}{volume};
+                                my $last = commify( $c->{ExtendedMktQuote}{last} );
+                                my $v = $self->format_units( $c->{ExtendedMktQuote}{volume} );
                                 my $change     = $c->{ExtendedMktQuote}{change};
                                 my $change_pct = $c->{ExtendedMktQuote}{change_pct};
                                 my $change_pretty =
@@ -484,8 +513,8 @@ sub command_run {
                             if ( exists $c->{ExtendedMktQuote}{type}
                                 && $c->{ExtendedMktQuote}{type} eq 'POST_MKT' )
                             {
-                                my $last       = commify( $c->{ExtendedMktQuote}{last} );
-                                my $v          = $c->{ExtendedMktQuote}{volume};
+                                my $last = commify( $c->{ExtendedMktQuote}{last} );
+                                my $v = $self->format_units( $c->{ExtendedMktQuote}{volume} );
                                 my $change     = $c->{ExtendedMktQuote}{change};
                                 my $change_pct = $c->{ExtendedMktQuote}{change_pct};
                                 my $change_pretty =
@@ -520,36 +549,38 @@ sub command_run {
                             }
                         }
 
-                        $self->send_server( PRIVMSG => $channel, $quote );
-                    }                           # // if($cmd eq 'q') {
+                        $self->send_server( $SEND_CMD => $channel, $quote );
+                    }
 
                 }
 
                 if ( $cmd ne 'q' && $cmd ne 'quote' && $cmd ne 'fun' ) {
                     $summary =~ s/\s+$//;
-                    $self->send_server( PRIVMSG => $channel, $summary )
+                    $self->send_server( $SEND_CMD => $channel, $summary )
                         if defined $summary && length $summary;
                 }
             }
         );
     }
     catch($e) {
-
-        #warn $e;
+        warn $e;
         }
 
         return 1;
 } ## ---------- end sub command_run
+
+sub quote_fetch {
+
+
+}
+
 
 sub finances {
     my ( $self, $channel, $nick, $symbol, $long ) = @_;
 
     $long |= 0;
 
-    # http://finviz.com/quote.ashx?t=AAPL
-
     my $url = sprintf ' http://finviz.com/quote.ashx?t=%s', $symbol;
-
     my $summary = '';
 
     try {
@@ -624,16 +655,18 @@ sub finances {
                 $title_pretty .= " $title ";
                 $title_pretty .= String::IRC->new( $f{Price} )->bold;
 
-                $self->send_server( PRIVMSG => $channel, $title_pretty );
+                $self->send_server( $SEND_CMD => $channel, $title_pretty );
 
                 foreach my $k ( keys %fun ) {
-                    my $sum = sprintf( "%-" . $keylen . "s %-" . $vallen . "s", $k, $fun{$k} )
-                        ;                       # %-15s %-10s", $si, $ver, $l );
+
+                    my $sum = sprintf( "%-" . $keylen . "s %-" . $vallen . "s", $k, $fun{$k} );
+
                     $summary .= $sum;
                     $level++;
                     if ( $level == 6 ) {
-                        warn $summary;
-                        $self->send_server( PRIVMSG => $long ? $nick : $channel, $summary );
+
+                        #warn $summary;
+                        $self->send_server( $SEND_CMD => $long ? $nick : $channel, $summary );
                         $summary = '';
                         $level   = 0;
                     }
@@ -696,12 +729,12 @@ sub stock_book {
 
                 my $change_pretty = String::IRC->new($change)->pink;
 
-                $change_pretty->light_green if substr( $change, 1, 1 ) == '+';
+                $change_pretty->light_green if substr( $change, 1, 1 ) eq '+';
 
                 my $quote =
                     "$symbol ($name) Last: $last ($change_pretty) Orders: $orders Volume: $volume Open: $open High: $high Low: $low Prev: $prev ";
 
-                $self->send_server( PRIVMSG => $channel, $quote );
+                $self->send_server( $SEND_CMD => $channel, $quote );
 
                 return 1;
 
@@ -782,7 +815,7 @@ sub currency_convert {
                         $summary .= String::IRC->new($amount_b)->light_green;
                         $summary .= ' ' . $currency_b;
 
-                        $self->send_server( PRIVMSG => $channel, $summary );
+                        $self->send_server( $SEND_CMD => $channel, $summary );
 
                         return 1;
                     }
@@ -829,7 +862,7 @@ sub market_movers {
                 }
 
                 if ( length $summary ) {
-                    $self->send_server( PRIVMSG => $channel, "Gainers - $summary" );
+                    $self->send_server( $SEND_CMD => $channel, "Gainers - $summary" );
                 }
 
                 $summary = '';
@@ -842,7 +875,7 @@ sub market_movers {
                 }
 
                 if ( length $summary ) {
-                    $self->send_server( PRIVMSG => $channel, "Losers - $summary" );
+                    $self->send_server( $SEND_CMD => $channel, "Losers - $summary" );
                 }
 
             }
@@ -854,6 +887,148 @@ sub market_movers {
 
         return 1;
 } ## ---------- end sub market_movers
+
+sub news_search {
+    my ( $self, $channel, $nick, $symbol ) = @_;
+
+    return unless defined $symbol;
+
+    warn "* News search for $symbol\n";
+
+    my $query =
+          'select * from feed where url=\'http://feeds.finance.yahoo.com/rss/2.0/headline?s='
+        . $symbol
+        . '&f=sl1d1t1c1ohgv&e=.csv\'';
+    my $params =
+        "format=json&diagnostics=true&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=";
+    my $url = sprintf 'http://query.yahooapis.com/v1/public/yql?q=%s&%s', uri_escape($query),
+        $params;
+
+    warn $url;
+
+    try {
+        $self->asyncsock->get(
+            $url,
+            sub {
+                my ( $body, $header ) = @_;
+
+                return unless defined $body && defined $header;
+
+                my $json_object = $body;
+                my $j           = $self->_jsonify($json_object);
+                my $results     = $j->{query}{results}{item};
+
+                #warn $body;
+                #warn Dumper($results);
+
+                return unless defined $results;
+
+                my $idx = 5;
+                foreach my $x ( @{$results} ) {
+                    my $title = $x->{title};
+                    my $link  = $x->{link};
+
+                    next
+                        unless defined $title && defined $link && length $title && length $link;
+
+                    my $title_pretty = "[" . String::IRC->new("$symbol")->purple . "]";
+                    my ( $short, $fetch_title ) = $self->{Owner}->_shorten( $link, 0 );
+                    $self->send_server(
+                        $SEND_CMD => $channel,
+                        "$title_pretty $title - $short"
+                    );                          # - $fetch_title" );
+                    $idx--;
+
+                    last if $idx <= 0;
+
+                    #warn Dumper($x);
+                }
+
+                return 1;
+
+            }
+        );
+    }
+    catch($e) {
+        warn("An error occured while news_search was executing: $e");
+    };
+} ## ---------- end sub news_search
+
+sub quoteminimal {
+    my ( $self, $channel, $nick, $symbol ) = @_;
+
+    #return unless defined $symbols;
+
+    #my $symbol = '';
+    #$symbol .= '"$val",' foreach my $val (@symbols);
+
+    #my $symbolString = join(',', $symbol);
+
+    for my $k (@{$symbol}) {
+        warn $k;
+    }
+
+    warn Dumper $symbol;;
+    #warn "Symbol string: $symbol\n";
+
+    #my $query = 'select * from yahoo.finance.historicaldata where symbol = "YHOO" and startDate = "2009-09-11" and endDate = "2009-09-11"';
+    my $params =
+        "format=json&diagnostics=true&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=";
+    my $query =
+        sprintf 'select * from yahoo.finance.quote where symbol in ("SPY","CLK15.NYM","AAPL")';
+    my $url = sprintf "http://query.yahooapis.com/v1/public/yql?q=%s&%s", uri_escape($query),
+        $params;
+
+    try {
+        $self->asyncsock->get(
+            $url,
+            sub {
+                my ( $body, $header ) = @_;
+
+                return unless defined $body && defined $header;
+
+                my $json_object = $body;
+                my $j           = $self->_jsonify($json_object);
+
+                my $results;
+                if ( !exists $j->{query}{results}{quote} ) {
+
+                    # retry
+                }
+
+                $results = $j->{query}{results}{quote};
+
+                #warn Dumper($j);                #$results);
+
+                return 1;
+
+            }
+        );
+    }
+    catch($e) {
+        warn("An error occured while quoteminimal was executing: $e");
+    };
+} ## ---------- end sub quoteminimal
+
+sub format_units {
+    my $self  = shift;
+    my $value = shift;
+    my $ret;
+
+    if ( $value > 1000000 ) {
+        my $n = $value / 1000000;
+        $ret = sprintf '%.2fM', $n;
+    }
+    elsif ( $value < 1000000 && $value > 1000 ) {
+        my $n = $value / 1000;
+        $ret = sprintf '%.2fK', $n;
+    }
+    else {
+        $ret = $value;
+    }
+
+    return $ret;
+} ## ---------- end sub format_units
 
 sub _jsonify {
     my $self = shift;

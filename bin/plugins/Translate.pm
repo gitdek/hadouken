@@ -141,7 +141,8 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
+        = @_;
 
     my ( $cmd, $arg ) = split( / /, lc($message), 2 );
 
@@ -173,7 +174,10 @@ sub command_run {
     }
 
     return
-        unless ( defined $dstlang && length $dstlang && defined $phrase && length $phrase );
+        unless ( defined $dstlang
+        && length $dstlang
+        && defined $phrase
+        && length $phrase );
 
     return
         unless exists $iso2_codes{$dstlang} && exists $iso2_codes{$srclang};
@@ -194,8 +198,8 @@ sub command_run {
 
     #warn $encoded_phrase;
 
-    my $define_url =
-          "http://mymemory.translated.net/api/get?q="
+    my $define_url
+        = "http://mymemory.translated.net/api/get?q="
         . $encoded_phrase
         . "&langpair="
         . $langpair;
@@ -215,7 +219,8 @@ sub command_run {
 
             #(exists $json->{'tuc'}->[0]->{meanings});
 
-            my $arg_pretty  = String::IRC->new($phrase)->bold;          #$json->{phrase})->bold;
+            my $arg_pretty
+                = String::IRC->new($phrase)->bold;    #$json->{phrase})->bold;
             my $translation = $json->{responseData}->{translatedText};
 
             # $translation =~ s/[^[:ascii:]]+//g;
@@ -225,7 +230,8 @@ sub command_run {
             # warn $translation;
 
             return
-                unless ( ( defined $translation ) && ( length($translation) ) );
+                unless ( ( defined $translation )
+                && ( length($translation) ) );
 
             my $ret = "[$arg_pretty] $dstlang($dest_lang): " . $translation;
             $self->send_server( PRIVMSG => $channel, $ret );

@@ -337,9 +337,9 @@ C<$bool> is C<false> by default.
 =cut
 
 my %LOWER_CASEMAP = (
-    rfc1459          => sub { tr/A-Z[]\\\^/a-z{}|~/ },
-    'strict-rfc1459' => sub { tr/A-Z[]\\/a-z{}|/ },
-    ascii            => sub { tr/A-Z/a-z/ },
+    rfc1459          => sub {tr/A-Z[]\\\^/a-z{}|~/},
+    'strict-rfc1459' => sub {tr/A-Z[]\\/a-z{}|/},
+    ascii            => sub {tr/A-Z/a-z/},
 );
 
 sub new {
@@ -465,8 +465,10 @@ sub connect {
                 my ( $self, $err ) = @_;
 
                 unless ($err) {
-                    $self->register( $info->{nick}, $info->{user}, $info->{real},
-                        $info->{password} );
+                    $self->register(
+                        $info->{nick}, $info->{user},
+                        $info->{real}, $info->{password}
+                    );
                 }
 
                 delete $self->{register_cb_guard};
@@ -755,7 +757,7 @@ sub send_long_message {
         $id = "X" x 60;                         # just in case the ident is not available...
     }
 
-    my $init_len = length mk_msg( $id, $cmd, @params, " " );    # i know off by 1
+    my $init_len = length mk_msg( $id, $cmd, @params, " " ); # i know off by 1
 
     if ( $ctcp ne '' ) {
         $init_len += length($ctcp) + 3;         # CTCP cmd + " " + "\001" x 2
@@ -769,8 +771,7 @@ sub send_long_message {
     my @lines = split /\n/, $msg;
 
     # splitup long lines into multiple ones:
-    @lines =
-        map split_unicode_string( $encoding, $_, $line_len ), @lines;
+    @lines = map split_unicode_string( $encoding, $_, $line_len ), @lines;
 
     # send lines line-by-line:
     for my $line (@lines) {
@@ -897,7 +898,9 @@ sub split_nick_mode {
     if ( $prefixed_nick =~ /^([\Q$pchrs\E]+)(.+)$/ ) {
         my $p = $1;
         $nick = $2;
-        for ( split //, $p ) { $mode_map{ $self->map_prefix_to_mode($_) } = 1 }
+        for ( split //, $p ) {
+            $mode_map{ $self->map_prefix_to_mode($_) } = 1;
+        }
     }
     else {
         $nick = $prefixed_nick;
@@ -1055,7 +1058,10 @@ sub _setup_internal_dcc_handlers {
                     arg  => $arg,
                 };
 
-                $self->event( dcc_request => $id, $src, $dcc_type, $arg, $addr, $port );
+                $self->event(
+                    dcc_request => $id,
+                    $src, $dcc_type, $arg, $addr, $port
+                );
             }
         }
     );
@@ -1069,14 +1075,18 @@ sub _setup_internal_dcc_handlers {
             if ( $type eq 'chat' ) {
                 $self->send_msg(
                     PRIVMSG => $dest,
-                    encode_ctcp( [ DCC => "CHAT", "CHAT", $local_ip, $local_port ] )
+                    encode_ctcp(
+                        [ DCC => "CHAT", "CHAT", $local_ip, $local_port ]
+                    )
                 );
 
             }
             elsif ( $type eq 'send' ) {
                 $self->send_msg(
                     PRIVMSG => $dest,
-                    encode_ctcp( [ DCC => "SEND", "NOTHING", $local_ip, $local_port ] )
+                    encode_ctcp(
+                        [ DCC => "SEND", "NOTHING", $local_ip, $local_port ]
+                    )
                 );
             }
         }
@@ -1157,8 +1167,9 @@ sub dcc_initiate {
     $dest = $self->lower_case($dest);
     $type = lc $type;
 
-    my $id = ++$self->{dcc_id};
-    my $dcc = $self->{dcc}->{$id} = { id => $id, type => $type, dest => $dest };
+    my $id  = ++$self->{dcc_id};
+    my $dcc = $self->{dcc}->{$id}
+        = { id => $id, type => $type, dest => $dest };
 
     weaken $dcc;
     weaken $self;
@@ -1199,7 +1210,10 @@ sub dcc_initiate {
         $dcc->{local_ip}   = $local_ip;
         $dcc->{local_port} = $local_port;
 
-        $self->event( dcc_ready => $id, $dest, $type, $local_ip, $local_port );
+        $self->event(
+            dcc_ready => $id,
+            $dest, $type, $local_ip, $local_port
+        );
         };
 
     $id;
@@ -1306,7 +1320,8 @@ sub send_dcc_chat {
 
 sub _was_me {
     my ( $self, $msg ) = @_;
-    $self->lower_case( prefix_nick($msg) ) eq $self->lower_case( $self->nick() );
+    $self->lower_case( prefix_nick($msg) ) eq
+        $self->lower_case( $self->nick() );
 }
 
 sub update_ident {
@@ -1329,13 +1344,15 @@ sub channel_remove {
     my ( $self, $msg, $chan, $nicks ) = @_;
 
     for my $nick (@$nicks) {
-        if ( $self->lower_case($nick) eq $self->lower_case( $self->nick() ) ) {
+        if ( $self->lower_case($nick) eq $self->lower_case( $self->nick() ) )
+        {
             delete $self->{chan_queue}->{ $self->lower_case($chan) };
             delete $self->{channel_list}->{ $self->lower_case($chan) };
             last;
         }
         else {
-            delete $self->{channel_list}->{ $self->lower_case($chan) }->{$nick};
+            delete $self->{channel_list}->{ $self->lower_case($chan) }
+                ->{$nick};
         }
     }
 } ## ---------- end sub channel_remove
@@ -1375,14 +1392,17 @@ sub channel_mode_change {
     defined $nickmode or return;
 
     $op eq '+'
-        ? $nickmode->{$mode} = 1
+        ? $nickmode->{$mode}
+        = 1
         : delete $nickmode->{$mode};
 } ## ---------- end sub channel_mode_change
 
 sub _filter_new_nicks_from_channel {
     my ( $self, $chan, @nicks ) = @_;
-    grep { not exists $self->{channel_list}->{ $self->lower_case($chan) }->{$_} } @nicks;
-}
+    grep {
+        not exists $self->{channel_list}->{ $self->lower_case($chan) }->{$_}
+    } @nicks;
+} ## ---------- end sub _filter_new_nicks_from_channel
 
 ################################################################################
 # Callbacks
@@ -1554,10 +1574,10 @@ sub endofnames_cb {
     my ( $self, $msg ) = @_;
     my $chan         = $msg->{params}->[1];
     my @names_result = @{ delete $self->{_tmp_namereply} };
-    my @modes        = map { ( $self->split_nick_mode($_) )[0] } @names_result;
-    my @nicks        = map { ( $self->split_nick_mode($_) )[1] } @names_result;
-    my @idents =
-        grep { defined } map { ( $self->split_nick_mode($_) )[2] } @names_result;
+    my @modes  = map { ( $self->split_nick_mode($_) )[0] } @names_result;
+    my @nicks  = map { ( $self->split_nick_mode($_) )[1] } @names_result;
+    my @idents = grep {defined}
+        map { ( $self->split_nick_mode($_) )[2] } @names_result;
     my @new_nicks = $self->_filter_new_nicks_from_channel( $chan, @nicks );
 
     $self->channel_add( $msg, $chan, \@nicks, \@modes );
@@ -1567,9 +1587,10 @@ sub endofnames_cb {
 
 sub whoreply_cb {
     my ( $self, $msg ) = @_;
-    my ( undef, $channel, $user, $host, $server, $nick ) = @{ $msg->{params} };
+    my ( undef, $channel, $user, $host, $server, $nick )
+        = @{ $msg->{params} };
     $self->update_ident( join_prefix( $nick, $user, $host ) );
-}
+} ## ---------- end sub whoreply_cb
 
 sub whoisuser_cb {
     my ( $self, $msg ) = @_;
@@ -1598,7 +1619,10 @@ sub part_cb {
     my $chan = $msg->{params}->[0];
     my $nick = prefix_nick($msg);
 
-    $self->event( part => $nick, $chan, $self->_was_me($msg), $msg->{params}->[1] );
+    $self->event(
+        part => $nick,
+        $chan, $self->_was_me($msg), $msg->{params}->[1]
+    );
     $self->channel_remove( $msg, $chan, [$nick] );
     $self->event( channel_remove => $msg, $chan, $nick );
 } ## ---------- end sub part_cb
@@ -1676,7 +1700,9 @@ sub change_nick_login_cb {
     else {
         my $newnick = $self->{nick_change}->( $self->nick );
 
-        if ( $self->lower_case($newnick) eq $self->lower_case( $self->{nick} ) ) {
+        if ( $self->lower_case($newnick) eq $self->lower_case( $self->{nick} )
+            )
+        {
             $self->disconnect("couldn't change nick to non-conflicting one");
             return 0;
         }
@@ -1742,7 +1768,8 @@ sub ctcp_auto_reply_cb {
         or return;
 
     if ( ref( $ctcprepl->[0] ) eq 'CODE' ) {
-        $ctcprepl = [ $ctcprepl->[0]->( $self, $src, $targ, $tag, $msg, $type ) ];
+        $ctcprepl
+            = [ $ctcprepl->[0]->( $self, $src, $targ, $tag, $msg, $type ) ];
     }
 
     $self->send_msg( NOTICE => $src, encode_ctcp(@$ctcprepl) );

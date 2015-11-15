@@ -4,9 +4,10 @@ use strict;
 use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
 
 require Exporter;
-@ISA       = qw(Exporter);
-@EXPORT    = qw(encode_base64 decode_base64);
-@EXPORT_OK = qw(encode_base64url decode_base64url encoded_base64_length decoded_base64_length);
+@ISA    = qw(Exporter);
+@EXPORT = qw(encode_base64 decode_base64);
+@EXPORT_OK
+    = qw(encode_base64url decode_base64url encoded_base64_length decoded_base64_length);
 
 $VERSION = '3.14';
 
