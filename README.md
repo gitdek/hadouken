@@ -1,11 +1,14 @@
 <A name="toc1-4" title="Hadouken" />
 # Hadouken
 
-By Joe P <dek@dek.codes>
 
+Author
+----
+Joe
 
-<A name="toc1-50" title="Status" />
-#### Current Status ![Build Status](https://travis-ci.org/gitdek/hadouken.svg?branch=master)
+admin@meatwad.org
+
+### Current Status [![Build Status](https://travis-ci.org/gitdek/hadouken.svg?branch=master)](https://travis-ci.org/gitdek/hadouken)
 
 <A name="toc2-9" title="Introduction" />
 ## Introduction
