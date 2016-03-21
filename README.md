@@ -1,23 +1,25 @@
-<A name="toc1-4" title="Hadouken" />
 # Hadouken
 
-By J. Puglisi <admin@meatwad.org>
+By J. Puglisi 
+
+admin@meatwad.org
 
 
-<A name="toc1-50" title="Status" />
-#### Current Status [![Build Status](https://travis-ci.org/gitdek/hadouken.png?branch=master)](https://travis-ci.org/gitdek/hadouken)
+### Current Status
+
+[![Build Status](https://travis-ci.org/gitdek/hadouken.png?branch=master)](https://travis-ci.org/gitdek/hadouken)
 
 
-<A name="toc2-9" title="Introduction" />
 ## Introduction
-***
 
-[Hadouken][] is an irc bot which aims to provide fun, information, and
+
+![Hadouken logo](https://gitdek.github.io/hadouken/images/hadouken.png "Hadouken logo")
+Hadouken is an irc bot which aims to provide fun, information, and
 channel management. The main goal is a simple plugin design so others can 
 contribute even with limited time. There are many useful, and some not so
 useful plugins included to begin with.
 
-<A name="toc2-16" title="Getting Started" />
+
 ## Getting Started
 ***
 This is straight forward and will take just a few minutes. I recommend using
@@ -36,7 +38,7 @@ If you would like to setup hadouken as a service you can generate the init file
 by running `hadouken get_init_file > /etc/init.d/hadouken`.
 
 
-<A name="toc2-103" title="Command-line options" />
+
 ## Command-line Options
 ***
 Make sure you make a backup of your configuration. It's possibly you might
@@ -83,7 +85,7 @@ encrypt it twice by accident, rendering it useless.
     > hadouken get_init_file
 `
 
-<A name="toc2-139" title="Core Commands" />
+
 ## Core Commands
 ***
 These are the core commands of Hadouken. There are many plugin-ins as well so
@@ -191,7 +193,7 @@ Commands for management of channels:
 
 - - -
 
-<A name="toc2-159" title="Issues" />
+
 ## Issues
 ***
 Hadouken has been tested on the following versions of perl:
