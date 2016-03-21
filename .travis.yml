@@ -1,7 +1,10 @@
+sudo: false
 language: perl
 perl:
+    - "blead"
     - "5.20"
     - "5.18"
+    - "5.16"
 env:
   global:
     - TEST_PARTITIONS=4
@@ -16,6 +19,8 @@ matrix:
       env: COVERAGE=1 TEST_PARTITION=3
     - perl: "5.20"
       env: COVERAGE=1 TEST_PARTITION=4
+  allow_failures:
+    - perl: blead       # ignore failures for blead perl
 before_install:
   - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
   - source ~/travis-perl-helpers/init
@@ -26,6 +31,7 @@ before_install:
 install:
   - cpan-install experimental
   - cpan-install ExtUtils::MakeMaker~6.68 --deps
+  - cpan-install --deps
   - cpan-install --coverage
 before_script:
   - coverage-setup

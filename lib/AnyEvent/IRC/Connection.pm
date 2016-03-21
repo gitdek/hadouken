@@ -177,10 +177,10 @@ sub connect {
         #$sock->bind($bind)
         #    or die "Cannot bind to addr: $!";
 
-        if ( defined $iface && $iface ne '' ) {
-            setsockopt( $sock, SOL_SOCKET, 25, pack( "Z*", $iface ) )
-                or die "Cannot bind to interface: $!";
-        }
+        #if ( defined $iface && $iface ne '' ) {
+        #   setsockopt( $sock, SOL_SOCKET, 25, pack( "Z*", $iface ) )
+        #       or die "Cannot bind to interface: $!";
+        #}
 
         return undef;
         };                                      #(defined $prep ? (ref $prep ? $prep : sub { $prep }) : ());

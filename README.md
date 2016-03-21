@@ -1,11 +1,12 @@
 <A name="toc1-4" title="Hadouken" />
 # Hadouken
 
-By Joe P <dek@dek.codes>
+By J. Puglisi <admin@meatwad.org>
 
 
 <A name="toc1-50" title="Status" />
-#### Current Status ![Build Status](https://travis-ci.org/gitdek/hadouken.svg?branch=master)
+#### Current Status [![Build Status](https://travis-ci.org/gitdek/hadouken.png?branch=master)](https://travis-ci.org/gitdek/hadouken)
+
 
 <A name="toc2-9" title="Introduction" />
 ## Introduction
@@ -219,6 +220,8 @@ If you have issues with Math::Pari and Digest::MD2 follow the directions below. 
 10. apt-get install libdigest-md2-perl
 
 
-[Hadouken]: http://github.com/gitdek/hadouken/
-[Dekcodes]: http://dek.codes/
+
+Hadouken on github: [https://github.com/gitdek/hadouken]
+
+Hadouken: [http://hadouken.pw]
 

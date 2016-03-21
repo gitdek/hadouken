@@ -1,0 +1,10 @@
+# vim: set ft=markdown :
+
+## Uncontroversial Items
+
+These items are reasonably well thought out, and can go in any major release.
+
+### Slack integration
+
+Slack Real-Time-Messaging API and webhooks
+

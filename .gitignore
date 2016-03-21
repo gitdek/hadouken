@@ -49,5 +49,22 @@ data/geoip/GeoIP.dat
 data/geoip/GeoIPOrg.dat
 data/geoip/GeoLiteCity.dat
 .tidyall.d/
-Gemfile
-Gemfile.lock
+README.html
+
+### SublimeText ###
+# cache files for sublime text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+
+# workspace files are user-specific
+*.sublime-workspace
+*.sublime-project
+
+# sftp configuration file
+sftp-config.json
+backupconfig.conf
+
+
+*.bak
+CHANGELOG.html
