@@ -27,3 +27,4 @@ sftp-config.json
 .tidyall.d/cache
 .travis.yml~
 README.html
+bin/
