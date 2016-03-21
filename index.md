@@ -6,7 +6,9 @@ layout: index
 <A name="toc1-4" title="Hadouken" />
 # Hadouken
 
-By J. Puglisi <admin@meatwad.org>
+By J. Puglisi 
+
+admin@meatwad.org
 
 <A name="toc1-50" title="Status" />
 #### Current Status [![Build Status](https://travis-ci.org/gitdek/hadouken.png?branch=master)](https://travis-ci.org/gitdek/hadouken)
