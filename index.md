@@ -6,7 +6,7 @@ layout: index
 <A name="toc1-4" title="Hadouken" />
 # Hadouken
 
-By J. Puglisi <[admin@meatwad.org](mailto:admin@meatwad.org)>
+By J. Puglisi <admin@meatwad.org>
 
 <A name="toc1-50" title="Status" />
 #### Current Status [![Build Status](https://travis-ci.org/gitdek/hadouken.png?branch=master)](https://travis-ci.org/gitdek/hadouken)
@@ -16,9 +16,9 @@ By J. Puglisi <[admin@meatwad.org](mailto:admin@meatwad.org)>
 ## Introduction
 ***
 
-![Hadouken logo](http://gitdek.github.io/hadouken/images/hadouken.png "Hadouken logo")
+![Hadouken logo](https://gitdek.github.io/hadouken/images/hadouken.png "Hadouken logo")
 
-[Hadouken](http://hadouken.pw) is an irc bot which aims to provide fun, information, and
+Hadouken is an irc bot which aims to provide fun, information, and
 channel management. The main goal is a simple plugin design so others can 
 contribute even with limited time. There are many useful, and some not so
 useful plugins included to begin with.
