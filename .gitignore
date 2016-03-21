@@ -28,3 +28,4 @@ sftp-config.json
 .travis.yml~
 README.html
 bin/
+_site/
