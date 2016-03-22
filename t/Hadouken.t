@@ -4,6 +4,8 @@ use strict;
 
 use Test::More;                                 # qw(no_plan);
 
+diag("Performing Hadouken tests");
+
 BEGIN {
     use_ok('Hadouken');
 }
@@ -11,6 +13,5 @@ BEGIN {
 can_ok( 'Hadouken', ('new') );
 
 diag("Testing Hadouken $Hadouken::VERSION, Perl $], $^X");
-
 
 done_testing();

@@ -6,9 +6,16 @@ use warnings;
 use Cwd qw(abs_path getcwd);
 use File::Basename;
 
-print "Decompressing GeoIP databases...\n";
+print "Decompressing GeoIP databases...";
+if ($ARGV[0] eq 'skip') {
+	print "skipping!\n";
+	exit 0;
+} else {
+	print "working.\n";
+}
 
-#print "argv0 is $ARGV[0]\n";
+# print "argv0 is $ARGV[0]\n";
+
 
 my $script_abs = abs_path($0);
 my $script_dir = dirname($script_abs);

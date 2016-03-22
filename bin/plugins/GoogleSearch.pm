@@ -19,9 +19,8 @@ our $AUTHOR  = 'dek';
 sub command_comment {
     my $self = shift;
 
-    return
-        "google search. command aliases: google, goog. add results=N to display N results.";
-} ## ---------- end sub command_comment
+    return "google search. command aliases: google, goog. add results=N to display N results.";
+}
 
 # Clean name of command.
 sub command_name {
@@ -62,8 +61,7 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
-        = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
     my ( $cmd, $arg ) = split( / /, lc($message), 2 );
 
     return

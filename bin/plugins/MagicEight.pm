@@ -110,16 +110,13 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
-        = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
     my ( $cmd, $arg ) = split( / /, lc($message), 2 );
 
     return unless defined $arg;
 
     # First, if we were asked to pick from some options:
-    if ( my ($option_list)
-        = $arg =~ /(?:choose|pick) \s+ (?:from\s+)? (.+)/x )
-    {
+    if ( my ($option_list) = $arg =~ /(?:choose|pick) \s+ (?:from\s+)? (.+)/x ) {
         my @options = split /\s+or\s+/, $option_list;
         my $picked = $options[ rand @options ];
 
@@ -135,8 +132,8 @@ sub command_run {
         $result = 'No';
     }
     else {
-        $result
-            = ( rand() < 0.3 ) ? 'Maybe' : ( rand() < 0.5 ) ? 'Yes' : 'No';
+        $result =
+            ( rand() < 0.3 ) ? 'Maybe' : ( rand() < 0.5 ) ? 'Yes' : 'No';
     }
     if ( $arg =~ / (?: suck | fail | shit | fucked ) /xi ) {
         $result = { 'Yes' => 'No', 'No' => 'Yes' }->{$result} || $result;

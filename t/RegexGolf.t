@@ -11,6 +11,8 @@ use Test::More qw(no_plan);
 use Regexp::Assemble;
 use List::MoreUtils ':all';
 
+# diag("Performing RegexGolf tests");
+
 diag("Testing Regex Golf, Perl $], $^X");
 
 my @winners = (

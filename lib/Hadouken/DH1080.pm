@@ -22,11 +22,10 @@ our @EXPORT = qw();
 
 our $VERSION = '0.1';
 
-my $B64_DH1080
-    = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+my $B64_DH1080 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-my $P
-    = Math::BigInt->from_hex( '0x'
+my $P =
+    Math::BigInt->from_hex( '0x'
         . 'FBE1022E23D213E8ACFA9AE8B9DFAD'
         . 'A3EA6B7AC7A7B7E95AB5EB2DF85892'
         . '1FEADE95E6AC7BE7DE6ADBAB8A783E'
@@ -70,15 +69,13 @@ sub as_string {
 
 sub public_key {
     my ($self) = @_;
-    return Hadouken::DH1080->encodeB64(
-        Hadouken::DH1080->int2bytes( $self->{_public_key} ) );
+    return Hadouken::DH1080->encodeB64( Hadouken::DH1080->int2bytes( $self->{_public_key} ) );
 }
 
 sub get_shared_secret {
     my ( $self, $peer_pub_key ) = @_;
 
-    my $public = Hadouken::DH1080->bytes2int(
-        Hadouken::DH1080->decodeB64($peer_pub_key) );
+    my $public = Hadouken::DH1080->bytes2int( Hadouken::DH1080->decodeB64($peer_pub_key) );
     if ( $public->bcmp(1) <= 0 || $public->bcmp( $self->{_p} ) >= 0 ) {
         warn sprintf( "Public key outside range: %s", $public->bstr() );
         return undef;

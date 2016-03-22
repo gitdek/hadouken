@@ -73,8 +73,11 @@ WriteMakefile(
         'REST::Google'          => 0,
         'Log::Log4perl'         => 0,
         'IMDB::Film'            => 0,
-        'AnyEvent::SlackRTM'    => 0
-        #'Net::ZooKeeper'        => 0
+        'AnyEvent::SlackRTM'    => 0,
+        'Try::Tiny'             => 0,
+        'Redis'                 => 0,
+        'Net::ZooKeeper'        => 0,
+        'CHI'                   => 0
     },
     PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
@@ -85,11 +88,12 @@ WriteMakefile(
         'bin/plugins/Weather.pm' => '$(INST_LIB)/Hadouken/Plugin/Weather.pm',
         'bin/plugins/Dictionary.pm' => '$(INST_LIB)/Hadouken/Plugin/Dictionary.pm',
         'bin/plugins/Shorten.pm' => '$(INST_LIB)/Hadouken/Plugin/Shorten.pm',
+        'bin/plugins/MitchQuotes.pm' => '$(INST_LIB)/Hadouken/Plugin/MitchQuotes.pm',
     },
     # EXE_FILES => ['bin/hadouken'],
     PL_FILES => {
                 #'bin/createconfig.pl' => '/etc/hadouken.conf',
-                'bin/deflategeoip.pl' => 'hi',
+                'bin/deflategeoip.pl' => 'skip',
                 },
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
 );

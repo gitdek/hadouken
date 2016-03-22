@@ -11,8 +11,10 @@ use JSON::XS qw( encode_json decode_json );
 use URI::Escape;
 use HTML::TokeParser;
 use Text::Unidecode;
+
 # use Data::Dumper;
 use Data::Printer alias => 'Dumper', colored => 1;
+
 # use Finance::QuoteHist::Yahoo;
 use CHI;
 

@@ -134,8 +134,7 @@ sub connect {
                 $self->disconnect("EOF from server $host:$port");
             },
             on_error => sub {
-                $self->disconnect(
-                    "error in connection to server $host:$port: $!");
+                $self->disconnect("error in connection to server $host:$port: $!");
             },
             on_read => sub {
                 my ($hdl) = @_;

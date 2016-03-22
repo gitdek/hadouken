@@ -16,7 +16,7 @@ use Config::General;
 use TryCatch;
 use namespace::autoclean;
 use Term::ReadPassword;
-use Data::Printer alias => 'Dumper', colored => 1;
+# use Data::Printer alias => 'Dumper', colored => 1;
 use AnyEvent;
 
 # $|=1;

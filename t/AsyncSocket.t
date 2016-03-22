@@ -1,9 +1,11 @@
 use strict;
 
-use Test::More;                                 # qw(no_plan);
+use Test::More;                                 # tests => 8;                                 # qw(no_plan);
 use ExtUtils::MakeMaker qw/prompt/;
 
 use vars qw/$REMOTE_TESTS/;
+
+diag("Performing AsyncSocket tests");
 
 BEGIN {
     use_ok('AsyncSocket');
@@ -12,21 +14,21 @@ BEGIN {
     require_ok('HTTP::Cookies');
 } ## ---------- end BEGIN
 
-#get_network_permission();
+$REMOTE_TESTS = 'y';
 
-$REMOTE_TESTS = 'n';
-
-#$REMOTE_TESTS ||='';
+#$REMOTE_TESTS ||='y';
 
 diag("Testing AsyncSocket $AsyncSocket::VERSION, Perl $], $^X");
+
+# get_network_permission();
 
 my $testurl = 'http://www.google.com';
 
 my $asock = new_ok( 'AsyncSocket' => [ timeout => 30 ] );
 
-$asock->timeout(5);
+$asock->timeout(15);
 
-cmp_ok( $asock->timeout, '==', '5', 'timeout set' );
+cmp_ok( $asock->timeout, '==', '15', 'timeout set' );
 
 my $cv;                                         # = AE::cv;
 

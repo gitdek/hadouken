@@ -15,11 +15,11 @@ our $VERSION = '0.01';
 
 # This will handle asynchronous DNS, HTTP and other sockets.
 
-has timeout => ( is => 'rw', isa => 'Int', default => sub {30} );
+has timeout => ( is => 'rw', isa => 'Int', default => sub { 30 } );
 has agent => (
     is      => 'rw',
     isa     => 'Str',
-    default => sub {'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)'}
+    default => sub { 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)' }
 );                                              #join "/", __PACKAGE__, $VERSION });
 has cookie_jar => (
     is      => 'rw',
@@ -54,8 +54,7 @@ sub request {
         body    => $request->content,
     );
 
-    AnyEvent::HTTP::http_request $request->method, $request->uri, %options,
-        sub {
+    AnyEvent::HTTP::http_request $request->method, $request->uri, %options, sub {
         my ( $body, $header ) = @_;
 
         if ( defined $header->{'set-cookie'} ) {
@@ -78,7 +77,7 @@ sub request {
         $res->header(%$header);
         $self->cookie_jar->extract_cookies($res);
         $cb->( $body, $header );
-        };
+    };
 } ## ---------- end sub request
 
 no Any::Moose;

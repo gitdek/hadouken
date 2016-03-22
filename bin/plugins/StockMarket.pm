@@ -131,7 +131,7 @@ sub command_run {
 
     if ( $cmd eq 'test' ) {
 
-        my $ret = $self->quoteminimal( $channel, $nick, ['AAPL','YHOO'] );
+        my $ret = $self->quoteminimal( $channel, $nick, [ 'AAPL', 'YHOO' ] );
 
         return 1;
     }
@@ -571,9 +571,7 @@ sub command_run {
 
 sub quote_fetch {
 
-
 }
-
 
 sub finances {
     my ( $self, $channel, $nick, $symbol, $long ) = @_;
@@ -964,11 +962,12 @@ sub quoteminimal {
 
     #my $symbolString = join(',', $symbol);
 
-    for my $k (@{$symbol}) {
+    for my $k ( @{$symbol} ) {
         warn $k;
     }
 
-    warn Dumper $symbol;;
+    warn Dumper $symbol;
+
     #warn "Symbol string: $symbol\n";
 
     #my $query = 'select * from yahoo.finance.historicaldata where symbol = "YHOO" and startDate = "2009-09-11" and endDate = "2009-09-11"';

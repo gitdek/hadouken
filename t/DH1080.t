@@ -3,6 +3,8 @@ use strict;
 # use Test::More qw(no_plan);
 use Test::More tests => 3;
 
+diag("Performing DH1080 tests");
+
 BEGIN { use_ok('Hadouken::DH1080') }
 
 diag("Testing Hadouken::DH1080 $Hadouken::DH1080::VERSION, Perl $], $^X");
