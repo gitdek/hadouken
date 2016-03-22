@@ -22,10 +22,10 @@ matrix:
   allow_failures:
     - perl: blead       # ignore failures for blead perl
 before_install:
-  - "curl -o zookeeper-3.4.5.tar.gz http://apache.mirrors.tds.net/zookeeper/zookeeper-3.4.5/zookeeper-3.4.5.tar.gz"
-  - "tar -zxf zookeeper-3.4.5.tar.gz"
-  - "cp zookeeper-3.4.5/conf/zoo_sample.cfg zookeeper-3.4.5/conf/zoo.cfg"
-  - "sudo zookeeper-3.4.5/bin/zkServer.sh start"
+  - "curl -o zookeeper-3.4.8.tar.gz http://apache.arvixe.com/zookeeper/stable/zookeeper-3.4.8.tar.gz"
+  - "tar -zxf zookeeper-3.4.8.tar.gz"
+  - "cp zookeeper-3.4.8/conf/zoo_sample.cfg zookeeper-3.4.8/conf/zoo.cfg"
+  - "sudo zookeeper-3.4.8/bin/zkServer.sh start"
   - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
   - source ~/travis-perl-helpers/init
   - build-perl
