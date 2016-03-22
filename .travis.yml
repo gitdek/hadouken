@@ -1,4 +1,4 @@
-sudo: false
+sudo: true
 language: perl
 perl:
     - "blead"
@@ -22,6 +22,10 @@ matrix:
   allow_failures:
     - perl: blead       # ignore failures for blead perl
 before_install:
+  - "curl -o zookeeper-3.4.5.tar.gz http://apache.mirrors.tds.net/zookeeper/zookeeper-3.4.5/zookeeper-3.4.5.tar.gz"
+  - "tar -zxf zookeeper-3.4.5.tar.gz"
+  - "cp zookeeper-3.4.5/conf/zoo_sample.cfg zookeeper-3.4.5/conf/zoo.cfg"
+  - "sudo zookeeper-3.4.5/bin/zkServer.sh start"
   - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
   - source ~/travis-perl-helpers/init
   - build-perl
@@ -31,7 +35,6 @@ before_install:
 install:
   - cpan-install experimental
   - cpan-install ExtUtils::MakeMaker~6.68 --deps
-  - cpan-install --deps
   - cpan-install --coverage
 before_script:
   - coverage-setup
