@@ -14,7 +14,7 @@ BEGIN {
 
 #get_network_permission();
 
-$REMOTE_TESTS = 'y';
+$REMOTE_TESTS = 'n';
 
 #$REMOTE_TESTS ||='';
 

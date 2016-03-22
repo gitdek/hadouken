@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-#use ExtUtils::MakeMaker;
+# use ExtUtils::MakeMaker;
 use inc::Module::Install;
 
 license 'gpl';
@@ -17,6 +17,7 @@ WriteMakefile(
         'File::Copy'            => 0 
     },
     PREREQ_PM           => {
+        'experimental'          => 0,
         'Scalar::Util'          => 0,
         'Cwd'                   => 0,
         'Moose'                 => 0,
@@ -72,8 +73,8 @@ WriteMakefile(
         'REST::Google'          => 0,
         'Log::Log4perl'         => 0,
         'IMDB::Film'            => 0,
-        'AnyEvent::SlackRTM'    => 0,
-        'Net::ZooKeeper'        => 0
+        'AnyEvent::SlackRTM'    => 0
+        #'Net::ZooKeeper'        => 0
     },
     PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
