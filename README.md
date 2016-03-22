@@ -7,7 +7,7 @@ admin@meatwad.org
 
 ### Current Status
 
-[![Build Status](https://travis-ci.org/gitdek/hadouken.png)](https://travis-ci.org/gitdek/hadouken)
+[![Build Status](https://api.travis-ci.org/gitdek/hadouken.png?branch=master,v0.9.0)](https://travis-ci.org/gitdek/hadouken)
 
 
 ## Introduction
