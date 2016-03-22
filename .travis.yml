@@ -7,16 +7,17 @@ addons:
       - libzookeeper-mt-dev
 language: perl
 perl:
-  - "blead"
-  #- "5.20"
+#  - "blead"
+  - "5.20"
   - "5.18"
   - "5.16"
+  - "5.14"
 env:
   global:
     - RELEASE_TESTING=1
     - AUTHOR_TESTING=1
-  allow_failures:
-    - perl: blead       # ignore failures for blead 
+allow_failures:
+  - perl: blead       # ignore failures for blead 
 before_install:
   #- "curl -o zookeeper-3.4.8.tar.gz http://apache.arvixe.com/zookeeper/stable/zookeeper-3.4.8.tar.gz"
   #- "tar -zxf zookeeper-3.4.8.tar.gz"
