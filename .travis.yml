@@ -1,15 +1,16 @@
-sudo: true
+sudo: false
 addons:
   apt:
     packages:
       - zookeeper
       - zookeeperd
+      - libzookeeper-mt-dev
 language: perl
 perl:
-  #- "blead"
-  # - "5.20"
+  - "blead"
+  #- "5.20"
   - "5.18"
-  #- "5.16"
+  - "5.16"
 env:
   global:
     - RELEASE_TESTING=1
@@ -17,27 +18,27 @@ env:
   allow_failures:
     - perl: blead       # ignore failures for blead 
 before_install:
-  - "curl -o zookeeper-3.4.8.tar.gz http://apache.arvixe.com/zookeeper/stable/zookeeper-3.4.8.tar.gz"
-  - "tar -zxf zookeeper-3.4.8.tar.gz"
-  - "cp zookeeper-3.4.8/conf/zoo_sample.cfg zookeeper-3.4.8/conf/zoo.cfg"
-  - "sudo zookeeper-3.4.8/bin/zkServer.sh start"
-  #- eval $(curl https://travis-perl.github.io/init) --auto
-  - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
-  - source ~/travis-perl-helpers/init
-  - build-perl
-  - perl -V
-  - build-dist
-  - cd $BUILD_DIR
+  #- "curl -o zookeeper-3.4.8.tar.gz http://apache.arvixe.com/zookeeper/stable/zookeeper-3.4.8.tar.gz"
+  #- "tar -zxf zookeeper-3.4.8.tar.gz"
+  #- "cp zookeeper-3.4.8/conf/zoo_sample.cfg zookeeper-3.4.8/conf/zoo.cfg"
+  #- "sudo zookeeper-3.4.8/bin/zkServer.sh start"
+  - eval $(curl https://travis-perl.github.io/init) --auto
+  #- git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
+  #- source ~/travis-perl-helpers/init
+  #- build-perl
+  #- perl -V
+  #- build-dist
+  #- cd $BUILD_DIR
 install:
   - cpan-install ExtUtils::MakeMaker~6.68
   - cpan-install --coverage
   - cpan-install --deps
 before_script:
   - coverage-setup
-script:
-  - perl Makefile.PL
-  - make
-  - prove -br -j$(test-jobs) $(test-files)
+#script:
+#  - perl Makefile.PL
+#  - make
+#  - prove -br -j$(test-jobs) $(test-files)
 after_success:
   - coverage-report
 
