@@ -1,56 +1,56 @@
-package Hadouken::ZooKeeper;
+# package Hadouken::ZooKeeper;
 
-our $VERSION = '0.02';
+# our $VERSION = '0.02';
 
-use strict;
-use warnings;
+# use strict;
+# use warnings;
 
-use Try::Tiny;
-use Net::ZooKeeper qw(:events :node_flags :acls);
-use Redis;
-use Params::Validate qw(:all);
+# use Try::Tiny;
+# use Net::ZooKeeper qw(:events :node_flags :acls);
+# use Redis;
+# use Params::Validate qw(:all);
 
-sub new {
-    my $class = shift;
+# sub new {
+#     my $class = shift;
 
-    my $p = validate(
-        @_,
-        {   zk_servers     => { type => SCALAR, default => '' },
-            zk_server_path => { type => SCALAR, default => '/redis/server' },
-            redis_server   => { type => SCALAR, default => '127.0.0.1:6378' },
-            sharded_id     => { type => SCALAR, default => 0 },
-            data           => { type => SCALAR, default => 0 },
-            debug => { type => BOOLEAN, default => undef },
-        }
-    );
-    my $self = $p;
-    bless $self, $class;
+#     my $p = validate(
+#         @_,
+#         {   zk_servers     => { type => SCALAR, default => '' },
+#             zk_server_path => { type => SCALAR, default => '/redis/server' },
+#             redis_server   => { type => SCALAR, default => '127.0.0.1:6378' },
+#             sharded_id     => { type => SCALAR, default => 0 },
+#             data           => { type => SCALAR, default => 0 },
+#             debug => { type => BOOLEAN, default => undef },
+#         }
+#     );
+#     my $self = $p;
+#     bless $self, $class;
 
-    # connect to zk
-    $self->{zkh} = Net::ZooKeeper->new( $self->{zk_servers} );
-    if ( !$self->{zkh} ) {
-        return;
-    }
-    $self->{zk_watch} = undef;
+#     # connect to zk
+#     $self->{zkh} = Net::ZooKeeper->new( $self->{zk_servers} );
+#     if ( !$self->{zkh} ) {
+#         return;
+#     }
+#     $self->{zk_watch} = undef;
 
-    # if not created create path
-    my $path_tmpl
-        = $self->{zk_server_path} . '/cluster/' . $self->{sharded_id};
-    $self->_create_cyclic_path($path_tmpl);
+#     # if not created create path
+#     my $path_tmpl
+#         = $self->{zk_server_path} . '/cluster/' . $self->{sharded_id};
+#     $self->_create_cyclic_path($path_tmpl);
 
-    # check already running manager is exists.
-    for my $child ( $self->{zkh}->get_children($path_tmpl) ) {
-        if ( $self->{zkh}->get( $path_tmpl . "/$child" ) eq
-            $self->{redis_server} )
-        {
-            print "already running manager is exists\n" if $self->{debug};
-            return;
-        }
-    }
-    return $self;
-} ## ---------- end sub new
+#     # check already running manager is exists.
+#     for my $child ( $self->{zkh}->get_children($path_tmpl) ) {
+#         if ( $self->{zkh}->get( $path_tmpl . "/$child" ) eq
+#             $self->{redis_server} )
+#         {
+#             print "already running manager is exists\n" if $self->{debug};
+#             return;
+#         }
+#     }
+#     return $self;
+# } ## ---------- end sub new
 
-1;
+# 1;
 
 package Hadouken;
 
