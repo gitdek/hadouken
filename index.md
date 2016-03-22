@@ -2,7 +2,6 @@
 layout: index
 ---
 
-
 # Hadouken
 
 By J. Puglisi 
