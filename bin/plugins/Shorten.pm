@@ -5,10 +5,10 @@ use warnings;
 
 use Hadouken ':acl_modes';
 
-use TryCatch;
-use Data::Dumper;
+#use TryCatch;
+#use Data::Dumper;
 use Regexp::Common;
-use AnyEvent::DNS;
+#use AnyEvent::DNS;
 
 our $VERSION = '0.2';
 our $AUTHOR  = 'dek';
