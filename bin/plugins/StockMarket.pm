@@ -11,7 +11,10 @@ use JSON::XS qw( encode_json decode_json );
 use URI::Escape;
 use HTML::TokeParser;
 use Text::Unidecode;
-use Data::Printer alias => 'Dumper', colored => 1;
+
+#use Data::Printer alias => 'Dumper', colored => 1;
+
+use Data::Dumper;                               # alias => 'Dumper';
 
 use CHI;
 
@@ -212,6 +215,7 @@ sub command_run {
 
     if ( $cmd eq 'movers' ) {
         my $mkt = '';
+        $arg = 'sp500' unless $arg;
         $mkt = $mktmovers_dow    if lc $arg eq 'dow';
         $mkt = $mktmovers_nasdaq if lc $arg eq 'nasdaq';
         $mkt = $mktmovers_sp500  if lc $arg eq 'sp500' || lc $arg eq 'es';
@@ -374,25 +378,25 @@ sub command_run {
                     my $change_pct_pretty = String::IRC->new(
                         $change_pct > 0 ? '+' . $change_pct . '%' : $change_pct . '%' );
 
-                    if ( $change > 0 ) {
-                        $change_pretty->light_green;
-                    }
-                    elsif ( $change < 0 ) {
-                        $change_pretty->red;
-                    }
-                    else {
-                        $change_pretty->pink;
-                    }
+                    # if ( $change > 0 ) {
+                    #     $change_pretty->light_green;
+                    # }
+                    # elsif ( $change < 0 ) {
+                    #     $change_pretty->red;
+                    # }
+                    # else {
+                    #     $change_pretty->pink;
+                    # }
 
-                    if ( $change_pct > 0 ) {
-                        $change_pct_pretty->light_green;
-                    }
-                    elsif ( $change_pct < 0 ) {
-                        $change_pct_pretty->red;
-                    }
-                    else {
-                        $change_pct_pretty->pink;    # neutral
-                    }
+                    # if ( $change_pct > 0 ) {
+                    #     $change_pct_pretty->light_green;
+                    # }
+                    # elsif ( $change_pct < 0 ) {
+                    #     $change_pct_pretty->red;
+                    # }
+                    # else {
+                    #     $change_pct_pretty->pink;    # neutral
+                    # }
 
                     $summary .= "$name: $last $change_pretty ($change_pct_pretty)  ";
 
@@ -485,25 +489,25 @@ sub command_run {
                                     : $change_pct . '%'
                                 );
 
-                                if ( $change > 0 ) {
-                                    $change_pretty->light_green;
-                                }
-                                elsif ( $change < 0 ) {
-                                    $change_pretty->red;
-                                }
-                                else {
-                                    $change_pretty->pink;
-                                }
+                                # if ( $change > 0 ) {
+                                #     $change_pretty->light_green;
+                                # }
+                                # elsif ( $change < 0 ) {
+                                #     $change_pretty->red;
+                                # }
+                                # else {
+                                #     $change_pretty->pink;
+                                # }
 
-                                if ( $change_pct > 0 ) {
-                                    $change_pct_pretty->light_green;
-                                }
-                                elsif ( $change_pct < 0 ) {
-                                    $change_pct_pretty->red;
-                                }
-                                else {
-                                    $change_pct_pretty->pink;    # neutral
-                                }
+                                # if ( $change_pct > 0 ) {
+                                #     $change_pct_pretty->light_green;
+                                # }
+                                # elsif ( $change_pct < 0 ) {
+                                #     $change_pct_pretty->red;
+                                # }
+                                # else {
+                                #     $change_pct_pretty->pink;    # neutral
+                                # }
                                 $quote .=
                                     " PreMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
                             }
@@ -525,25 +529,25 @@ sub command_run {
                                     : $change_pct . '%'
                                 );
 
-                                if ( $change > 0 ) {
-                                    $change_pretty->light_green;
-                                }
-                                elsif ( $change < 0 ) {
-                                    $change_pretty->red;
-                                }
-                                else {
-                                    $change_pretty->pink;
-                                }
+                                # if ( $change > 0 ) {
+                                #     $change_pretty->light_green;
+                                # }
+                                # elsif ( $change < 0 ) {
+                                #     $change_pretty->red;
+                                # }
+                                # else {
+                                #     $change_pretty->pink;
+                                # }
 
-                                if ( $change_pct > 0 ) {
-                                    $change_pct_pretty->light_green;
-                                }
-                                elsif ( $change_pct < 0 ) {
-                                    $change_pct_pretty->red;
-                                }
-                                else {
-                                    $change_pct_pretty->pink;    # neutral
-                                }
+                                # if ( $change_pct > 0 ) {
+                                #     $change_pct_pretty->light_green;
+                                # }
+                                # elsif ( $change_pct < 0 ) {
+                                #     $change_pct_pretty->red;
+                                # }
+                                # else {
+                                #     $change_pct_pretty->pink;    # neutral
+                                # }
                                 $quote .=
                                     " PostMarket $last $change_pretty $change_pct_pretty (Vol: $v)";
                             }
@@ -564,9 +568,9 @@ sub command_run {
     }
     catch($e) {
         warn $e;
-        }
+    };
 
-        return 1;
+    return 1;
 } ## ---------- end sub command_run
 
 sub quote_fetch {
@@ -649,11 +653,46 @@ sub finances {
                 my $level = 0;
                 my $summary;
 
-                my $title_pretty = "[" . String::IRC->new("$nick")->purple . "]";
+                my $title_pretty = "[" . String::IRC->new("$nick") . "]";
                 $title_pretty .= " $title ";
-                $title_pretty .= String::IRC->new( $f{Price} )->bold;
+                $title_pretty .= String::IRC->new( $f{Price} );
 
-                $self->send_server( $SEND_CMD => $channel, $title_pretty );
+                # $self->{Owner}->send_slack(
+                #     pretext => '*Gainers*',
+                #     message => $summary,
+                #     color   => 'good',
+                #     channel => $channel
+                # );
+
+                # $payload = {
+                #     channel => $channel,
+                #     username   => 'hadouken',
+                #     #icon_emoji => $params{'icon_emoji'} || '',
+
+                #     color => 'good',
+                #     # icon_emoji => ':construction:',
+                #     #text => $text,
+                #     #color => '#D3D3D3'
+                # };
+
+                # $payload->{attachments} = [
+                #     {
+
+                #         text       => $params{'message'},
+                #         title      => $params{'title'} || '',
+                #         title_link => $params{'title_link'} || '',
+                #         fallback   => $params{'message'},
+                #         color      => $params{'color'} || '',
+                #         pretext    => $params{'pretext'} || '',
+                #         mrkdwn_in  => [ 'text', 'pretext' ],
+                #     }
+
+                # ];
+
+                #my $fields = $self->_jsonify(fields => \%fun);
+                #print Dumper($fields);
+
+                my @fields = ();                # = ();# = [];
 
                 foreach my $k ( keys %fun ) {
 
@@ -663,13 +702,31 @@ sub finances {
                     $level++;
                     if ( $level == 6 ) {
 
+                        # fields
                         #warn $summary;
-                        $self->send_server( $SEND_CMD => $long ? $nick : $channel, $summary );
+                        # $self->send_server( $SEND_CMD => $long ? $nick : $channel, $summary );
                         $summary = '';
                         $level   = 0;
+                        last;
                     }
+
+                    next unless length $fun{$k} && length $k;
+
+                    push( @fields, { title => $k, value => $fun{$k}, short => 'false' } );
+
                 }
 
+                $self->{Owner}->send_slack(
+                    pretext => "*$nick* $title",
+
+                    #message => $summary,
+                    color    => 'good',
+                    channel  => $channel,
+                    fields   => @fields,
+                    fallback => "$title",
+                );
+
+                warn Dumper( \@fields );
             }
         );
     }
@@ -852,28 +909,45 @@ sub market_movers {
                 my $summary;
 
                 for my $x ( @{ $json->{gainers} } ) {
-                    my $change_pretty =
-                        String::IRC->new( '+' . $x->{change} . '%' )->light_green;
-                    my $company = $x->{company};
-                    my $ticker  = $x->{ticker};
-                    $summary .= "$ticker($company) $change_pretty  ";
+                    my $change_pretty = String::IRC->new( '+' . $x->{change} . '%' );
+                    my $company       = $x->{company};
+                    my $ticker        = $x->{ticker};
+                    $summary .= "$ticker(\_$company\_) $change_pretty  ";
                 }
 
                 if ( length $summary ) {
-                    $self->send_server( $SEND_CMD => $channel, "Gainers - $summary" );
+
+                    #$self->send_server( $SEND_CMD => $channel, "Gainers - $summary" );
+                    #$self->{Owner}->send_slack(title => 'Gainers', message => $summary);
+                    $self->{Owner}->send_slack(
+                        pretext => '*Gainers*',
+                        message => $summary,
+                        color   => 'good',
+                        channel => $channel
+                    );
                 }
 
                 $summary = '';
 
                 for my $y ( @{ $json->{losers} } ) {
-                    my $change_pretty = String::IRC->new( '-' . $y->{change} . '%' )->red;
+                    my $change_pretty = String::IRC->new( '-' . $y->{change} . '%' );
                     my $company       = $y->{company};
                     my $ticker        = $y->{ticker};
-                    $summary .= "$ticker($company) $change_pretty  ";
+
+                    #$summary .= "$ticker($company) $change_pretty  ";
+                    $summary .= "$ticker(\_$company\_) $change_pretty  ";
                 }
 
                 if ( length $summary ) {
-                    $self->send_server( $SEND_CMD => $channel, "Losers - $summary" );
+
+                    #$self->send_server( $SEND_CMD => $channel, "Losers - $summary" );
+                    $self->{Owner}->send_slack(
+                        pretext => '*Losers*',
+                        message => $summary,
+                        color   => 'danger',
+                        channel => $channel
+                    );
+
                 }
 
             }
@@ -921,6 +995,11 @@ sub news_search {
 
                 return unless defined $results;
 
+                #unless (ref $results eq 'ARRAY') {
+                #    print "StockMarket news_search() results unknown ref type.\n";
+                #    return;
+                #}
+
                 my $idx = 5;
                 foreach my $x ( @{$results} ) {
                     my $title = $x->{title};
@@ -931,10 +1010,21 @@ sub news_search {
 
                     my $title_pretty = "[" . String::IRC->new("$symbol")->purple . "]";
                     my ( $short, $fetch_title ) = $self->{Owner}->_shorten( $link, 0 );
-                    $self->send_server(
-                        $SEND_CMD => $channel,
-                        "$title_pretty $title - $short"
-                    );                          # - $fetch_title" );
+
+                    $self->{Owner}->send_slack(
+                        title      => $title,
+                        title_link => $link,
+                        pretext    => "\*$symbol\*",
+                        message    => $short,
+                        icon_emoji => ':newspaper:',
+                        channel    => $channel
+                    );
+
+                    #$self->send_server(
+                    #    $SEND_CMD => $channel,
+                    #    "$title - $short"
+                    #);                          # - $fetch_title" );
+
                     $idx--;
 
                     last if $idx <= 0;

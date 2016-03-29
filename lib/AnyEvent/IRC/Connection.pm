@@ -160,8 +160,8 @@ sub connect {
 
         my $ipn = AnyEvent::Socket::aton "$bindaddr";
 
-        setsockopt( $sock, SOL_SOCKET, SO_REUSEPORT, 1 )
-            or die "Cannot set sockopt SO_REUSEPORT: $!";
+        #setsockopt( $sock, SOL_SOCKET, SO_REUSEPORT, 1 )
+        #    or die "Cannot set sockopt SO_REUSEPORT: $!";
 
         if (   defined $bindaddr
             && $bindaddr ne ''

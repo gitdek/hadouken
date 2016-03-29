@@ -1,188 +1,233 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use strict;
 use warnings;
 use FindBin qw($Bin);
 use lib "$Bin/../lib";
 
-use Hadouken;
-
 use Crypt::CBC;
 use MIME::Base64;
 use Cwd ();
 use File::Basename();
-use Daemon::Control;
 use Config::General;
 use TryCatch;
-use namespace::autoclean;
 use Term::ReadPassword;
-# use Data::Printer alias => 'Dumper', colored => 1;
+#use Data::Printer alias => 'Dumper', colored => 1;
+use Data::Dumper;
 use AnyEvent;
+use Getopt::Long;
+use Pod::Usage;
+use Daemon::Control;
+use namespace::autoclean;
+use Hadouken;
+
+our $VERSION = '0.9.1';
+our $AUTHOR  = 'dek';
 
 # $|=1;
 $|++;
 
-my $filedirname = File::Basename::dirname( Cwd::abs_path(__FILE__) );
+# use constant $default_reconnect_delay => 30;
 
-# Change into the current file directory
-# so items in our config are relative from here.
+my $script = File::Basename::basename( $0, () );
+my $filedirname = File::Basename::dirname( Cwd::abs_path(__FILE__) );
 chdir $filedirname;
 
-my $arg_password  = undef;
-my $password_flag = "--password"
-    ;                                           # Got tired of entering it manually so allow to pass as an argument.
-my $config_flag     = "--config=";
-my $setup_flag      = "--setup";
-my $showconfig_flag = "--showconfig";
-my $config_filename = '/etc/hadouken.conf';
-my $cipher          = undef;
+my %opt;
+GetOptions(
+    %opt,
+    's|stats'    => \$opt{stats},
+    'password=s' => \$opt{password},
+    'version'    => \$opt{version},
+    'h|help'     => \$opt{help},
+    'm|man'      => \$opt{man},
+    "reload"     => \$opt{reload},
+    "restart"    => \$opt{restart},
+    "start"      => \$opt{run},
+    "status"     => \$opt{status},
+    "stop"       => \&stop,
+    "c|config=s" => \$opt{config_filename},
+) or pod2usage("Try '$script --man' for more information.");
 
-if ( my ($idx) = grep $ARGV[$_] =~ $config_flag, 0 .. $#ARGV ) {
-    my ( $flag, $cf ) = split( /=/, $ARGV[$idx] );
-    splice @ARGV, $idx, 1;                      # Remove so it does not affect the Daemon.
-    $config_filename = $cf;
+
+pod2usage( -verbose => 3 ) if $opt{man};
+
+print "$VERSION\n" and exit(0) if $opt{version};
+
+
+$opt{config_filename} ||= '/etc/hadouken.conf';
+
+unless ( -e $opt{config_filename} && -r $opt{config_filename} ) {
+    die "Error reading configuration file $opt{config_filename}";
 }
 
-if ( my ($idx) = grep $ARGV[$_] =~ $password_flag, 0 .. $#ARGV ) {
-    my ( $flag, $cf ) = split( /=/, $ARGV[$idx] );
-    splice @ARGV, $idx, 1;                      # Remove so it does not affect the Daemon.
-    $arg_password = $cf;
+my $cipher = undef;
+my $conf_obj;
+my %config;
+my $method = shift;
+if ( !defined $method ) {
+    print "\nERROR: Command line not parsed correctly. Check input.\n";
+    exit(1);
 }
 
-unless ( -e $config_filename && -r $config_filename ) {
-    die "Error reading configuration file";
-}
+our $daemon;
+our $cb;
 
-my $conf_plain = '';
-
-if ( grep $ARGV[$_] =~ $setup_flag, 0 .. $#ARGV ) {
-    createconf();
-}
-else {
-    $conf_plain = readconf();
-}
-
-if ( grep $ARGV[$_] =~ $showconfig_flag, 0 .. $#ARGV ) {
-    showconf();
-}
-
-my $conf = Config::General->new(
-    -ForceArray => 1,
-    -String     => $conf_plain,
-    -AutoTrue   => 1
+my %method_table = (
+    'stop'       => \&stop,
+    'printconf'  => \&showconf,
+    'showconf'   => \&showconf,
+    'setup'      => \&createconf,
+    'createconf' => \&createconf,
+    'start'      => \&start,
+    'status'     => \&status,
+    'restart'    => \&restart,
+    'foreground' => \&foreground,
 );
-my %config = $conf->getall;
-
-my $log_filename
-    = exists $config{log}
-    ? Cwd::abs_path( $config{log} )
-    : '/var/log/hadouken.log';
-my $pid_filename
-    = exists $config{pid}
-    ? Cwd::abs_path( $config{pid} )
-    : '/var/run/hadouken.pid';
-my $rsakey_filename
-    = exists $config{rsa_key_file}
-    ? Cwd::abs_path( $config{rsa_key_file} )
-    : '';
-
-# Make sure file exists and is readable by effective uid/gid.
-if ( $rsakey_filename ne '' ) {
-    unless ( -e $rsakey_filename && -r $rsakey_filename ) {
-        die "RSA key is specified but does not exist.";
-    }
-}
-
-unless ( exists $config{admin} && exists $config{server} ) {
-    die "Error reading configuration!";
-}
-
-my $cb = Hadouken->new_with_options(
-    reload_update =>
-        \&on_reload_update,                     #sub { print Dumper(@_); }, #on_config_update,
-    conf_update =>
-        \&on_config_update,                     #sub { print Dumper(@_); }, #on_config_update,
-    nick => $config{nick}
-        || 'hadouken',
-    bind => $config{bind}
-        || '',
-    iface => $config{iface}
-        || '',
-    servers         => [ $config{server} ],
-    admin           => $config{admin},
-    config_hash     => \%config,
-    config_filename => $config_filename,
-    conf_obj        => $conf,
-    rejoin_on_kick  => 1,
-    quote_limit     => $config{quote_limit}
-        || '2',
-    safe_delay => $config{safe_delay}
-        || '0.25',
-    bitly_user_id => $config{bitly_user_id}
-        || '',                                  # To disable shortening, remove from config!
-    bitly_api_key => $config{bitly_api_key} || '',
-    private_rsa_key_filename => $rsakey_filename,
-    private_rsa_key_password => $config{rsa_key_password} || '',
-    blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
-    ownerdir     => $filedirname,
-    reconnect       => $config{reconnect}       || 1,
-    reconnect_delay => $config{reconnect_delay} || 30,
-);
-
-my %daemon_args = (
-    name      => "Hadouken",
-    lsb_start => '$syslog $remote_fs',
-    lsb_stop  => '$syslog',
-    lsb_sdesc => 'Hadouke bot',
-    lsb_desc  => 'Hadouken bot by dek',
-
-    program => sub { $cb->start },
-
-    help =>
-        "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n",
-    kill_timeout => 7,
-
-    pid_file    => $pid_filename,
-    stderr_file => $log_filename,
-    stdout_file => $log_filename,
-
-    fork  => 2,
-    quiet => 0,
-);
-
-$daemon_args{user}  = $config{user}  if ( exists $config{user} );
-$daemon_args{group} = $config{group} if ( exists $config{group} );
-
-my $daemon = Daemon::Control->new(%daemon_args);
-
-my ($command) = @{ $cb->extra_argv };
-
-defined $command || die "No command specified";
-
-my $exit_code;
-
-if ( $command eq 'stop' ) {
-    $daemon->pretty_print( "Shutting Down", "red" )
-        if ( defined $cb->start_time && $cb->start_time ne '' );
-
-    $cb->stop();                                # Clean disconnect.
-
-    $exit_code = $daemon->run_command('stop');
-    exit( $exit_code || 0 );
-}
 
 my $w = AnyEvent->signal( signal => "HUP", cb => \&on_reload_update );
+my $exit_code;
 
-try {
-    $exit_code = $daemon->run_command($command);
+if ( exists $method_table{$method} ) {
+
+    try {
+
+        $exit_code = $method_table{$method}->( \%opt, $daemon, $cb, $script );
+    }
+    catch($e) {
+        warn "Error $e\n";
+    }
 }
-catch( Str $e where { $_ =~ /^Error: undefined action/i } ) {
-    warn "You must specify an action.\n";
-    } catch($e) {
-    warn $e, "\n";
+else {
+    print "\nERROR: '$method' is not recognized. See the manual by typing '$script -m',"
+        . " or see https://github.com/gitdek/hadouken.\n";
+    exit(1);
+}
+
+exit( ( $exit_code || 0 ) );
+
+sub foreground {
+
+    if ( daemon_cb_spawn() != 0 ) {
+        print "\nERROR spawning daemon.\n";
+        exit(1);
     }
 
-    exit( ( $exit_code || 0 ) );
+    return $daemon->run_command('foreground');
+} ## ---------- end sub foreground
+
+sub restart {
+
+    if ( daemon_cb_spawn() != 0 ) {
+        print "\nERROR spawning daemon.\n";
+        exit(1);
+    }
+
+    return $daemon->run_command('restart');
+} ## ---------- end sub restart
+
+sub status {
+
+    if ( daemon_cb_spawn() != 0 ) {
+        print "\nERROR spawning daemon.\n";
+        exit(1);
+    }
+
+    return $daemon->run_command('status');
+} ## ---------- end sub status
+
+sub start {
+
+    if ( daemon_cb_spawn() != 0 ) {
+        print "\nERROR spawning daemon.\n";
+        exit(1);
+    }
+
+    if ( defined $cb->start_time && $cb->start_time ne '' ) {
+        return $daemon->run_command('status');
+    }
+    else {
+        $daemon->pretty_print( "Starting...", "red" );
+        return $daemon->run_command('start');
+    }
+} ## ---------- end sub start
+
+sub stop {
+
+    if ( daemon_cb_spawn() != 0 ) {
+        print "\nERROR spawning daemon.\n";
+        return 1;
+    }
+
+    $daemon->pretty_print( "Shutting Down", "red" );
+    $cb->stop();                                # Clean disconnect.
+
+    return $daemon->run_command('stop');
+} ## ---------- end sub stop
+
+sub daemon_cb_spawn {
+
+    if ( readconf() != 0 ) {
+        print "\nERROR reading configuration.\n";
+        return 1;
+    }
+
+    $cb = Hadouken->new_with_options(
+        reload_update => \&on_reload_update,    #sub { print Dumper(@_); }, #on_config_update,
+        conf_update   => \&on_config_update,    #sub { print Dumper(@_); }, #on_config_update,
+        nick          => $config{nick}
+            || 'hadouken',
+        bind => $config{bind}
+            || '',
+        iface => $config{iface}
+            || '',
+        servers         => [ $config{server} ],
+        admin           => $config{admin},
+        config_hash     => \%config,
+        config_filename => $opt{config_filename},
+        conf_obj        => $conf_obj,
+        rejoin_on_kick  => 1,
+        quote_limit     => $config{quote_limit}
+            || '2',
+        safe_delay => $config{safe_delay}
+            || '0.25',
+        bitly_user_id => $config{bitly_user_id}
+            || '',                              # To disable shortening, remove from config!
+        bitly_api_key => $config{bitly_api_key} || '',
+        private_rsa_key_filename => $config{rsakey_filename},          # rsakey_filename,
+        private_rsa_key_password => $config{rsa_key_password} || '',
+        blowfish_key => $config{blowfish_key} || 'hadoukeyletmein',    # Blowfish key
+        ownerdir     => $filedirname,
+        reconnect       => $config{reconnect}       || 1,
+        reconnect_delay => $config{reconnect_delay} || 30,
+    );
+
+    my %daemon_args = (
+        name      => "Hadouken",
+        lsb_start => '$syslog $remote_fs',
+        lsb_stop  => '$syslog',
+        lsb_sdesc => 'Hadouke',
+        lsb_desc  => 'Hadouken',
+
+        program => sub { $cb->start },
+
+        kill_timeout => 7,
+
+        pid_file    => $config{pid},
+        stderr_file => $config{log},
+        stdout_file => $config{log},
+
+        fork  => 2,
+        quiet => 0,
+    );
+
+    $daemon_args{user}  = $config{user}  if ( exists $config{user} );
+    $daemon_args{group} = $config{group} if ( exists $config{group} );
+
+    $daemon = Daemon::Control->new(%daemon_args);
+
+    return 0;
+} ## ---------- end sub daemon_cb_spawn
 
 sub on_config_update {
     my ($conf_data) = @_;
@@ -190,12 +235,14 @@ sub on_config_update {
     $encrypted = encode_base64($encrypted);
     chomp($encrypted);
 
-    unlink $config_filename;
+    unlink $opt{config_filename};
 
-    open FILE, ">$config_filename"
+    open (my $fh, ">$opt{config_filename}")
         or die "Error reading configuration file: $!";
-    print FILE $encrypted;
-    close FILE;
+    print $fh $encrypted;
+    close $fh;
+
+    return 0;
 } ## ---------- end sub on_config_update
 
 sub on_reload_update {
@@ -206,42 +253,29 @@ sub on_reload_update {
 
     # TODO: Reload Hadouken.pm from disk.
     $cb->start();
-    $daemon->pretty_print( "Reloaded", "green" )
-        ;                                       # if(defined $cb->start_time && $cb->start_time ne '');
+    $daemon->pretty_print( "Reloaded", "green" );
+        # if(defined $cb->start_time && $cb->start_time ne '');
+
+    return 0;
 } ## ---------- end sub on_reload_update
 
-#sub reload_daemon {
-#    my $conf_encrypted = '';
-#
-#    open FILE, $config_filename or die "Error reading configuration file: $!";
-#    while (<FILE>){
-#        $conf_encrypted .= $_;
-#    }
-#    close FILE;
-#
-#    die "Error reloading" unless defined $cipher && defined $cb;
-#
-#    my $plaintext = $cipher->decrypt(decode_base64($conf_encrypted));
-#    $cb->reload_config($plaintext);
-#
-#    return 1;
-#}
-
 sub createconf {
-    open FILE, $config_filename or die "Error reading configuration file: $!";
-    while (<FILE>) {
+    open (my $fh, "$opt{config_filename}") or die "Error reading configuration file: $!";
+    my $conf_plain;
+    while (<$fh>) {
         $conf_plain .= $_;
     }
-    close FILE;
+    close $fh;
 
-    unlink($config_filename);
+    unlink( $opt{config_filename} );
 
     my $password = readcredentials();
 
-    exit(1337) unless defined $password && length $password;
+    return 2 unless defined $password && length $password;
 
     $cipher = Crypt::CBC->new(
-        {   key => $password,                   # 256 bits
+        {
+            key => $password,                   # 256 bits
         }
     );
 
@@ -249,43 +283,94 @@ sub createconf {
     $encrypted = encode_base64($encrypted);
     chomp($encrypted);
 
-    open FILE, ">$config_filename"
+    open(my $fh, ">$opt{config_filename}")
         or die "Error reading configuration file: $!";
-    print FILE $encrypted;
-    close FILE;
+    print $fh $encrypted;
+    close $fh;
 
     print "\n\nSetup complete!\n\nYou can now run hadouken.\n";
-    exit(0);
+
+    return 0;
 } ## ---------- end sub createconf
 
 sub readconf {
+
+    my $conf_encrypted = '';
+    open ( my $fh, $opt{config_filename} ) or die "Error reading configuration file: $!";
+    while (<$fh>) {
+        $conf_encrypted .= $_;
+    }
+    close $fh;
+
     unless ( defined $cipher ) {
         my $password = readcredentials();
         exit(1337) unless defined $password && length $password;
 
         $cipher = Crypt::CBC->new(
-            {   key => $password,               # 256 bits
+            {
+                key => $password,               # 256 bits
             }
         );
     }
 
-    my $conf_encrypted = '';
-    open FILE, $config_filename or die "Error reading configuration file: $!";
-    while (<FILE>) {
-        $conf_encrypted .= $_;
-    }
-    close FILE;
-
     my $plaintext = $cipher->decrypt( decode_base64($conf_encrypted) );
 
-    return $plaintext;
+    my $conf_plain = $plaintext;
+
+    $conf_obj = Config::General->new(
+        -ForceArray => 1,
+        -String     => $conf_plain,
+        -AutoTrue   => 1
+    );
+
+    %config = $conf_obj->getall;
+
+    $config{log} =
+        exists $config{log}
+        ? Cwd::abs_path( $config{log} )
+        : '/var/log/hadouken.log';
+    $config{pid} =
+        exists $config{pid}
+        ? Cwd::abs_path( $config{pid} )
+        : '/var/run/hadouken.pid';
+    $config{rsa_key_file} =
+        exists $config{rsa_key_file}
+        ? Cwd::abs_path( $config{rsa_key_file} )
+        : '';
+
+    return 0;
+
+    #return $plaintext;
 } ## ---------- end sub readconf
 
 sub showconf {
-    my $plaintext = readconf();
-    print $plaintext;
-    exit(0);
-}
+    my ( $opt, $daemon, $cb, $script ) = @_;
+
+    if ( readconf() != 0 ) {
+        print "\nERROR reading configuration.\n";
+        return 1;
+    }
+
+    print Dumper(%config) . "\n";
+
+    return 0;
+} ## ---------- end sub showconf
+
+# sub reload_daemon {
+#    my $conf_encrypted = '';
+
+#    open FILE, $opt{config_filename} or die "Error reading configuration file: $!";
+#    while (<FILE>){
+#        $conf_encrypted .= $_;
+#    }
+#    close FILE;
+
+#    die "Error reloading" unless defined $cipher && defined $cb;
+
+#    my $plaintext = $cipher->decrypt(decode_base64($conf_encrypted));
+#    $cb->reload_config($plaintext);
+#    return 1;
+# }
 
 sub readcredentials {
     my $password;
@@ -293,7 +378,7 @@ sub readcredentials {
 
     my $confirm = 0;
 
-    return $arg_password if defined $arg_password && length $arg_password;
+    return $opt{password} if $opt{password};
 
     while (1) {
         $password = Term::ReadPassword::read_password('Enter password: ');
@@ -313,11 +398,108 @@ sub readcredentials {
     return $password;
 } ## ---------- end sub readcredentials
 
-sub usage {
+__END__
 
-    my $u
-        = "Specify --config=file to avoid using default config path\n\tDefault path is /etc/hadouken.conf\n";
+=head1 NAME
 
-    return $u;
-} ## ---------- end sub usage
+hadouken - Chat bot for IRC and Slack
 
+=head1 SYNOPSIS
+
+## Run service:
+
+hadouken start
+
+## Stop service:
+
+hadouken stop
+
+## Restart service:
+
+hadouken restart
+
+## Get service status:
+
+hadouken status
+
+## Specify another configuration:
+
+hadouken --config=[file]
+
+## Run in foreground:
+
+hadouken foreground
+
+## Encrypt configuration file:
+
+hadouken --setup
+
+## Display encrypted configuration file:
+
+hadouken --showconfig
+
+## Provide password as an argument:
+
+hadouken --password=[passwd]
+
+## Generate init file for Hadouken
+
+hadouken get_init_file
+
+=head1 DESCRIPTION
+
+Hadouken is an chat bot for IRC and Slack which aims to provide fun, information, and channel management. 
+The main goal is a simple plugin design so others can contribute even with limited time. 
+There are many useful, and some not so useful plugins included to begin with.
+
+=head1 LICENSE
+
+The MIT License should included with the project. If not, it can be found at: http://opensource.org/licenses/mit-license.php
+
+Copyright (c) 2016 J. Puglisi
+
+=head1 TESTED WITH:
+
+=over
+
+=item *
+Perl 5.10.1 (Ubuntu 12.04.3 LTS)
+
+=item *
+Perl 5.12.5 (Ubuntu 12.04.3 LTS)
+
+=item *
+Perl 5.14.1 (Red Hat Enterprise Linux Server release 5.7 (Tikanga))
+
+=item *
+Perl 5.14.2 (Red Hat Enterprise Linux Desktop release 6.2 (Santiago); Fedora 17)
+
+=item *
+Perl 5.14.4 (Ubuntu 12.04.3 LTS)
+
+=item *
+Perl 5.16.0 (Red Hat Enterprise Linux Server release 5.9 (Tikanga))
+
+=item *
+Perl 5.16.3 (Ubuntu 12.04.3 LTS)
+
+=item *
+Perl 5.18.0 (Red Hat Enterprise Linux Server release 5.9 (Tikanga))
+
+=item *
+Perl 5.18.1 (Ubuntu 12.04.3 LTS)
+
+=item *
+Perl 5.20.1 (Red Hat Enterprise Linux Server release 5.9 (Tikanga))
+
+=back
+
+=head1 AUTHOR
+
+Puglisi J.
+
+=head1 CONTACT
+
+hadouken at meatwad dot org
+
+=cut

@@ -108,7 +108,7 @@ lib/AnyEvent/IRC.pm
 lib/AnyEvent/IRC/Client.pm
 lib/AnyEvent/IRC/Connection.pm
 lib/AnyEvent/IRC/Util.pm
-lib/AsyncSocket.pm
+lib/Hadouken/AsyncSocket.pm
 lib/Hadouken.pm
 lib/Hadouken/Base64.pm
 lib/Hadouken/Base64.xs

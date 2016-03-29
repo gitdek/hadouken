@@ -42,9 +42,11 @@ sub acl_check {
 
     my $permissions = $aclentry{'permissions'};
 
-    if ( $self->check_acl_bit( $permissions, Hadouken::BIT_BLACKLIST ) ) {
-        return 0;
-    }
+    print "Permissions: $permissions\n";
+    
+    #if ( $self->check_acl_bit( $permissions, Hadouken::BIT_BLACKLIST ) ) {
+    #    return 0;
+    #}
 
     # Or you can do it with the function Hadouken exports.
     # Make sure at least one of these flags is set.

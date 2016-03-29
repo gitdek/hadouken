@@ -1,63 +1,62 @@
-package Hadouken::ZooKeeper;
+# package Hadouken::ZooKeeper;
 
-our $VERSION = '0.02';
+# our $VERSION = '0.02';
 
-use strict;
-use warnings;
+# use strict;
+# use warnings;
 
-use Try::Tiny;
-use Net::ZooKeeper qw(:events :node_flags :acls);
-use Redis;
-use Params::Validate qw(:all);
+# use Net::ZooKeeper qw(:events :node_flags :acls);
+# use Redis;
+# use Params::Validate qw(:all);
 
-sub new {
-    my $class = shift;
+# sub new {
+#     my $class = shift;
 
-    my $p = validate(
-        @_,
-        {
-            zk_servers     => { type => SCALAR,  default => '' },
-            zk_server_path => { type => SCALAR,  default => '/redis/server' },
-            redis_server   => { type => SCALAR,  default => '127.0.0.1:6378' },
-            sharded_id     => { type => SCALAR,  default => 0 },
-            data           => { type => SCALAR,  default => 0 },
-            debug          => { type => BOOLEAN, default => undef },
-        }
-    );
-    my $self = $p;
-    bless $self, $class;
+#     my $p = validate(
+#         @_,
+#         {
+#             zk_servers     => { type => SCALAR,  default => '' },
+#             zk_server_path => { type => SCALAR,  default => '/redis/server' },
+#             redis_server   => { type => SCALAR,  default => '127.0.0.1:6378' },
+#             sharded_id     => { type => SCALAR,  default => 0 },
+#             data           => { type => SCALAR,  default => 0 },
+#             debug          => { type => BOOLEAN, default => undef },
+#         }
+#     );
+#     my $self = $p;
+#     bless $self, $class;
 
-    # connect to zk
-    $self->{zkh} = Net::ZooKeeper->new( $self->{zk_servers} );
-    if ( !$self->{zkh} ) {
-        return;
-    }
-    $self->{zk_watch} = undef;
+#     # connect to zk
+#     $self->{zkh} = Net::ZooKeeper->new( $self->{zk_servers} );
+#     if ( !$self->{zkh} ) {
+#         return;
+#     }
+#     $self->{zk_watch} = undef;
 
-    # if not created create path
-    my $path_tmpl = $self->{zk_server_path} . '/cluster/' . $self->{sharded_id};
-    $self->_create_cyclic_path($path_tmpl);
+#     # if not created create path
+#     my $path_tmpl = $self->{zk_server_path} . '/cluster/' . $self->{sharded_id};
+#     $self->_create_cyclic_path($path_tmpl);
 
-    # check already running manager is exists.
-    for my $child ( $self->{zkh}->get_children($path_tmpl) ) {
-        if ( $self->{zkh}->get( $path_tmpl . "/$child" ) eq $self->{redis_server} ) {
-            print "already running manager is exists\n" if $self->{debug};
-            return;
-        }
-    }
-    return $self;
-} ## ---------- end sub new
+#     # check already running manager is exists.
+#     for my $child ( $self->{zkh}->get_children($path_tmpl) ) {
+#         if ( $self->{zkh}->get( $path_tmpl . "/$child" ) eq $self->{redis_server} ) {
+#             print "already running manager is exists\n" if $self->{debug};
+#             return;
+#         }
+#     }
+#     return $self;
+# } ## ---------- end sub new
 
-1;
+# 1;
 
 package Hadouken;
 
-use 5.014;
+# use 5.014;
 
 use strict;
 use warnings;
 
-# use diagnostics;
+use diagnostics;
 
 #no strict "refs";
 #use experimental qw(smartmatch);
@@ -88,14 +87,14 @@ our %EXPORT_TAGS =
     ( acl_modes =>
         [ 'BIT_ADMIN', 'BIT_WHITELIST', 'BIT_BLACKLIST', 'BIT_OP', 'BIT_VOICE', 'BIT_BOT' ] );
 
-our $VERSION = '0.9.0';
+our $VERSION = '0.9.1';
 our $AUTHOR  = 'dek';
 
 #use Data::Dumper;
-use Data::Printer alias => 'Dumper', colored => 1;
+use Data::Printer alias => 'Dumper';            #, colored => 1;
 
 use Hadouken::DH1080;
-use AsyncSocket;
+use Hadouken::AsyncSocket;
 
 use Scalar::Util    ();
 use Cwd             ();
@@ -238,13 +237,13 @@ my @commands = (
         name          => 'plugin',
         regex         => 'plugin.*?',
         comment       => 'plugin <name> <command>',
-        require_admin => 1
+        require_admin => 0
     },
     {
         name          => 'admin',
         regex         => 'admin\s.+?',
         comment       => 'admin <command> <args>',
-        require_admin => 1
+        require_admin => 0
     },
     {
         name          => 'whitelist',
@@ -262,7 +261,7 @@ my @commands = (
         name          => 'channel',
         regex         => 'channel\s.+?',
         comment       => 'channel <command> <args>',
-        require_admin => 1
+        require_admin => 0
     },
 );
 
@@ -547,7 +546,7 @@ sub load {
     my $module = shift;
 
     # it's safe to die here, mostly this call is eval'd.
-    die "Cannot load module without a name" unless $module;
+    die "Cannot load module without a name" unless $module;    # && length $module;
 
     #die("Module $module already loaded") if $self->_plugin($module);
 
@@ -807,7 +806,7 @@ sub start {
         }
     }
 
-    if ( $self->{private_rsa_key_filename} ne '' ) {
+    if ( $self->{private_rsa_key_filename} && $self->{private_rsa_key_filename} ne '' ) {
         my $key_string = $self->readPrivateKey( $self->{private_rsa_key_filename},
               $self->{private_rsa_key_password} ne ''
             ? $self->{private_rsa_key_password}
@@ -831,7 +830,8 @@ before 'send_server_unsafe' => sub {
     $self->{burst_lines}++;
 
     if ( $self->{burst_lines} >= 10 ) {
-        Time::HiRes::sleep( $self->safe_delay );
+
+        #Time::HiRes::sleep( $self->safe_delay );
         $self->{burst_lines} = 0;
     }
 };
@@ -846,9 +846,10 @@ before 'send_server_safe' => sub {
     $self->{burst_lines}++;
 
     if ( $self->{burst_lines} >= 6 ) {
-        sleep( $self->safe_delay );
 
-        # Time::HiRes::sleep($self->safe_delay);
+        #sleep( $self->safe_delay );
+
+        Time::HiRes::sleep( $self->safe_delay );
         $self->{burst_lines} = 0;
     }
 };
@@ -871,6 +872,99 @@ before 'send_server_long_safe' => sub {
 };
 
 # Friendly alias for plugins.
+
+sub send_slack {
+    my $self = shift;
+
+    my %params = @_;
+
+    # return unless exists $params{'message'};
+
+    # my $text = '';
+    #return unless defined $self->{con} && defined $text;
+
+    #    encode( 'utf8', $_ ) foreach @params;
+
+    # print Dumper($_) foreach @params;
+
+    # print Dumper(%params);
+    #return;
+
+    #my $text_nocolor = $self->_strip_color($text);
+    #print "No color: $text_nocolor\n";
+
+    my $payload;
+
+    if ( exists $params{'payload'} ) {
+
+        print "IT EXISTS\n";
+
+        $payload = $params{'payload'};
+
+    }
+    else {
+        if ( substr( $params{'channel'}, 0, 1 ) ne "\#" ) {
+            $params{'channel'} = "\#" . $params{'channel'};
+        }
+
+        $payload = {
+            channel => $params{'channel'} || "\#slaughterhouse",
+            username   => 'hadouken',
+            icon_emoji => $params{'icon_emoji'} || '',
+
+            #color => $params{'color'} || 'good',
+            # icon_emoji => ':construction:',
+            #text => $text,
+            #color => '#D3D3D3'
+        };
+
+        $payload->{attachments} = [
+            {
+
+                text       => $params{'message'},
+                title      => $params{'title'} || '',
+                title_link => $params{'title_link'} || '',
+                fallback   => $params{'message'},
+                color      => $params{'color'} || '',
+                pretext    => $params{'pretext'} || '',
+                mrkdwn_in  => [ 'text', 'pretext' ],
+                fields     => $params{'fields'} || [],
+                fallback   => $params{'fallback'} || '',
+            }
+
+        ];
+
+    }
+
+    my $posturl =
+        'https://hooks.slack.com/services/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';
+    my $json;
+
+    try {
+        my $response =
+            $self->_webclient->post( $posturl, [ 'payload' => encode_json($payload) ] );
+
+        #print Dumper($response);
+
+        if ( $response->is_success ) {
+        }
+        else {
+            warn "Function send_slack did not receive a successful response.\n";
+        }
+
+        #$json = $self->jsonify( $response->content );
+    }
+    catch($e) {
+        warn "Error in send_slack $e\n";
+        }
+
+        # print "SLACK RET: $json\n";
+
+        #    return $json;
+
+        #$self->{con}->send_srv( $command, @params );
+} ## ---------- end sub send_slack
+
 sub send_server { &send_server_safe }
 
 sub send_server_unsafe {
@@ -879,7 +973,32 @@ sub send_server_unsafe {
 
     encode( 'utf8', $_ ) foreach @params;
 
+    if ( $command eq 'PRIVMSG' ) {
+        if ( $params[0] eq "\#slaughterhouse" || $params[0] eq "\#lounge" ) {
+
+            # print Dumper(@params);
+
+            #print "SENDING TO SLACK\n";
+            #print $params[1],"\n";
+            #my $payload = {
+            #       channel => "\#slaughterhouse",
+            #       username => 'hadouken',
+            # icon_emoji => ':construction:',
+            #text => $text,
+            #color => '#D3D3D3'
+            #};
+            $self->send_slack(
+                message    => $params[1],
+                color      => 'good',
+                pretext    => '',
+                icon_emoji => ':hotdog:',
+                channel    => $params[0]
+            );
+            return 0;
+        }
+    }
     $self->{con}->send_srv( $command, @params );
+
 } ## ---------- end sub send_server_unsafe
 
 sub send_server_safe {
@@ -887,6 +1006,31 @@ sub send_server_safe {
     return unless defined $self->{con} && defined $command;
 
     encode( 'utf8', $_ ) foreach @params;
+
+    if ( $command eq 'PRIVMSG' ) {
+        if ( $params[0] eq "\#slaughterhouse" || $params[0] eq "\#lounge" ) {
+
+            # print Dumper(@params);
+
+            #print "SENDING TO SLACK\n";
+            #print $params[1],"\n";
+            #my $payload = {
+            #       channel => "\#slaughterhouse",
+            #       username => 'hadouken',
+            # icon_emoji => ':construction:',
+            #text => $text,
+            #color => '#D3D3D3'
+            #};
+            $self->send_slack(
+                message    => $params[1],
+                color      => 'good',
+                pretext    => '',
+                icon_emoji => ':hotdog:',
+                channel    => $params[0]
+            );
+            return 0;
+        }
+    }
 
     $self->{con}->send_srv( $command, @params );
 } ## ---------- end sub send_server_safe
@@ -1446,6 +1590,8 @@ sub get_nick_and_host {
     my ( $mode_map, $nickname, $ident ) = $self->{con}->split_nick_mode($who);
     my ( $n_pre, $n_host );
 
+    $self->debug($who);
+    print Dumper($who);
     if ( defined $ident && $ident ne '' ) {
         ( $n_pre, $n_host ) = split( /@/, $ident );
     }
@@ -1982,6 +2128,8 @@ sub _buildup {
                 my ( $mode_map, $nickname, $ident ) =
                     $self->{con}->split_nick_mode($who);
 
+                print Dumper($who);
+
                 if ( exists $channel_list->{$nickname} ) {
                     {
                         use experimental qw/smartmatch/;
@@ -2128,6 +2276,8 @@ sub _buildup {
         $func_flags => sub {
             my $func = shift;
             my ( $who, $message, $channel, $channel_list ) = @_;
+
+            return 1;
 
             {
                 use integer;
@@ -2609,7 +2759,7 @@ sub _buildup {
                 }
 
                 $self->send_server_unsafe(
-                    PRIVMSG => $nickname,
+                    PRIVMSG => "\@" + $nickname,
                     $command_summary
                 );
 
@@ -2639,15 +2789,15 @@ sub _buildup {
                 my $pcount = scalar keys %{ $self->loaded_plugins };
 
                 if ( defined $pcount && $pcount < 1 ) {
-                    my $si1 = String::IRC->new('No plugins are available for you!')->bold;
+                    my $si1 = String::IRC->new('No plugins are available for you!');
 
                     #$self->send_server_unsafe (NOTICE => $nickname, $si1);
                     $self->send_server_unsafe( PRIVMSG => $nickname, $si1 );
                     return 1;
                 }
 
-                my $si1 = String::IRC->new('Available Plugins:')->bold;
-                $self->send_server_unsafe( PRIVMSG => $nickname, $si1 );
+                #my $si1 = String::IRC->new('Available Plugins:');
+                #$self->send_server_unsafe( PRIVMSG => "$nickname", $si1 );
 
                 foreach my $plugin ( keys %{ $self->loaded_plugins } ) {
                     my $command_summary = '';
@@ -2657,7 +2807,7 @@ sub _buildup {
                     my $comment = $p->command_comment || '';
                     my $ver     = $p->VERSION || '0.0';
 
-                    my $si = String::IRC->new($name)->bold;
+                    my $si = String::IRC->new($name);
                     $command_summary .= "$si $ver";    # ' . $comment . " ";
 
                     my $cnt = 0;
@@ -2670,15 +2820,25 @@ sub _buildup {
                         $cnt++;
 
                         my $sum = sprintf( "%-15s %-15s %-10s", $si, $ver, $l );
-                        $self->send_server(
-                            PRIVMSG => $nickname,
-                            $cnt > 1 ? $l : $sum
-                        );
+
+                        #$self->send_server(
+                        #    PRIVMSG => $nickname,
+                        #    $cnt > 1 ? $l : $sum
+                        #);
+
                     }
 
                     #}
 
-                    # $self->send_server_unsafe( PRIVMSG => $nickname, $command_summary );
+                    $self->send_slack(
+                        channel => $channel,
+                        message => $comment,
+                        title   => "$name version $ver",
+                        color   => 'good',
+                        pretext => "Plugin: $name"
+                    );
+
+                    # $self->send_server( PRIVMSG => $nickname, $command_summary );
                 }
             }
             catch($e) {
@@ -2799,7 +2959,7 @@ sub _buildup {
             }
             return 1;
         },
-        acl => $admin_access,
+        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(
@@ -3099,7 +3259,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $admin_access,
+        acl => $all_access_except_blacklist,
     );
 
     $self->add_func(
@@ -3451,7 +3611,7 @@ sub _buildup {
 
             return 1;
         },
-        acl => $admin_access,
+        acl => $all_access_except_blacklist,
     );
     $self->add_func(
         name     => 'help',
@@ -3482,24 +3642,30 @@ sub _buildup {
             #                }
             #            }
             #
-            if ( $self->is_admin($who) ) {
-                $usage = $self->usage_plugin       if $topic eq 'plugin';
-                $usage = $self->usage_admin('key') if $topic eq 'admin key';
-                $usage = $self->usage_admin        if $topic eq 'admin';
-                $usage = $self->usage_whitelist    if $topic eq 'whitelist';
-                $usage = $self->usage_blacklist    if $topic eq 'blacklist';
-                $usage = $self->usage_channel      if $topic eq 'channel';
-                $usage = $self->usage_channel('mode')
-                    if $topic eq 'channel mode';
-            }
+            #if ( $self->is_admin($who) ) {
+            $usage = $self->usage_plugin       if $topic eq 'plugin';
+            $usage = $self->usage_admin('key') if $topic eq 'admin key';
+            $usage = $self->usage_admin        if $topic eq 'admin';
+            $usage = $self->usage_whitelist    if $topic eq 'whitelist';
+            $usage = $self->usage_blacklist    if $topic eq 'blacklist';
+            $usage = $self->usage_channel      if $topic eq 'channel';
+            $usage = $self->usage_channel('mode')
+                if $topic eq 'channel mode';
+
+            #}
 
             $usage = $self->usage_general if $usage eq '';
 
-            for my $line ( split /\n/, $usage ) {
-                $self->send_server_unsafe( PRIVMSG => $nickname, $line );
+            $self->send_slack( channel => $channel, message => $usage );
 
-                #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
-            }
+            # $self->send_server( PRIVMSG => "\@" + $nickname, $usage );
+
+            #for my $line ( split /\n/, $usage ) {
+            # $self->send_server( PRIVMSG => $nickname, $line );
+            #    $self->send_slack(channel => "\@" + $nickname, message => $line);
+
+            #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
+            #}
 
             return 1;
         },
@@ -3521,9 +3687,11 @@ sub _buildup {
             my $msg = $self->_chat_encrypt( $who, $basic_info );    #, $self->{keys}->[0] );
             $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
 
+            $self->send_slack($basic_info);
+
             return 1;
         },
-        acl => $admin_access,
+        acl => $all_access_except_blacklist,
     );
 
     #    $self->add_func(name => 'btc',
@@ -3573,6 +3741,10 @@ sub _buildup {
     $self->{con}->reg_cb(
         connect => sub {
             my ( $con, $err ) = @_;
+
+            #$self->send_server (PASS => $self->{pass});
+            #$con->send_msg (NICK => $self->{nick});
+            #$con->send_msg (USER => 'puglisij', 'puglisij','tickaddict.irc.slack.com', 'puglisij');
             if ( defined $err ) {
                 warn "* Couldn't connect to server: $err\n";
                 if ( $self->{reconnect} ) {
@@ -3586,10 +3758,13 @@ sub _buildup {
                     $self->{c}->broadcast;
                 }
             }
+
         },
         registered => sub {
             $self->{connected} = 1;
             $self->_set_connect_time( time() );
+
+            warn "registered\n";
 
             #$self->{con}->enable_ping (60);
         },
@@ -4945,11 +5120,18 @@ sub _buildup {
     $self->{con}->reg_cb(
         'debug_send' => sub {
             my ( $con, $command, @params ) = @_;
+
+            #if(!defined @params) {
+            #    @params = ();
+            #}
+
+            print Dumper(@params);
             my $sent = "> " . $command . "\t" . join( "\t", @params ) . "\n";
 
-            # warn $sent;
-            my $logger = get_logger();
-            $logger->debug($sent);
+            warn $sent;
+
+            #my $logger = get_logger();
+            #$logger->debug($sent);
         }
     );
 
@@ -5303,20 +5485,10 @@ sub _start {
         $self->_set_key( $user, $key );
     }
 
-    my $count = List::MoreUtils::true { /dek/ } @channels;
+    my $count = List::MoreUtils::true { /slaughterhouse/ } @channels;
     unless ( $count > 0 ) {
-        push( @channels, '#dek' );
-        $self->channel_mode_human( 'dek', '+O-W+P-V-U+A+Z-F' );
-    }
-
-    # TODO: Handle if no channels defined.
-    foreach my $chan (@channels) {
-
-        #foreach my $chan ( @{$server_hashref->{$server_name}{channel}} ) {
-        $chan = "#" . $chan
-            unless ( $chan =~ m/^\#/ );         # Append # if doesn't begin with.
-        warn "* Joining $chan\n";
-        $self->send_server_unsafe( JOIN => $chan );
+        push( @channels, '#slaughterhouse' );
+        $self->channel_mode_human( 'slaughterhouse', '+O-W+P-V-U+A+Z-F' );
     }
 
     # When connecting, sometimes if a nick is in use it requires an alternative.
@@ -5343,10 +5515,6 @@ sub _start {
     #warn $self->{nick};
     #warn $server_hashref->{$server_name}{nickname};
 
-    if ( $self->{nick} ne $server_hashref->{$server_name}{nickname} ) {
-        $self->send_server_unsafe( NICK => $self->{nick} );
-    }
-
     my $do_ssl   = 0;
     my $hostname = $server_hashref->{$server_name}{host};
     if ( $hostname =~ m/^\+/ ) {
@@ -5357,13 +5525,15 @@ sub _start {
         $self->{con}->enable_ssl();
     }
 
+    $self->{pass} = $server_hashref->{$server_name}{password};
+
     $self->{con}->connect(
         $hostname,
         $server_hashref->{$server_name}{port},
         {
             iface              => $self->{iface},
             bindaddr           => $self->{bind},
-            real               => 'hadouken',
+            real               => 'puglisij',
             nick               => $server_hashref->{$server_name}{nickname},
             password           => $server_hashref->{$server_name}{password},
             send_initial_whois => 1,
@@ -5381,6 +5551,20 @@ sub _start {
     # ident,quote,channel,time
 
     $self->{c}->wait unless $self->{reconnecting};
+
+    #if ( $self->{nick} ne $server_hashref->{$server_name}{nickname} ) {
+    #    $self->send_server_unsafe( NICK => $self->{nick} );
+    #}
+
+    # TODO: Handle if no channels defined.
+    foreach my $chan (@channels) {
+
+        #foreach my $chan ( @{$server_hashref->{$server_name}{channel}} ) {
+        $chan = "#" . $chan
+            unless ( $chan =~ m/^\#/ );         # Append # if doesn't begin with.
+        warn "* Joining $chan\n";
+        $self->send_server_unsafe( JOIN => $chan );
+    }
 
     #return 1;
 } ## ---------- end sub _start
@@ -5512,7 +5696,7 @@ sub _asyncsock {
 
     unless ( defined $self->{asyncsock} ) {
 
-        $self->{asyncsock} = AsyncSocket->new();
+        $self->{asyncsock} = Hadouken::AsyncSocket->new();
 
         require HTTP::Cookies;
         $self->{asyncsock}->cookie_jar( HTTP::Cookies->new );

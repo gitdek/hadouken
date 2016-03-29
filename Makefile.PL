@@ -1,21 +1,42 @@
+# use 5.008;
 use strict;
 use warnings;
-# use ExtUtils::MakeMaker;
+use warnings FATAL => 'all';
 use inc::Module::Install;
 
-license 'gpl';
+include     ('ExtUtils::AutoInstall');
+
+my @exe_files;
+
+if ($ENV{HADOUKEN_INSTALL_TOOLS}) {
+   push @exe_files, 'bin/hadouken';
+}
+
+if (eval ($ExtUtils::MakeMaker::VERSION) <= 6.55) {
+    print "\n[ERROR]: ExtUtils::MakeMaker >= 6.5503 is required to build the package correctly.\n";
+    print "The installed version is $ExtUtils::MakeMaker::VERSION.\n";
+    print "Install the latest ExtUtils::MakeMaker and try again. Exiting.\n";
+    exit(1);
+}
 
 WriteMakefile(
     NAME                => 'Hadouken',
     AUTHOR              => q{dek <dek@dek.bz>},
-    VERSION_FROM        => 'lib/Hadouken.pm',
-    ABSTRACT            => 'Hadouken',
+    VERSION             => '0.9.0',
+    ABSTRACT            => 'Hadouken chat bot',
+
     CONFIGURE_REQUIRES  => { 
-        'ExtUtils::MakeMaker'   => 0, 
+        'ExtUtils::MakeMaker'   => 6.5503, 
         'YAML',                 => 0,
-        'Test::More'            => 0,
-        'File::Copy'            => 0 
     },
+
+    BUILD_REQUIRES => {
+        'Test::More'            => 0,
+        'File::Copy'            => 0
+    },
+
+    EXE_FILES => [ @exe_files ],
+
     PREREQ_PM           => {
         'experimental'          => 0,
         'Scalar::Util'          => 0,
@@ -77,26 +98,81 @@ WriteMakefile(
         'Try::Tiny'             => 0,
         'Redis'                 => 0,
         'Net::ZooKeeper'        => 0,
-        'CHI'                   => 0
+        'CHI'                   => 0,
+        'Math::BigInt'          => 0
     },
-    PM => { # We don't want to install ALL plugins by default.
-        'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
-        'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm',
-        'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm',
-        'bin/plugins/StockMarket.pm' => '$(INST_LIB)/Hadouken/Plugin/StockMarket.pm',
-        'bin/plugins/IMDB.pm' => '$(INST_LIB)/Hadouken/Plugin/IMDB.pm',
-        'bin/plugins/Weather.pm' => '$(INST_LIB)/Hadouken/Plugin/Weather.pm',
-        'bin/plugins/Dictionary.pm' => '$(INST_LIB)/Hadouken/Plugin/Dictionary.pm',
-        'bin/plugins/Shorten.pm' => '$(INST_LIB)/Hadouken/Plugin/Shorten.pm',
-        'bin/plugins/MitchQuotes.pm' => '$(INST_LIB)/Hadouken/Plugin/MitchQuotes.pm',
-    },
-    # EXE_FILES => ['bin/hadouken'],
-    PL_FILES => {
+
+   (( eval { ExtUtils::MakeMaker->VERSION(6.46) } ) ?
+      ( META_MERGE => {
+         'build_requires' => {
+            'ExtUtils::MakeMaker' => 0,
+            'Test::More'          => 0.45
+         },
+         'no_index' => {
+            'file' => [
+               'bin/hadouken'
+            ]
+         },
+         'resources' => {
+            'homepage'   => 'https://github.com/gitdek/hadouken',
+            'repository' => 'https://github.com/gitdek/hadouken',
+            'license'    => 'http://dev.perl.org/licenses/'
+         },
+         'provides' => {
+            'Hadouken' => {
+               'file'    => 'lib/Hadouken.pm',
+               'version' => '0.9.0'
+            },
+            'Hadouken::AsyncSocket' => {
+               'file'    => 'lib/Hadouken/AsyncSocket.pm',
+               'version' => '0.2'
+            },
+            'Hadouken::DH1080' => {
+               'file'    => 'lib/Hadouken/DH1080.pm',
+               'version' => '0.1'
+            },
+         }
+      } ) : () ),
+
+    (( eval { ExtUtils::MakeMaker->VERSION(6.31) } ) ?
+      ( LICENSE => 'perl' ) : () ),
+
+   (( eval { ExtUtils::MakeMaker->VERSION(6.48) } ) ?
+      ( MIN_PERL_VERSION => 5.008 ) : () ),
+
+   ((!eval { ExtUtils::MakeMaker->VERSION(6.25) } ) ?
+      ( PL_FILES => { 
                 #'bin/createconfig.pl' => '/etc/hadouken.conf',
-                'bin/deflategeoip.pl' => 'skip',
-                },
+                'bin/deflategeoip.pl' => 'skip', #'skip',
+        } ) : () ),
+
+    # PM => { # We don't want to install ALL plugins by default.
+    #     'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
+    #     'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm',
+    #     'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm',
+    #     'bin/plugins/StockMarket.pm' => '$(INST_LIB)/Hadouken/Plugin/StockMarket.pm',
+    #     'bin/plugins/IMDB.pm' => '$(INST_LIB)/Hadouken/Plugin/IMDB.pm',
+    #     'bin/plugins/Weather.pm' => '$(INST_LIB)/Hadouken/Plugin/Weather.pm',
+    #     'bin/plugins/Dictionary.pm' => '$(INST_LIB)/Hadouken/Plugin/Dictionary.pm',
+    #     'bin/plugins/Shorten.pm' => '$(INST_LIB)/Hadouken/Plugin/Shorten.pm',
+    #     'bin/plugins/MitchQuotes.pm' => '$(INST_LIB)/Hadouken/Plugin/MitchQuotes.pm',
+    # },
+    PMLIBDIRS => ['lib','bin/plugins'],
+
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
+
+    INSTALLDIRS => ( ($] < 5.011) ? 'perl' : 'site' )
 );
 
-auto_install();
+#auto_install(
+#    make_args   => '--hello',   # option(s) for CPAN::Config
+#    force       => 1,           # pseudo-option to force install
+    #do_once     => 0,           # skip previously failed modules
+#);
 
+#WriteMakefile;
+
+# WriteAll();
+
+    auto_install();
+    #&WriteAll;

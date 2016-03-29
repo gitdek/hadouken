@@ -8,7 +8,7 @@ use vars qw/$REMOTE_TESTS/;
 diag("Performing AsyncSocket tests");
 
 BEGIN {
-    use_ok('AsyncSocket');
+    use_ok('Hadouken::AsyncSocket');
     use_ok('AnyEvent');
 
     require_ok('HTTP::Cookies');
@@ -18,13 +18,13 @@ $REMOTE_TESTS = 'y';
 
 #$REMOTE_TESTS ||='y';
 
-diag("Testing AsyncSocket $AsyncSocket::VERSION, Perl $], $^X");
+diag("Testing AsyncSocket $Hadouken::AsyncSocket::VERSION, Perl $], $^X");
 
 # get_network_permission();
 
 my $testurl = 'http://www.google.com';
 
-my $asock = new_ok( 'AsyncSocket' => [ timeout => 30 ] );
+my $asock = new_ok( 'Hadouken::AsyncSocket' => [ timeout => 30 ] );
 
 $asock->timeout(15);
 

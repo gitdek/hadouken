@@ -1,4 +1,4 @@
-package AsyncSocket;
+package Hadouken::AsyncSocket;
 
 use strict;
 use warnings;
@@ -11,7 +11,7 @@ use HTTP::Response;
 use HTTP::Cookies;
 use Any::Moose;
 
-our $VERSION = '0.01';
+our $VERSION = '0.2';
 
 # This will handle asynchronous DNS, HTTP and other sockets.
 
