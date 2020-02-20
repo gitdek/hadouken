@@ -13,7 +13,7 @@ use String::IRC;
 use Data::Printer alias => 'Dumper', colored => 1;
 use TryCatch;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 our $AUTHOR  = 'dek';
 
 #our $start_time = time();
@@ -67,8 +67,7 @@ sub acl_check {
 } ## ---------- end sub acl_check
 
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
-        = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
     my ( $cmd, $arg ) = split( / /, lc($message), 2 );
 
     return unless ( defined($arg) && length($arg) );
@@ -125,8 +124,7 @@ sub command_run {
             $host_status->light_green if lc( $host->status ) eq 'up';
             $host_status->red         if lc( $host->status ) eq 'down';
 
-            my $pretty_status
-                = $host->hostname . " (" . $addr . ") is " . $host_status;
+            my $pretty_status = $host->hostname . " (" . $addr . ") is " . $host_status;
             $self->send_server( PRIVMSG => $channel, $pretty_status );
 
             my @open = $host->tcp_ports('open');    # even 'open|filtered'
@@ -137,13 +135,12 @@ sub command_run {
                 my $confidence        = $host->tcp_service($port)->confidence;
                 my $port_state_pretty = String::IRC->new($state);
                 $port_state_pretty->light_green if lc($state) eq 'open';
-                my $f_pretty
-                    = $host->hostname . " ("
+                my $f_pretty =
+                      $host->hostname . " ("
                     . $addr
                     . "), found "
                     . $port_state_pretty
-                    . " port "
-                    ;                           #port ".join('/',$port->protocol(), $port->portid());
+                    . " port ";                 #port ".join('/',$port->protocol(), $port->portid());
 
                 if ( defined $svc && length $svc ) {
                     $f_pretty .= "$port($svc)";
@@ -160,8 +157,8 @@ sub command_run {
                 && defined $os->name_accuracy
                 && length $os->name_accuracy )
             {
-                my $os_summary
-                    = $host->hostname . " ("
+                my $os_summary =
+                      $host->hostname . " ("
                     . $addr
                     . ") - OS: "
                     . $os->name . " / ("
@@ -175,8 +172,7 @@ sub command_run {
 
     my $port_arg = defined $ports
         && length $ports ? '-p ' . $ports : '-F --top-ports 100';
-    $np->parsescan( '/usr/bin/nmap',
-        '-Pn --dns-servers 8.8.8.8 -O -T4 -sS ' . $port_arg, $hosts )
+    $np->parsescan( '/usr/bin/nmap', '--dns-servers 8.8.8.8 -T4 -sV ' . $port_arg, $hosts )
         ;                                       # --dns-servers 8.8.8.8
 
     return 1;
@@ -184,8 +180,8 @@ sub command_run {
 
 sub is_local_net {
     my $host = shift;
-    if ( $host
-        =~ m/(^localhost)|(^127\.0\.0\.1)|(^10\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^192\.168\.)/
+    if ( $host =~
+        m/(^localhost)|(^127\.0\.0\.1)|(^10\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^192\.168\.)/
         )
     {
         return 1;

@@ -11,9 +11,7 @@ use JSON::XS qw( encode_json decode_json );
 use URI::Escape;
 use HTML::TokeParser;
 use Text::Unidecode;
-# use Data::Dumper;
 use Data::Printer alias => 'Dumper', colored => 1;
-# use Finance::QuoteHist::Yahoo;
 use CHI;
 
 our $VERSION = '0.2';
@@ -428,12 +426,12 @@ sub price_lookup {
 
         }
     }
-    catch($e) {
+    catch ($e) {
 
         warn $e;
-        }
+    }
 
-        return $open_price;
+    return $open_price;
 } ## ---------- end sub price_lookup
 
 sub currency_convert {
@@ -513,7 +511,7 @@ sub currency_convert {
             }
         );
     }
-    catch($e) {
+    catch ($e) {
         warn("An error occured while currency_convert was executing: $e");
     };
 } ## ---------- end sub currency_convert
@@ -525,9 +523,10 @@ sub _jsonify {
     try {
         $hashref = decode_json( encode( "utf8", $arg ) );
     }
-    catch($e) {
+    catch ($e) {
         $hashref = undef;
-    } return $hashref;
+    }
+    return $hashref;
 } ## ---------- end sub _jsonify
 
 sub commify {

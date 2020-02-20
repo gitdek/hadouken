@@ -1,7 +1,5 @@
 # Hadouken
 
-By J. Puglisi 
-
 admin@meatwad.org
 
 
@@ -225,5 +223,5 @@ If you have issues with Math::Pari and Digest::MD2 follow the directions below. 
 
 Hadouken on github: [https://github.com/gitdek/hadouken]
 
-Hadouken: [http://hadouken.pw]
+Hadouken: [http://ha.douken.co]
 
