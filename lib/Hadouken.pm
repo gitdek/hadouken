@@ -287,6 +287,7 @@ sub new {
             my ( $layout, $message, $category, $priority, $caller_level ) = @_;
 
             my $ret = '';
+
             if ( $priority eq 'DEBUG' ) {       # } || $priority eq 'INFO' ) {
                 $ret = '[*]';
             }

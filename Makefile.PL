@@ -77,7 +77,8 @@ WriteMakefile(
         'Term::ReadPassword'    => 0,
         'Text::Unidecode'       => 0,
         'IMDB::Film'            => 0,
-        'Params::Validate'      => 0
+        'Params::Validate'      => 0,
+        'Devel::Declare'        => 0
     },
     PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',

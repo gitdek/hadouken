@@ -1,10 +1,6 @@
 sudo: false
 language: perl
 perl:
-    - "blead"
-    - "blead-thr"
-    - "dev"
-    - "dev-thr"
     - "5.30"
     - "5.30-thr"
     - "5.28"
@@ -46,7 +42,7 @@ matrix:
   allow_failures:
     - perl: blead       # ignore failures for blead perl
     - perl: blead-thr   # ignore failures for blead perl
-  fast_finish: 1
+  fast_finish: false
 before_install:
   - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
   - source ~/travis-perl-helpers/init --always-upgrade-modules
