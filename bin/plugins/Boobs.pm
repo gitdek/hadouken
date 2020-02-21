@@ -74,10 +74,10 @@ sub command_run {
 
     try {
         my $line;
-        open( FILE, '<' . $self->{Owner}->{ownerdir} . '/../data/hooters' ) or die $!;
+        open( my $fh, '<' . $self->{Owner}->{ownerdir} . '/../data/hooters' ) or die $!;
         srand;
-        rand($.) < 1 && ( $line = $_ ) while <FILE>;
-        close(FILE);
+        rand($.) < 1 && ( $line = $_ ) while <$fh>;
+        close($fh);
 
         $self->send_server( PRIVMSG => $channel, "[boobs] - " . lc($line) );
 

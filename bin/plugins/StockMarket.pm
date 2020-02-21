@@ -11,9 +11,9 @@ use JSON::XS qw( encode_json decode_json );
 use URI::Escape;
 use HTML::TokeParser;
 use Text::Unidecode;
-use Data::Printer alias => 'Dumper', colored => 1;
+#use Data::Printer alias => 'Dumper', colored => 1;
 
-use CHI;
+# use CHI;
 
 our $VERSION = '0.6';
 our $AUTHOR  = 'dek';
@@ -968,7 +968,7 @@ sub quoteminimal {
         warn $k;
     }
 
-    warn Dumper $symbol;;
+    #warn Dumper $symbol;;
     #warn "Symbol string: $symbol\n";
 
     #my $query = 'select * from yahoo.finance.historicaldata where symbol = "YHOO" and startDate = "2009-09-11" and endDate = "2009-09-11"';

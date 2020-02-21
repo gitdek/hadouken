@@ -1,13 +1,10 @@
-use strict;
-use warnings;
-#use ExtUtils::MakeMaker;
 use inc::Module::Install;
 
 license 'gpl';
 
 WriteMakefile(
     NAME                => 'Hadouken',
-    AUTHOR              => q{dek <dek@dek.bz>},
+    AUTHOR              => q{dek <dek@ha.douken.co>},
     VERSION_FROM        => 'lib/Hadouken.pm',
     ABSTRACT            => 'Hadouken',
     CONFIGURE_REQUIRES  => { 
@@ -18,8 +15,10 @@ WriteMakefile(
     },
     PREREQ_PM           => {
         'Scalar::Util'          => 0,
+        'TryCatch'              => 0,
         'Cwd'                   => 0,
         'Moose'                 => 0,
+        'Log::Log4perl'         => 0,
         'List::MoreUtils'       => 0,
         'List::Util'            => 0,
         'AnyEvent'              => 0,
@@ -39,7 +38,6 @@ WriteMakefile(
         'POSIX'                 => 0,
         'Time::HiRes'           => 0,
         'Geo::IP'               => 0,
-        'Yahoo::Weather'        => 0,
         'Tie::Array::CSV'       => 0,
         'Text::CSV_XS'          => 0,
         'Regexp::Common'        => 0,
@@ -55,8 +53,6 @@ WriteMakefile(
         'Digest::MD2'           => 0,
         'Digest::SHA1'          => 0,
         'XML::Parser'           => 0,
-        'Net::ZooKeeper'        => 0,
-        'TryCatch'              => 0,
         'Daemon::Control'       => 0,
         'Config::General'       => 0,
         'File::Basename'        => 0,
@@ -80,27 +76,32 @@ WriteMakefile(
         'Digest::SHA'           => 0,
         'Term::ReadPassword'    => 0,
         'Text::Unidecode'       => 0,
-        'REST::Google'          => 0,
-        'Log::Log4perl'         => 0,
         'IMDB::Film'            => 0,
-        'Params::Validate'      => 0,
-        'AnyEvent::SlackRTM'    => 0
+        'Params::Validate'      => 0
     },
     PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
         'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm',
         'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm',
         'bin/plugins/StockMarket.pm' => '$(INST_LIB)/Hadouken/Plugin/StockMarket.pm',
+        'bin/plugins/ExamplePlugin.pm' => '$(INST_LIB)/Hadouken/Plugin/ExamplePlugin.pm',
         'bin/plugins/IMDB.pm' => '$(INST_LIB)/Hadouken/Plugin/IMDB.pm',
-        'bin/plugins/Weather.pm' => '$(INST_LIB)/Hadouken/Plugin/Weather.pm',
-        'bin/plugins/Dictionary.pm' => '$(INST_LIB)/Hadouken/Plugin/Dictionary.pm',
+        'bin/plugins/Portfolio.pm' => '$(INST_LIB)/Hadouken/Plugin/Portfolio.pm',
+        'bin/plugins/Translate.pm' => '$(INST_LIB)/Hadouken/Plugin/Translate.pm',
+        'bin/plugins/MitchQuotes.pm' => '$(INST_LIB)/Hadouken/Plugin/MitchQuotes.pm',
+        'bin/plugins/Whois.pm' => '$(INST_LIB)/Hadouken/Plugin/Whois.pm',
+        'bin/plugins/UrbanDictionary.pm' => '$(INST_LIB)/Hadouken/Plugin/UrbanDictionary.pm',
+        'bin/plugins/Translate.pm' => '$(INST_LIB)/Hadouken/Plugin/Translate.pm',
         'bin/plugins/Shorten.pm' => '$(INST_LIB)/Hadouken/Plugin/Shorten.pm',
+        'bin/plugins/MagicEight.pm' => '$(INST_LIB)/Hadouken/Plugin/MagicEight.pm',
+        'bin/plugins/IPCalc.pm' => '$(INST_LIB)/Hadouken/Plugin/IPCalc.pm',
+        'bin/plugins/GeoIP.pm' => '$(INST_LIB)/Hadouken/Plugin/GeoIP.pm',
     },
-    # EXE_FILES => ['bin/hadouken'],
+    EXE_FILES => ['bin/hadouken'],
     PL_FILES => {
-                #'bin/createconfig.pl' => '/etc/hadouken.conf',
-                'bin/deflategeoip.pl' => 'hi',
-                },
+        #'bin/createconfig.pl' => '/etc/hadouken.conf',
+        'bin/deflategeoip.pl' => 'hi',
+    },
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
 );
 

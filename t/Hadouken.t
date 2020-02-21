@@ -1,8 +1,9 @@
-use strict;
+#!/usr/bin/env perl
+
+use v5.14;
 
 use Test::More qw(no_plan);
 
-# use Test::More;                                 # qw(no_plan);
 
 BEGIN {
     use_ok('Hadouken');

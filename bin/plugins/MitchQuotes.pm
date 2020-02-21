@@ -67,10 +67,10 @@ sub command_run {
 
     try {
         my $line;
-        open( FILE, '<' . $self->{Owner}->{ownerdir} . '/../data/mitch_quotes' ) or die $!;
+        open( my $fh, '<' . $self->{Owner}->{ownerdir} . '/../data/mitch_quotes' ) or die $!;
         srand;
-        rand($.) < 1 && ( $line = $_ ) while <FILE>;
-        close(FILE);
+        rand($.) < 1 && ( $line = $_ ) while <$fh>;
+        close($fh);
 
         # I disabled the below feature, it would use cowthink/cowsay plus @visuals arg to do funny ascii stuff.
 

@@ -1,6 +1,8 @@
-use strict;
+#!/usr/bin/env perl
 
-use Test::More;                                 # qw(no_plan);
+use v5.14;
+
+use Test::More;
 use ExtUtils::MakeMaker qw/prompt/;
 
 use vars qw/$REMOTE_TESTS/;
@@ -39,7 +41,7 @@ SKIP: {
     # This doesnt count as a test.
     ok( test_network(), "began network test" );
 
-    my ( $response, $header ) = $cv->recv if defined $cv;
+    my ( $response, $header ) = $cv->recv;
 
     isnt( $response, undef, "Response" );
     isnt( $header,   undef, "Header" );

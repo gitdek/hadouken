@@ -1,4 +1,5 @@
 package Hadouken::Plugin::Portfolio;
+
 use strict;
 use warnings;
 

@@ -1,6 +1,7 @@
-use strict;
+#!/usr/bin/env perl
 
-# use Test::More qw(no_plan);
+use v5.14;
+
 use Test::More tests => 3;
 
 BEGIN { use_ok('Hadouken::DH1080') }
