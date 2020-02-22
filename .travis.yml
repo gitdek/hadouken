@@ -1,61 +1,68 @@
-sudo: false
 language: perl
 perl:
-    - "5.30"
-    - "5.30-thr"
-    - "5.28"
-    - "5.28-thr"
-    - "5.26"
-    - "5.26-thr"
-    - "5.24"
-    - "5.24-thr"
-    - "5.22"
-    - "5.22-thr"
-    - "5.20"
-    - "5.20-thr"
-    - "5.18"
-    - "5.18-thr"
-    - "5.16"
-    - "5.16-thr"
-    - "5.14"
-    - "5.14-thr"
+  - "5.30"
+  - "5.30-thr"
+  - "5.28"
+  - "5.28-thr"
+  - "5.26"
+  - "5.26-thr"
+  - "5.24"
+  - "5.24-thr"
+  - "5.22"
+  - "5.22-thr"
+  - "5.20"
+  - "5.20-thr"
+  - "5.18"
+  - "5.18-thr"
+  - "5.16"
+  - "5.16-thr"
+  - "5.14"
+  - "5.14-thr"
 env:
   global:
     - TEST_PARTITIONS=4
     - RELEASE_TESTING=1
-matrix:
-  include:
-    - perl: "5.20"
-      env: COVERAGE=1 TEST_PARTITION=1
-    - perl: "5.20"
-      env: COVERAGE=1 TEST_PARTITION=2
-    - perl: "5.20"
-      env: COVERAGE=1 TEST_PARTITION=3
-    - perl: "5.20"
-      env: COVERAGE=1 TEST_PARTITION=4
-  allow_failures:
-    - perl: blead       # ignore failures for blead perl
-    - perl: blead-thr   # ignore failures for blead perl
-  fast_finish: false
-before_install:
-  - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
-  - source ~/travis-perl-helpers/init --always-upgrade-modules
-  - build-perl
-  - perl -V
-  - build-dist
-  - cd $BUILD_DIR
-install:
-  - cpan-install inc::Module::Install
-  - cpan-install experimental
-  - cpan-install ExtUtils::MakeMaker~6.68 --deps
-  - cpan-install --deps
-  - cpan-install --coverage
-before_script:
-  - coverage-setup
-script:
-  - perl Makefile.PL
-  - make
-  - prove -b -r -s -j$(test-jobs) $(test-files)
-after_success:
-  - coverage-report
+  matrix:
+    include:
+      - perl: "5.20"
+        env: COVERAGE=1 TEST_PARTITION=1
+      - perl: "5.20"
+        env: COVERAGE=1 TEST_PARTITION=2
+      - perl: "5.20"
+        env: COVERAGE=1 TEST_PARTITION=3
+      - perl: "5.20"
+        env: COVERAGE=1 TEST_PARTITION=4
+        allow_failures:
+          - perl: blead       # ignore failures for blead perl
+          - perl: blead-thr   # ignore failures for blead perl
+            fast_finish: false
+            before_install:
+              - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
+              - source ~/travis-perl-helpers/init --always-upgrade-modules
+              - build-perl
+              - perl -V
+              - build-dist
+              - cd $BUILD_DIR
+            install:
+              - cpan-install inc::Module::Install
+              - cpan-install experimental
+              - cpan-install ExtUtils::MakeMaker~6.68 --deps
+              - cpan-install --deps
+              - cpan-install --coverage
+            before_script:
+              - coverage-setup
+            script:
+              - perl Makefile.PL
+              - make
+              - prove -b -r -s -j$(test-jobs) $(test-files)
+            after_success:
+              - coverage-report
+            notifications:
+              irc:
+                template:
+                  - "%{repository}#%{build_number} (%{branch} - %{commit} : %{author}): %{message} -  Change view : %{compare_url} - Build details : %{build_url}"
+                    channels:
+                      - "irc.efnet.org#hadouken"
+                    on_success: always
+                    on_failure: always
 
