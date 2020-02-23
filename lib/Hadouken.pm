@@ -86,7 +86,7 @@ our @EXPORT_OK =
 our %EXPORT_TAGS = ( acl_modes =>
         [ 'BIT_ADMIN', 'BIT_WHITELIST', 'BIT_BLACKLIST', 'BIT_OP', 'BIT_VOICE', 'BIT_BOT' ] );
 
-our $VERSION = "0.9.2";
+our $VERSION = "0.9.3";
 our $AUTHOR  = "dek";
 
 #use Data::Dumper;
