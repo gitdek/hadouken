@@ -4,22 +4,20 @@ layout: index
 
 # Hadouken
 
-By J. Puglisi 
-
-admin@meatwad.org
+admin@ha.douken.co
 
 
 ### Current Status
 
-[![Build Status](https://travis-ci.org/gitdek/hadouken.png)](https://travis-ci.org/gitdek/hadouken)
+[![Build Status](//travis-ci.org/gitdek/hadouken.png)](//travis-ci.org/gitdek/hadouken)
 
 
 ## Introduction
 
 
-![Hadouken logo](https://gitdek.github.io/hadouken/images/hadouken.png "Hadouken logo")
+![Hadouken logo](//gitdek.github.io/hadouken/images/hadouken.png "Hadouken logo")
 Hadouken is an irc bot which aims to provide fun, information, and
-channel management. The main goal is a simple plugin design so others can 
+channel management. The main goal is a simple plugin design so others can
 contribute even with limited time. There are many useful, and some not so
 useful plugins included to begin with.
 
@@ -53,7 +51,7 @@ encrypt it twice by accident, rendering it useless.
     > hadouken start
 
 *   Stop service:
-        
+
     > hadouken stop
 
 *   Restart service:
@@ -69,23 +67,23 @@ encrypt it twice by accident, rendering it useless.
     > hadouken --config=[file]
 
 *   Run in foreground:
-    
+
     > hadouken foreground
 
 *   Encrypt configuration file:
-	
+
 	> hadouken --setup
 
 *   Display encrypted configuration file:
-	
+
 	> hadouken --showconfig
 
 *   Provide password as an argument:
-	
+
 	> hadouken --password=[passwd]
-	
+
 *   Generate init file for Hadouken
-    
+
     > hadouken get_init_file
 `
 
@@ -227,7 +225,7 @@ If you have issues with Math::Pari and Digest::MD2 follow the directions below. 
 
 
 
-Hadouken on github: [https://github.com/gitdek/hadouken]
+Hadouken on github: (https://github.com/gitdek/hadouken)
 
-Hadouken: [http://hadouken.pw]
+Hadouken: [http://ha.douken.co]
 
