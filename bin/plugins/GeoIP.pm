@@ -53,8 +53,7 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
-        = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
 
     my ( $cmd, $arg ) = split( / /, $message, 2 );    # DO NOT LC THE MESSAGE!
 
@@ -100,8 +99,7 @@ sub command_run {
 
                 return unless ( $ip_addr =~ /$RE{net}{IPv4}/ );
 
-                my $record
-                    = $self->{Owner}->{geoip}->record_by_addr($ip_addr);
+                my $record = $self->{Owner}->{geoip}->record_by_addr($ip_addr);
 
                 unless ( defined $record ) {
                     $self->send_server(

@@ -74,7 +74,7 @@ sub command_run {
 
     try {
         my $line;
-        open(my $fh, '<' . $self->{Owner}->{ownerdir} . '/../data/coitus' ) or die $!;
+        open( my $fh, '<' . $self->{Owner}->{ownerdir} . '/../data/coitus' ) or die $!;
         srand;
         rand($.) < 1 && ( $line = $_ ) while <$fh>;
         close($fh);
@@ -82,11 +82,11 @@ sub command_run {
         $self->send_server( PRIVMSG => $channel, "[coitus] - " . lc($line) );
 
     }
-    catch($e) {
+    catch ($e) {
         warn $e;
-        }
+    }
 
-        return 1;
+    return 1;
 } ## ---------- end sub command_run
 
 1;

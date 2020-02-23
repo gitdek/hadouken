@@ -113,11 +113,11 @@ sub command_run {
             $self->send_server( PRIVMSG => $channel, $cnt > 1 ? $l : "Mitch Hedberg - $l" );
         }
     }
-    catch($e) {
+    catch ($e) {
         warn $e;
-        }
+    }
 
-        return 1;
+    return 1;
 } ## ---------- end sub command_run
 
 1;

@@ -90,7 +90,7 @@ sub command_run {
 
                             my ( $key, $value ) = $line =~ /^\s*([\d\w\s_-]+):\s*(.+)$/;
                             next if !$line || !$value;
-                            $key =~ s/\s+$//;
+                            $key   =~ s/\s+$//;
                             $value =~ s/\s+$//;
 
                             $parsed{$key} =

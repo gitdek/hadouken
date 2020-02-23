@@ -5,6 +5,7 @@ use warnings;
 use Hadouken ':acl_modes';
 
 use TryCatch;
+
 #use Data::Dumper;
 use IMDB::Film;
 
@@ -55,8 +56,7 @@ sub acl_check {
 # Return 1 if OK (and then callback can be called)
 # Return 0 and the callback will not be called.
 sub command_run {
-    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted )
-        = @_;
+    my ( $self, $nick, $host, $message, $channel, $is_admin, $is_whitelisted ) = @_;
 
     my ( $cmd, $arg ) = split( / /, $message, 2 );    # DO NOT LC THE MESSAGE!
 
@@ -66,13 +66,14 @@ sub command_run {
     my $title   = $arg;
 
     try {
-        my $imdb = new IMDB::Film( crit => $title )
-            ;                                   #, search => 'find?tt=on;mx=20;q=');
+        my $imdb = new IMDB::Film( crit => $title );    #, search => 'find?tt=on;mx=20;q=');
 
         # Try searching if we do not get a result.
         unless ( $imdb->status ) {
-            $imdb = new IMDB::Film( crit => $title,
-                search => 'find?tt=on;mx=20;q=' );
+            $imdb = new IMDB::Film(
+                crit   => $title,
+                search => 'find?tt=on;mx=20;q='
+            );
         }
 
         if ( $imdb->status ) {
@@ -96,7 +97,7 @@ sub command_run {
             my $wrapped;
             ( $wrapped = $storyline ) =~ s/(.{0,300}(?:\s|$))/$1\n/g;
             my @lines = split( /\n/, $wrapped );
-            my $cnt = 0;
+            my $cnt   = 0;
             foreach my $l (@lines) {
                 next unless defined $l && length $l;
                 next if $l eq 'Add Full Plot | Add Synopsis';
@@ -113,11 +114,11 @@ sub command_run {
             #warn Dumper($imdb);
         }
     }
-    catch($e) {
+    catch ($e) {
         $summary = '';
-        }
+    }
 
-        return 1;
+    return 1;
 } ## ---------- end sub command_run
 
 1;

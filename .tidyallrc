@@ -1,6 +1,13 @@
 ; Install Code::TidyAll
 ; run "tidyall -a" to tidy all files
 ; run "tidyall -g" to tidy only files modified from git
+
+[PerlCritic]
+select = **/*.{pl,pm,t,psgi}
+argv = --profile=$ROOT/.perlcriticrc
+
 [PerlTidy]
 select = {lib,t}/**/*.{pl,pm,t}
 select = bin/plugins/*.pm
+argv = --profile=$ROOT/.perltidyrc
+

@@ -1,9 +1,9 @@
 #!/usr/bin/env perl
 
-use v5.14;
-
 use strict;
 use warnings;
+
+use v5.14;
 
 use diagnostics;
 use feature 'say';
@@ -158,14 +158,14 @@ sub findboth {
 sub findregex {
     my ( $winners, $losers ) = @_;
 
-    my @pool = regex_components( $winners, $losers );
+    my @pool     = regex_components( $winners, $losers );
     my @solution = ();
 
     my $bestscore = sub {
         my ($PI) = @_;
         my %scores;
         for my $poolitem (@$PI) {
-            my @M = matches( $poolitem, $winners );
+            my @M     = matches( $poolitem, $winners );
             my $score = 4 * scalar(@M) - length($poolitem);
             $scores{$poolitem} = $score;
         }
@@ -181,7 +181,7 @@ sub findregex {
         my $best = $bestscore->( \@pool );
         push( @solution, $best );
 
-        my %matches = map { $_ => 1 } matches( $best, \@winners_copy );
+        my %matches  = map  { $_ => 1 } matches( $best, \@winners_copy );
         my @filtered = grep { !exists $matches{$_} } @winners_copy;
         @winners_copy = @filtered;
 

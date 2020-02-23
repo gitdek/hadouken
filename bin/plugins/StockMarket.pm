@@ -11,7 +11,7 @@ use JSON::XS qw( encode_json decode_json );
 use URI::Escape;
 use HTML::TokeParser;
 use Text::Unidecode;
-#use Data::Printer alias => 'Dumper', colored => 1;
+use Data::Printer alias => 'Dumper', colored => 1;
 
 # use CHI;
 
@@ -26,7 +26,7 @@ our $mktmovers_dow =
     'B64ENCeyJzeW1ib2wiOiJVUyZESkkiLCJjb3VudCI6IjIwIiwiY2hhcnQiOiJib3RoIiwicmVnaW9uIjoiIn0=';
 
 our $USE_NOTICE = 0;
-our $SEND_CMD = $USE_NOTICE ? 'NOTICE' : 'PRIVMSG';
+our $SEND_CMD   = $USE_NOTICE ? 'NOTICE' : 'PRIVMSG';
 
 # Description of this command.
 sub command_comment {
@@ -131,7 +131,7 @@ sub command_run {
 
     if ( $cmd eq 'test' ) {
 
-        my $ret = $self->quoteminimal( $channel, $nick, ['AAPL','YHOO'] );
+        my $ret = $self->quoteminimal( $channel, $nick, [ 'AAPL', 'YHOO' ] );
 
         return 1;
     }
@@ -140,7 +140,7 @@ sub command_run {
 
         return unless defined $arg;
 
-        my @z = split( / /, uc($arg) );
+        my @z       = split( / /, uc($arg) );
         my $symbols = join( ',', @z );
 
         #my $ret = $self->quoteminimal($channel,$nick,$arg);
@@ -562,25 +562,23 @@ sub command_run {
             }
         );
     }
-    catch($e) {
+    catch ($e) {
         warn $e;
-        }
+    }
 
-        return 1;
+    return 1;
 } ## ---------- end sub command_run
 
 sub quote_fetch {
 
-
 }
-
 
 sub finances {
     my ( $self, $channel, $nick, $symbol, $long ) = @_;
 
     $long |= 0;
 
-    my $url = sprintf ' http://finviz.com/quote.ashx?t=%s', $symbol;
+    my $url     = sprintf ' http://finviz.com/quote.ashx?t=%s', $symbol;
     my $summary = '';
 
     try {
@@ -675,11 +673,12 @@ sub finances {
             }
         );
     }
-    catch($e) {
+    catch ($e) {
         warn("An error occured while finances() was executing: $e");
     };
 } ## ---------- end sub finances
 
+## Obsolete. BATS made this private.
 sub stock_book {
 
     my ( $self, $channel, $symbol ) = @_;
@@ -741,7 +740,7 @@ sub stock_book {
             }
         );
     }
-    catch($e) {
+    catch ($e) {
         warn("An error occured while currency_convert was executing: $e");
     };
 
@@ -824,7 +823,7 @@ sub currency_convert {
             }
         );
     }
-    catch($e) {
+    catch ($e) {
         warn("An error occured while currency_convert was executing: $e");
     };
 } ## ---------- end sub currency_convert
@@ -837,7 +836,7 @@ sub market_movers {
     try {
 
         $self->asyncsock->post(
-            'http://api.cnbc.com/api/movers/common/lib/asp/bufferGainersLosers.asp',
+            'https://api.cnbc.com/api/movers/common/lib/asp/bufferGainersLosers.asp',
             [
                 'data'            => $market,
                 '..requester..'   => 'ContentBuffer',
@@ -881,11 +880,11 @@ sub market_movers {
             }
         );
     }
-    catch($e) {
+    catch ($e) {
         warn $e;
-        }
+    }
 
-        return 1;
+    return 1;
 } ## ---------- end sub market_movers
 
 sub news_search {
@@ -895,31 +894,36 @@ sub news_search {
 
     warn "* News search for $symbol\n";
 
-    my $query =
-          'select * from feed where url=\'http://feeds.finance.yahoo.com/rss/2.0/headline?s='
-        . $symbol
-        . '&f=sl1d1t1c1ohgv&e=.csv\'';
-    my $params =
-        "format=json&diagnostics=true&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=";
-    my $url = sprintf 'http://query.yahooapis.com/v1/public/yql?q=%s&%s', uri_escape($query),
-        $params;
+    $symbol = "AAPL";
+
+    my $url =
+        sprintf
+        'https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/get-news?region=US&category=%s',
+        uri_escape($symbol);
 
     warn $url;
 
+    #headers => { "x-rapidapi-key" => "4f98308d8dmshb2bc4d493bc9df9p1cd5b4jsn896a8e19d288" },
     try {
         $self->asyncsock->get(
-            $url,
+            [
+                $url,
+                headers => {
+                    "x-rapidapi-key" => "4f98308d8dmshb2bc4d493bc9df9p1cd5b4jsn896a8e19d288"
+                }
+            ],
             sub {
                 my ( $body, $header ) = @_;
 
+                warn Dumper($body);
+                warn Dumper($header);
                 return unless defined $body && defined $header;
 
                 my $json_object = $body;
                 my $j           = $self->_jsonify($json_object);
-                my $results     = $j->{query}{results}{item};
+                my $results     = $j->{items}{result};
 
-                #warn $body;
-                #warn Dumper($results);
+                warn Dumper($results);
 
                 return unless defined $results;
 
@@ -949,7 +953,7 @@ sub news_search {
             }
         );
     }
-    catch($e) {
+    catch ($e) {
         warn("An error occured while news_search was executing: $e");
     };
 } ## ---------- end sub news_search
@@ -964,7 +968,7 @@ sub quoteminimal {
 
     #my $symbolString = join(',', $symbol);
 
-    for my $k (@{$symbol}) {
+    for my $k ( @{$symbol} ) {
         warn $k;
     }
 
@@ -1005,7 +1009,7 @@ sub quoteminimal {
             }
         );
     }
-    catch($e) {
+    catch ($e) {
         warn("An error occured while quoteminimal was executing: $e");
     };
 } ## ---------- end sub quoteminimal
@@ -1037,9 +1041,10 @@ sub _jsonify {
     try {
         $hashref = decode_json( encode( "utf8", $arg ) );
     }
-    catch($e) {
+    catch ($e) {
         $hashref = undef;
-    } return $hashref;
+    }
+    return $hashref;
 } ## ---------- end sub _jsonify
 
 sub commify {

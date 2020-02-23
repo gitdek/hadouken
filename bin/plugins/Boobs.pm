@@ -82,11 +82,11 @@ sub command_run {
         $self->send_server( PRIVMSG => $channel, "[boobs] - " . lc($line) );
 
     }
-    catch($e) {
+    catch ($e) {
         warn $e;
-        }
+    }
 
-        return 1;
+    return 1;
 } ## ---------- end sub command_run
 
 1;

@@ -1,11 +1,20 @@
-severity = 5
-verbose = 8
+severity = 3
+verbose = 11
+program-extensions = pl psgi t
+theme = (core && (pbp || bugs || maintenance || cosmetic || complexity || security || tests)) || moose
+
 [Variables::ProhibitPunctuationVars]
 allow = $@ $!
+
 [TestingAndDebugging::ProhibitNoStrict]
 allow = refs
+
 [Variables::ProhibitEvilVariables]
 variables = $DB::single
+
+# "use v5.14" is more readable than "use 5.014"
+[-ValuesAndExpressions::ProhibitVersionStrings]
+
 # Turn these off
 [-BuiltinFunctions::ProhibitStringyEval]
 [-ControlStructures::ProhibitPostfixControls]
@@ -18,6 +27,79 @@ variables = $DB::single
 [-Modules::ProhibitEvilModules]
 [-Modules::RequireFilenameMatchesPackage]
 [-InputOutput::ProhibitBarewordFileHandles]
-# Turn this on
-[Lax::ProhibitStringyEval::ExceptForRequire]
+[-TestingAndDebugging::RequireTestLabels]
+[-ValuesAndExpressions::RequireQuotedHeredocTerminator]
+[-Lax::ProhibitStringyEval::ExceptForRequire]
+[-Modules::ProhibitExcessMainComplexity]
+[-Subroutines::ProhibitExcessComplexity]
+[-InputOutput::RequireCheckedSyscalls]
+[-Modules::ProhibitAutomaticExportation]
 
+# exclude = Subroutines::ProhibitCallsToUndeclaredSubs
+
+[BuiltinFunctions::ProhibitStringySplit]
+severity = 3
+
+[ControlStructures::ProhibitCStyleForLoops]
+severity = 3
+
+[RegularExpressions::ProhibitComplexRegexes]
+max_characters = 200
+
+[RegularExpressions::ProhibitUnusualDelimiters]
+severity = 3
+
+[Subroutines::ProhibitUnusedPrivateSubroutines]
+private_name_regex = _(?!build)\w+
+
+[-TestingAndDebugging::RequireUseWarnings]
+
+[TestingAndDebugging::ProhibitNoWarnings]
+allow = redefine
+
+#[ValuesAndExpressions::ProhibitEmptyQuotes]
+#severity = 3
+
+#[ValuesAndExpressions::ProhibitInterpolationOfLiterals]
+#severity = 3
+
+[ValuesAndExpressions::RequireUpperCaseHeredocTerminator]
+severity = 3
+
+[Variables::ProhibitPackageVars]
+add_packages = Carp Test::Builder
+
+[-Subroutines::RequireFinalReturn]
+
+# This incorrectly thinks signatures are prototypes.
+[-Subroutines::ProhibitSubroutinePrototypes]
+
+[-ErrorHandling::RequireCarping]
+
+# No need for /xsm everywhere
+[-RegularExpressions::RequireDotMatchAnything]
+[-RegularExpressions::RequireExtendedFormatting]
+[-RegularExpressions::RequireLineBoundaryMatching]
+
+# http://stackoverflow.com/questions/2275317/why-does-perlcritic-dislike-using-shift-to-populate-subroutine-variables
+[-Subroutines::RequireArgUnpacking]
+
+# "use v5.14" is more readable than "use 5.014"
+[-ValuesAndExpressions::ProhibitVersionStrings]
+
+# Explicitly returning undef is a _good_ thing in many cases, since it
+# prevents very common errors when using a sub in list context to construct a
+# hash and ending up with a missing value or key.
+[-Subroutines::ProhibitExplicitReturnUndef]
+
+# Sometimes I want to write "return unless $x > 4"
+[-ControlStructures::ProhibitNegativeExpressionsInUnlessAndUntilConditions]
+
+# I've only ever had this fire when calling ->mkpath on a Path::Tiny or
+# similar object.
+[-ValuesAndExpressions::ProhibitLeadingZeros]
+
+# We've removed "second" from the forbidden list since it's pretty unambiguous
+# in DateTime
+[NamingConventions::ProhibitAmbiguousNames]
+forbid = abstract bases close contract last left no record right set

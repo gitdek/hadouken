@@ -68,7 +68,7 @@ You can also access that member via the C<heap> method.
 =cut
 
 sub new {
-    my $this = shift;
+    my $this  = shift;
     my $class = ref($this) || $this;
 
     my $self = $class->SUPER::new( @_, heap => {} );
@@ -134,8 +134,7 @@ sub connect {
                 $self->disconnect("EOF from server $host:$port");
             },
             on_error => sub {
-                $self->disconnect(
-                    "error in connection to server $host:$port: $!");
+                $self->disconnect("error in connection to server $host:$port: $!");
             },
             on_read => sub {
                 my ($hdl) = @_;
@@ -156,7 +155,7 @@ sub connect {
 
         $self->{connected} = 1;
         $self->event('connect');
-        }, sub {
+    }, sub {
         my ($sock) = @_;
 
         my $ipn = AnyEvent::Socket::aton "$bindaddr";
@@ -183,7 +182,7 @@ sub connect {
         #}
 
         return undef;
-        };                                      #(defined $prep ? (ref $prep ? $prep : sub { $prep }) : ());
+    };                                          #(defined $prep ? (ref $prep ? $prep : sub { $prep }) : ());
 } ## ---------- end sub connect
 
 =item $con->enable_ssl ()
