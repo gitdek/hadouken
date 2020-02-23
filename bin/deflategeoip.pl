@@ -17,12 +17,12 @@ my $script_dir = dirname($script_abs);
 my $cwd = getcwd();
 #print "current dir is $cwd\n";
 
-chdir($script_dir) or die("Failed to change to directory: $!"); 
+chdir($script_dir) or die("Failed to change to directory: $!");
 chdir "../data/geoip/" or die("Failed to change to directory: $!");
 
 $cwd = getcwd();
 # print "current dir is $cwd\n";
-system("gzip -dq *.gz");
+system("gzip -dqk *.gz");
 
 print "Finished decompressing.\n";
 #my $geoip_gzip = "$path../data../geoip/";

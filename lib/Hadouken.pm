@@ -3,7 +3,6 @@
 #use strict;
 #use warnings;
 #
-#our $VERSION = '0.02';
 #
 #use Try::Tiny;
 #use Net::ZooKeeper qw(:events :node_flags :acls);
@@ -87,8 +86,8 @@ our @EXPORT_OK =
 our %EXPORT_TAGS = ( acl_modes =>
         [ 'BIT_ADMIN', 'BIT_WHITELIST', 'BIT_BLACKLIST', 'BIT_OP', 'BIT_VOICE', 'BIT_BOT' ] );
 
-our $VERSION = '0.9.2';
-our $AUTHOR  = 'dek';
+our $VERSION = "0.9.2";
+our $AUTHOR  = "dek";
 
 #use Data::Dumper;
 use Data::Printer alias => 'Dumper', colored => 1;
