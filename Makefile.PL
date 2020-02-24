@@ -7,11 +7,11 @@ WriteMakefile(
     AUTHOR              => q{dek <dek@ha.douken.co>},
     VERSION_FROM        => 'lib/Hadouken.pm',
     ABSTRACT            => 'Hadouken',
-    CONFIGURE_REQUIRES  => { 
-        'ExtUtils::MakeMaker'   => 0, 
+    CONFIGURE_REQUIRES  => {
+        'ExtUtils::MakeMaker'   => 0,
         'YAML',                 => 0,
         'Test::More'            => 0,
-        'File::Copy'            => 0 
+        'File::Copy'            => 0
     },
     PREREQ_PM           => {
         'Scalar::Util'          => 0,
@@ -78,7 +78,9 @@ WriteMakefile(
         'Text::Unidecode'       => 0,
         'IMDB::Film'            => 0,
         'Params::Validate'      => 0,
-        'Devel::Declare'        => 0
+        'Devel::Declare'        => 0,
+        'Math::BigInt'          => 0,
+        'Net::SSLeay'           => 0,
     },
     PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
