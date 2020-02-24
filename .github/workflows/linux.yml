@@ -44,7 +44,7 @@ jobs:
       - name: perl -V
         run: perl -V
       - name: Install Dependencies
-        run: cpanm inc::Module::Install ExtUtils::MakeMaker YAML Test::More
+        run: cpanm ExtUtils::MakeMaker
       - name: Makefile.PL
         run: perl Makefile.PL
       - name: make test
