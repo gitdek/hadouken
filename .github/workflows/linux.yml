@@ -41,10 +41,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
+      - name: Install deb packages
+        run: apt-get -qq update && apt-get -qq install -y unzip libdb-dev
       - name: perl -V
         run: perl -V
       - name: Install Dependencies
-        run: cpanm ExtUtils::MakeMaker
+        run: cpanm ExtUtils::MakeMaker Crypt::Random
       - name: Makefile.PL
         run: perl Makefile.PL
       - name: make test
