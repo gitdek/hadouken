@@ -1,5 +1,6 @@
 #package Hadouken::ZooKeeper;
 #
+                    #if($comment =~ /\n/) {
 #use strict;
 #use warnings;
 #
@@ -215,12 +216,12 @@ my @commands = (
         channel_only  => 1
     },
 
-    #{name => 'lq',                  regex => '(lq|lastquote)$',         comment => 'get most recently added quote', channel_only => 1 },
-    #{name => 'aq',                  regex => '(aq|addquote)\s.+?',      comment => 'add a quote', channel_only => 1 },
-    #{name => 'dq',                  regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote', channel_only => 1 },
-    #{name => 'fq',                  regex => '(fq|findquote)\s.+?',     comment => 'find a quote', channel_only => 1 },
-    #{name => 'rq',                  regex => '(rq|randquote)$',         comment => 'get a random quote', channel_only => 1 },
-    #{name => 'q',                   regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)', channel_only => 1 },
+    {name => 'lq',                  regex => '(lq|lastquote)$',         comment => 'get most recently added quote', channel_only => 1 },
+    {name => 'aq',                  regex => '(aq|addquote)\s.+?',      comment => 'add a quote', channel_only => 1 },
+    {name => 'dq',                  regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote', channel_only => 1 },
+    {name => 'fq',                  regex => '(fq|findquote)\s.+?',     comment => 'find a quote', channel_only => 1 },
+    {name => 'rq',                  regex => '(rq|randquote)$',         comment => 'get a random quote', channel_only => 1 },
+    {name => 'q',                   regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)', channel_only => 1 },
     {
         name    => 'commands',
         regex   => '(commands|cmds)$',
@@ -2200,15 +2201,7 @@ sub _buildup {
             my ( $who, $message, $channel, $channel_list ) = @_;
             my ( $mode_map, $nickname, $ident ) = $self->{con}->split_nick_mode($who);
 
-            #my $ref_modes = $self->{con}->nick_modes( $channel, $nickname );
-
-            #return unless defined $ref_modes;
-
-            #if ( $ref_modes->{'o'} ne 1 ) {
             $self->op_user( $channel, $nickname, $ident );
-
-            # $self->send_server_unsafe( MODE => $channel, '+o', $nickname);
-            #}
 
             return 1;
         },
@@ -2558,17 +2551,10 @@ sub _buildup {
             my ( $who, $message, $channel, $channel_list ) = @_;
             my ( $mode_map, $nickname, $ident ) = $self->{con}->split_nick_mode($who);
 
-            #my $cmd_names = _->pluck(\@commands, 'name');
-
             my @copy = @commands;
             my $iter = List::MoreUtils::natatime 1, @copy;
             my $si1  = String::IRC->new('Available Commands:')->bold;
-
-            #$self->send_server_unsafe (NOTICE => $nickname, $si1);
-            $self->send_server_unsafe( PRIVMSG => $nickname, $si1 );
-
-            #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $si1);
-            # $self->send_server_unsafe (PRIVMSG => $nickname, $si1);
+            $self->send_server_unsafe( $self->{message_transport} => $nickname, $si1 );
 
             while ( my @tmp = $iter->() ) {
                 my $command_summary = '';
@@ -2596,13 +2582,10 @@ sub _buildup {
                 }
 
                 $self->send_server_unsafe(
-                    PRIVMSG => $nickname,
+                    $self->{message_transport} => $nickname,
                     $command_summary
                 );
 
-                #$self->send_server_unsafe (NOTICE => $nickname, $command_summary);
-                #$self->send_server_long_safe ("PRIVMSG\001ACTION", $nickname, $command_summary);
-                #$self->send_server_unsafe (PRIVMSG => $nickname, $command_summary);
                 undef $command_summary;
             }
             undef $iter;
@@ -2627,13 +2610,12 @@ sub _buildup {
                 if ( defined $pcount && $pcount < 1 ) {
                     my $si1 = String::IRC->new('No plugins are available for you!')->bold;
 
-                    #$self->send_server_unsafe (NOTICE => $nickname, $si1);
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $si1 );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $si1 );
                     return 1;
                 }
 
                 my $si1 = String::IRC->new('Available Plugins:')->bold;
-                $self->send_server_unsafe( PRIVMSG => $nickname, $si1 );
+                $self->send_server_unsafe( $self->{message_transport} => $nickname, $si1 );
 
                 foreach my $plugin ( keys %{ $self->loaded_plugins } ) {
                     my $command_summary = '';
@@ -2648,7 +2630,6 @@ sub _buildup {
 
                     my $cnt = 0;
 
-                    #if($comment =~ /\n/) {
                     my @lines = split( /\n/, $comment );
                     foreach my $l (@lines) {
                         next unless defined $l && length $l;
@@ -2657,14 +2638,10 @@ sub _buildup {
 
                         my $sum = sprintf( "%-15s %-15s %-10s", $si, $ver, $l );
                         $self->send_server(
-                            PRIVMSG => $nickname,
+                            $self->{message_transport} => $nickname,
                             $cnt > 1 ? $l : $sum
                         );
                     }
-
-                    #}
-
-                    # $self->send_server_unsafe( PRIVMSG => $nickname, $command_summary );
                 }
             }
             catch ($e) {
@@ -2686,8 +2663,6 @@ sub _buildup {
 
             return unless defined $cmd && length $cmd;
 
-            #return unless defined $arg && defined $cmd && length $cmd && length $arg;
-
             $cmd = lc($cmd);
 
             if ( $cmd eq 'add' ) {
@@ -2697,7 +2672,7 @@ sub _buildup {
                 if ($add_ret) {
                     my $out_msg = "[admin] $arg added - > by $nickname";
                     my $msg = $self->_chat_encrypt( $who, $out_msg );   #, $self->{keys}->[0] );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
             }
             elsif ($cmd eq 'delete'
@@ -2712,7 +2687,7 @@ sub _buildup {
                 if ($del_ret) {
                     my $out_msg = "[admin] $arg deleted - > by $nickname";
                     my $msg = $self->_chat_encrypt( $who, $out_msg );   #, $self->{keys}->[0] );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
             }
             elsif ( $cmd eq 'list' || $cmd eq 'ls' ) {
@@ -2733,9 +2708,7 @@ sub _buildup {
                     my $out_msg = "[admin] $entry";
 
                     my $msg = $self->_chat_encrypt( $who, $out_msg );   #, $self->{keys}->[0] );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
-
-                    #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
 
                 #}
@@ -2749,7 +2722,6 @@ sub _buildup {
                 # warn "* ADMIN LIST $owner";
                 # warn "* ADMIN LIST $who";
 
-                #if($self->matches_mask($owner,$who)) {
                 my @matches = grep { /$arg/ }
                     map { $_->[0] . '@' . $_->[1] } @{ $self->{adminsdb} };
 
@@ -2757,7 +2729,7 @@ sub _buildup {
                 for my $admin_row (@matches) {
                     my $out_msg = "[admin] $admin_row";
                     my $msg = $self->_chat_encrypt( $who, $out_msg );   #, $self->{keys}->[0] );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
 
                 #}
@@ -2772,14 +2744,12 @@ sub _buildup {
 
                 $self->_set_key( $who, $arg );
 
-                #my $content = $self->{conf_obj}->save_string(); #($self->{config_filename}, $conf);
                 #$self->{conf_update}->($content);
             }
             elsif ( $cmd eq 'reload' ) {
                 my $out_msg = "[admin] reloading!";
                 my $msg     = $self->_chat_encrypt( $who, $out_msg );   #, $self->{keys}->[0] );
-                $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
-
+                $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 $self->{reload_update}->();
             }
             return 1;
@@ -2808,7 +2778,7 @@ sub _buildup {
                 if ($add_ret) {
                     my $out_msg = "[whitelist] $arg added - > by $nickname";
                     my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
             }
             elsif ($cmd eq 'delete'
@@ -2823,12 +2793,11 @@ sub _buildup {
                 if ($del_ret) {
                     my $out_msg = "[whitelist] $arg deleted - > by $nickname";
                     my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
             }
             elsif ( $cmd eq 'list' || $cmd eq 'ls' ) {
 
-                #my $owner = '*!*dek@butche.red';
                 my $owner = $self->normalize_mask( $self->{admin} );
                 warn "* WHITELIST LIST $owner";
                 warn "* WHITELIST LIST $who";
@@ -2844,8 +2813,8 @@ sub _buildup {
                     my $out_msg = "[whitelist] $entry";
 
                     my $msg = $self->_chat_encrypt( $who, $out_msg );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
 
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
                 }
 
@@ -2878,7 +2847,7 @@ sub _buildup {
                 if ($add_ret) {
                     my $out_msg = "[blacklist] $arg added - > by $nickname";
                     my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
             }
             elsif ($cmd eq 'delete'
@@ -2893,7 +2862,7 @@ sub _buildup {
                 if ($del_ret) {
                     my $out_msg = "[blacklist] $arg deleted - > by $nickname";
                     my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
             }
             elsif ( $cmd eq 'list' || $cmd eq 'ls' ) {
@@ -2914,11 +2883,7 @@ sub _buildup {
                         my $out_msg = "[blacklist] $entry";
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
-
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                         #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
                     }
                 }
@@ -2958,11 +2923,7 @@ sub _buildup {
                         my $out_msg =
                             "[channel] mode for $chan_name set to $current_mode - > by $nickname";
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
-
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                         return 1;
                     }
 
@@ -2996,10 +2957,7 @@ sub _buildup {
                         }
 
                         $msg = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
 
                     }
                     else {                      # Trying to get singular mode value perhaps?
@@ -3014,10 +2972,7 @@ sub _buildup {
 
                         my $out_msg = "[channel] $chan_name: $current_mode";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
 
                     return 1;
@@ -3061,7 +3016,7 @@ sub _buildup {
                     my $current_mode = $self->channel_mode_get( $ch, '*' );
                     my $out_msg      = "[channel] \#$ch $current_mode";
                     my $msg          = $self->_chat_encrypt( $who, $out_msg );
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
 
                 #                    for my $admin_row (@{$self->{adminsdb}}) {
@@ -3102,7 +3057,7 @@ sub _buildup {
 
             unless ( defined $arg ) {
                 for my $line ( split /\n/, $self->usage_plugin() ) {
-                    $self->send_server_unsafe( PRIVMSG => $nickname, $line );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $line );
                 }
                 return;
             }
@@ -3121,10 +3076,7 @@ sub _buildup {
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
 
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
                     }
                 }
                 else {
@@ -3149,10 +3101,7 @@ sub _buildup {
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
 
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                 }
             }
@@ -3172,10 +3121,7 @@ sub _buildup {
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
 
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                 }
                 else {
@@ -3197,10 +3143,7 @@ sub _buildup {
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
 
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                 }
             }
@@ -3276,10 +3219,7 @@ sub _buildup {
                         $status_msg .= " (autoload off)";
                     }
 
-                    $self->send_server_unsafe(
-                        PRIVMSG => $nickname,
-                        $status_msg
-                    );
+                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $status_msg );
                 }
 
             }
@@ -3304,10 +3244,7 @@ sub _buildup {
 
                         my $out_msg = "[plugin] $p reloaded - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                 }
                 else {
@@ -3332,10 +3269,8 @@ sub _buildup {
 
                         my $out_msg = "[plugin] $plugin_name reloaded - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                 }
             }
@@ -3352,10 +3287,7 @@ sub _buildup {
                         $conf->{plugins}{$p}{autoload} = 1;
                         my $out_msg = "[plugin] $p set autoload on - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                     $self->save_config();
 
@@ -3377,10 +3309,7 @@ sub _buildup {
 
                         my $out_msg = "[plugin] $plugin_name set autoload on - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                 }
             }
@@ -3397,10 +3326,7 @@ sub _buildup {
                         $conf->{plugins}{$p}{autoload} = 0;
                         my $out_msg = "[plugin] $p set autoload off - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                     $self->save_config();
 
@@ -3422,10 +3348,7 @@ sub _buildup {
 
                         my $out_msg = "[plugin] $plugin_name set autoload off - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe(
-                            PRIVMSG => $nickname,
-                            $msg
-                        );
+                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                     }
                 }
             }
@@ -3476,7 +3399,7 @@ sub _buildup {
             $usage = $self->usage_general if $usage eq '';
 
             for my $line ( split /\n/, $usage ) {
-                $self->send_server_unsafe( PRIVMSG => $nickname, $line );
+                $self->send_server_unsafe( $self->{message_transport} => $nickname, $line );
 
                 #$self->{con}->send_long_message ("utf8", 0, "PRIVMSG\001ACTION", $nickname, $line);
             }
@@ -3498,56 +3421,12 @@ sub _buildup {
                 String::IRC->new($running_elapsed)->bold
             );
             my $msg = $self->_chat_encrypt( $who, $basic_info );    #, $self->{keys}->[0] );
-            $self->send_server_unsafe( PRIVMSG => $nickname, $msg );
-
+            $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
             return 1;
         },
         acl => $admin_access,
     );
 
-    #    $self->add_func(name => 'btc',
-    #        delegate => sub {
-    #            my ($who, $message, $channel, $channel_list) = @_;
-    #            my ($mode_map,$nickname,$ident) = $self->{con}->split_nick_mode($who);
-    #            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/btc_usd');
-    #            my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/btc_usd');
-    #            my $ret =  "[btc_usd\@btce] Last: $json->{btc_usd}->{last} Low: $json->{btc_usd}->{low} High: $json->{btc_usd}->{high} Avg: $json->{btc_usd}->{avg} Vol: $json->{btc_usd}->{vol}";
-    #            my $ret2 = "[btc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
-    #            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
-    #            $self->send_server_unsafe (PRIVMSG => $channel, $ret2);
-    #
-    #            return 1;
-    #        },
-    #        acl => $admin_access,
-    #    );
-    #
-    #    $self->add_func(name => 'ltc',
-    #        delegate => sub {
-    #            my ($who, $message, $channel, $channel_list) = @_;
-    #            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/ltc_usd');
-    #            my $json2 = $self->fetch_json('https://crypto-trade.com/api/1/ticker/ltc_usd');
-    #            my $ret =  "[ltc_usd\@btce] Last: $json->{ltc_usd}->{last} Low: $json->{ltc_usd}->{low} High: $json->{ltc_usd}->{high} Avg: $json->{ltc_usd}->{avg} Vol: $json->{ltc_usd}->{vol}";
-    #            my $ret2 = "[ltc_usd\@ct]   Last: $json2->{data}->{last} Low: $json2->{data}->{low} High: $json2->{data}->{high} Vol(usd): $json2->{data}->{vol_usd}";
-    #
-    #            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
-    #            $self->send_server_unsafe (PRIVMSG => $channel, $ret2);
-    #
-    #            return 1;
-    #        },
-    #        acl => $admin_access,
-    #    );
-    #
-    #    $self->add_func(name => 'eur2usd',
-    #        delegate => sub {
-    #            my ($who, $message, $channel, $channel_list) = @_;
-    #            my $json = $self->fetch_json('https://btc-e.com/api/3/ticker/eur_usd');
-    #            my $ret = "[eur_usd] Last: $json->{eur_usd}->{last} Low: $json->{eur_usd}->{low} High: $json->{eur_usd}->{high} Avg: $json->{eur_usd}->{avg} Vol: $json->{eur_usd}->{vol}";
-    #            $self->send_server_unsafe (PRIVMSG => $channel, $ret);
-    #
-    #            return 1;
-    #        },
-    #        acl => $all_access_except_blacklist,
-    #    );
 
     $self->{con}->reg_cb(
         connect => sub {
@@ -5798,13 +5677,6 @@ sub usage_blacklist {
     return $h;
 } ## ---------- end sub usage_blacklist
 
-# This should really be confined to StockMarket.pm but I will make an exception
-# until 'usage' for plugins is implemented.
-sub usage_stockmarket {
-
-    my ( $self, $subkey ) = @_;
-
-}
 
 1;
 

@@ -121,6 +121,7 @@ my $cb = Hadouken->new_with_options(
     bitly_user_id => $config{bitly_user_id}
         || '',                                  # To disable shortening, remove from config!
     bitly_api_key => $config{bitly_api_key} || '',
+    message_transport => $config{message_transport} || 'PRIVMSG',
     private_rsa_key_filename => $rsakey_filename,
     private_rsa_key_password => $config{rsa_key_password} || '',
     blowfish_key => $config{blowfish_key} || 'hadoukeyletmein', # Blowfish key
