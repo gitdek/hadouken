@@ -196,12 +196,15 @@ Commands for management of channels:
 ***
 Hadouken has been tested on the following versions of perl:
 
-*  perl-5.16.3
-*  perl-5.19.0
-*  perl-5.19.8
-*  perl-5.20.1
-*  perl-5.21.0
-*  perl-5.21.6
+* perl-5.30
+* perl-5.28
+* perl-5.26
+* perl-5.24
+* perl-5.22
+* perl-5.20
+* perl-5.18
+* perl-5.16
+* perl-5.14
 
 
 These dependencies may not be satisfied, but this is very rare.
