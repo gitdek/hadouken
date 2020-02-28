@@ -22,7 +22,7 @@ chdir "../data/geoip/" or die("Failed to change to directory: $!");
 
 $cwd = getcwd();
 # print "current dir is $cwd\n";
-system("gzip -dqk *.gz");
+system("gzip -dfqk *.gz");
 
 print "Finished decompressing.\n";
 #my $geoip_gzip = "$path../data../geoip/";

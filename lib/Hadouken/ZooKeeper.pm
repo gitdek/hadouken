@@ -43,7 +43,6 @@ High level class for communicating with ZooKeeper
 The session timout used for the ZooKeeper connection.
  
 =cut
- 
 
 has timeout => ( is => 'rw', isa => 'Int', default => sub { 30 } );
 
@@ -56,60 +55,58 @@ A comma separated list of ZooKeeper server hostnames and ports.
  
 =cut
 
-has zk_servers   => (
+has zk_servers => (
     is      => 'rw',
     isa     => 'Str',
     default => sub { 'localhost:2181' }
 );
 
-has root_path   => (
+has root_path => (
     is      => 'rw',
     isa     => 'Str',
     default => sub { '/hadouken' }
 );
 
-has leader_elect_time => ( is => 'ro', isa => 'Str', writer   => '_set_leader_time' );
+has leader_elect_time => ( is => 'ro', isa => 'Str', writer => '_set_leader_time' );
 
 sub BUILD {
-    my ($self, $args) = @_;
+    my ( $self, $args ) = @_;
 
     $self->{zk_watch} = undef;
-    $self->{c}   = AnyEvent->condvar;
-}
- 
+    $self->{c}        = AnyEvent->condvar;
+} ## ---------- end sub BUILD
 
-sub gen_seq_name { hostname . ".PID.$$-" }
+sub gen_seq_name   { hostname . ".PID.$$-" }
 sub split_seq_name { shift =~ /^(.+-)(\d+)$/; $1, $2 }
 
-
 sub _start {
-	warn "START CALLED\n";
+    warn "START CALLED\n";
 
-	my ($self, $args) = @_;
+    my ( $self, $args ) = @_;
     $self->{zk} = ZooKeeper->new( hosts => $self->zk_servers );
 
     warn "CREATED NEW ZOOKEEPER";
 
-    $self->{zk}->create($self->root_path) unless $self->{zk}->exists($self->root_path);
+    $self->{zk}->create( $self->root_path ) unless $self->{zk}->exists( $self->root_path );
 
-	my $lockname = gen_seq_name();
-	my $path;
-	$path .= $self->root_path;
-	$path .= "/";
-	$path .= $lockname;
+    my $lockname = gen_seq_name();
+    my $path;
+    $path .= $self->root_path;
+    $path .= "/";
+    $path .= $lockname;
 
-	warn "Path:$path";
+    warn "Path:$path";
 
     my $lock = $self->{zk}->create(
         $path,
-        ephemeral => 1, sequential => 1,
-        acl => ZOO_OPEN_ACL_UNSAFE,
+        ephemeral  => 1,
+        sequential => 1,
+        acl        => ZOO_OPEN_ACL_UNSAFE,
     );
 
-	my ($basename, $n) = split_seq_name $lock;
+    my ( $basename, $n ) = split_seq_name $lock;
 
-
-}
+} ## ---------- end sub _start
 
 sub DEMOLISH {
     warn "DEMOLISH ENTER";
@@ -118,7 +115,6 @@ sub DEMOLISH {
 sub DESTROY {
 
 }
-
 
 no Moose;
 __PACKAGE__->meta->make_immutable;
