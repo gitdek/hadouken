@@ -22,6 +22,8 @@ WriteMakefile(
         'List::MoreUtils'       => 0,
         'List::Util'            => 0,
         'AnyEvent'              => 0,
+        'AnyEvent::HTTP'        => 0,
+        'AnyEvent::HTTP::Request' => 0,
         'AnyEvent::DNS'         => 0,
         'AnyEvent::Whois::Raw'  => 0,
         'HTML::TokeParser'      => 0,
@@ -84,7 +86,7 @@ WriteMakefile(
     },
     PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
-        'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm',
+        'lib/Hadouken/AsyncSocket.pm' => '$(INST_LIB)/Hadouken/AsyncSocket.pm',
         'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm',
         #'lib/Hadouken/ZooKeeper.pm' => '$(INST_LIB)/Hadouken/ZooKeeper.pm',
         'bin/plugins/StockMarket.pm' => '$(INST_LIB)/Hadouken/Plugin/StockMarket.pm',

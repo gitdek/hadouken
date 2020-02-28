@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-
+BEGIN { eval "use blib" }
 use v5.14;
 
 use Test::More;
@@ -11,7 +11,7 @@ use ExtUtils::MakeMaker qw/prompt/;
 use vars qw/$REMOTE_TESTS/;
 
 BEGIN {
-    use_ok('AsyncSocket');
+    use_ok('Hadouken::AsyncSocket;');
     use_ok('AnyEvent');
 
     require_ok('HTTP::Cookies');
@@ -23,11 +23,11 @@ $REMOTE_TESTS = 'y';
 
 #$REMOTE_TESTS ||='';
 
-diag("Testing AsyncSocket $AsyncSocket::VERSION, Perl $], $^X");
+diag("Testing Hadouken::AsyncSocket $Hadouken::AsyncSocket::VERSION, Perl $], $^X");
 
 my $testurl = 'http://www.google.com';
 
-my $asock = new_ok( 'AsyncSocket' => [ timeout => 30 ] );
+my $asock = new_ok( 'Hadouken::AsyncSocket' => [ timeout => 30 ] );
 
 $asock->timeout(5);
 

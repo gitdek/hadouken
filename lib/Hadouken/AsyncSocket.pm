@@ -1,17 +1,36 @@
-package AsyncSocket;
+package Hadouken::AsyncSocket;
 
 use strict;
 use warnings;
 use utf8;
 
-use AnyEvent::HTTP        ();
+use Errno;
+use AnyEvent;
+use AnyEvent::HTTP;
+use AnyEvent::HTTP::Request;
+use AnyEvent::HTTP::Response;
+use AnyEvent::Util;
+use AnyEvent::Socket;
+use AnyEvent::Handle;
 use HTTP::Request::Common ();
 use HTTP::Request;
 use HTTP::Response;
 use HTTP::Cookies;
-use Any::Moose;
 
-our $VERSION = '0.01';
+use Time::HiRes qw(time);
+use LWP::UserAgent;
+use Log::Log4perl qw( get_logger );
+use Encode;
+use Moose;
+use Moose::Util::TypeConstraints;
+use namespace::autoclean;
+
+
+our $VERSION = '0.02';
+
+
+subtype 'Hadouken::AsyncSocket::Cookies' => as class_type('HTTP::Cookies');
+coerce 'Hadouken::AsyncSocket::Cookies' => from 'HashRef' => via { HTTP::Cookies->new( %{$_} ) };
 
 # This will handle asynchronous DNS, HTTP and other sockets.
 
@@ -21,11 +40,40 @@ has agent   => (
     isa     => 'Str',
     default => sub { 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)' }
 );                                              #join "/", __PACKAGE__, $VERSION });
-has cookie_jar => (
-    is      => 'rw',
-    isa     => 'HTTP::Cookies',
-    default => sub { my $jar = HTTP::Cookies->new; $jar; }
-);
+
+has cookies => (is => 'rw', isa => 'Hadouken::AsyncSocket::Cookies', coerce => 1, default => sub { HTTP::Cookies->new });
+has proxypac =>     ( is => 'rw', isa => 'Str', required => 0 );
+has proxyhost =>    ( is => 'rw', isa => 'Str', required => 0 );
+has proxyport =>    ( is  => 'rw', isa => subtype( 'Int' => where { $_ > 0} ), required => 0 );
+has proxytype =>    ( is => 'rw', isa => enum([ qw(none https socks pac) ]), default => 'none' );
+has useragent =>    ( is => 'rw', isa => 'Str', required => 0 );
+
+sub BUILD {
+    my $self = shift;
+    my $args = shift;
+
+    $self->{debug} = $args->{debug} || 0;
+    $self->{slave} = $args->{slave} || undef;
+    $self->{hexdump} = $args->{hexdump} || 0;
+
+    $self->{sock} = undef;
+    $self->{socket} = undef;
+    # Global handlers to be propagated to all sub-classes.
+    $self->{handlers} => {};
+
+    $self->{cv} = AnyEvent->condvar( cb => sub { warn "done WTF"; });;
+    $self->{cbresult} = undef;
+
+
+    $self->{socket} = LWP::UserAgent->new(
+        keep_alive => 1,
+        agent => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:73.0) Gecko/20100101 Firefox/73.0',
+        timeout => 60,
+        ssl_opts => { verify_hostname => 0 },
+        requests_redirectable => ['GET', 'HEAD', 'POST']
+    );
+
+}
 
 sub get    { _request( GET    => @_ ) }
 sub head   { _request( HEAD   => @_ ) }
@@ -46,7 +94,7 @@ sub request {
     my ( $self, $request, $cb ) = @_;
 
     $request->headers->user_agent( $self->agent );
-    $self->cookie_jar->add_cookie_header($request);
+    $self->cookies->add_cookie_header($request);
 
     my %options = (
         timeout => $self->timeout,
@@ -75,12 +123,13 @@ sub request {
         my $res = HTTP::Response->new( $header->{Status}, $header->{Reason} );
         $res->request($request);
         $res->header(%$header);
-        $self->cookie_jar->extract_cookies($res);
+        $self->cookies->extract_cookies($res);
         $cb->( $body, $header );
     };
 } ## ---------- end sub request
 
-no Any::Moose;
+
+no Moose;
 __PACKAGE__->meta->make_immutable;
 
 1;
