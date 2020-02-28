@@ -1,55 +1,3 @@
-#package Hadouken::ZooKeeper;
-#
-                    #if($comment =~ /\n/) {
-#use strict;
-#use warnings;
-#
-#
-#use Try::Tiny;
-#use Net::ZooKeeper qw(:events :node_flags :acls);
-#use Redis;
-#use Params::Validate qw(:all);
-#
-#sub new {
-#    my $class = shift;
-#
-#    my $p = validate(
-#        @_,
-#        {
-#            zk_servers     => { type => SCALAR,  default => '' },
-#            zk_server_path => { type => SCALAR,  default => '/redis/server' },
-#            redis_server   => { type => SCALAR,  default => '127.0.0.1:6378' },
-#            sharded_id     => { type => SCALAR,  default => 0 },
-#            data           => { type => SCALAR,  default => 0 },
-#            debug          => { type => BOOLEAN, default => undef },
-#        }
-#    );
-#    my $self = $p;
-#    bless $self, $class;
-#
-#    # connect to zk
-#    $self->{zkh} = Net::ZooKeeper->new( $self->{zk_servers} );
-#    if ( !$self->{zkh} ) {
-#        return;
-#    }
-#    $self->{zk_watch} = undef;
-#
-#    # if not created create path
-#    my $path_tmpl = $self->{zk_server_path} . '/cluster/' . $self->{sharded_id};
-#    $self->_create_cyclic_path($path_tmpl);
-#
-#    # check already running manager is exists.
-#    for my $child ( $self->{zkh}->get_children($path_tmpl) ) {
-#        if ( $self->{zkh}->get( $path_tmpl . "/$child" ) eq $self->{redis_server} ) {
-#            print "already running manager is exists\n" if $self->{debug};
-#            return;
-#        }
-#    }
-#    return $self;
-#} ## ---------- end sub new
-#
-#1;
-
 package Hadouken;
 
 use 5.014;
@@ -90,7 +38,6 @@ our %EXPORT_TAGS = ( acl_modes =>
 our $VERSION = "0.9.3";
 our $AUTHOR  = "dek";
 
-#use Data::Dumper;
 use Data::Printer alias => 'Dumper', colored => 1;
 
 use Hadouken::DH1080;
@@ -216,12 +163,43 @@ my @commands = (
         channel_only  => 1
     },
 
-    {name => 'lq',                  regex => '(lq|lastquote)$',         comment => 'get most recently added quote', channel_only => 1 },
-    {name => 'aq',                  regex => '(aq|addquote)\s.+?',      comment => 'add a quote', channel_only => 1 },
-    {name => 'dq',                  regex => '(dq|delquote)\s.+?', ,    comment => 'delete quote', channel_only => 1 },
-    {name => 'fq',                  regex => '(fq|findquote)\s.+?',     comment => 'find a quote', channel_only => 1 },
-    {name => 'rq',                  regex => '(rq|randquote)$',         comment => 'get a random quote', channel_only => 1 },
-    {name => 'q',                   regex => '(q|quote)\s.+?',          comment => 'get a quote by index(es)', channel_only => 1 },
+    {
+        name         => 'lq',
+        regex        => '(lq|lastquote)$',
+        comment      => 'get most recently added quote',
+        channel_only => 1
+    },
+    {
+        name         => 'aq',
+        regex        => '(aq|addquote)\s.+?',
+        comment      => 'add a quote',
+        channel_only => 1
+    },
+    {
+        name  => 'dq',
+        regex => '(dq|delquote)\s.+?',
+        ,
+        comment      => 'delete quote',
+        channel_only => 1
+    },
+    {
+        name         => 'fq',
+        regex        => '(fq|findquote)\s.+?',
+        comment      => 'find a quote',
+        channel_only => 1
+    },
+    {
+        name         => 'rq',
+        regex        => '(rq|randquote)$',
+        comment      => 'get a random quote',
+        channel_only => 1
+    },
+    {
+        name         => 'q',
+        regex        => '(q|quote)\s.+?',
+        comment      => 'get a quote by index(es)',
+        channel_only => 1
+    },
     {
         name    => 'commands',
         regex   => '(commands|cmds)$',
@@ -314,14 +292,7 @@ sub new {
             file   => "STDOUT",
             layout => '%d %Z %m{indent=2,chomp}%n'
         }
-    );                                          #  %Z
-
-    #my $logger = get_logger();
-    #$logger->debug("Debug message\nWeee\nWeee");
-
-    #$logger->warn("Warning");
-    #$logger->info("Info");
-    # $logger->notify("Notify");
+    );
 
     return $self;
 } ## ---------- end sub new
@@ -334,10 +305,8 @@ sub debug {
     }
 
     my $logger = get_logger();
-    $logger->debug($text);                      #"< " . $text . "\t$nick\t" . $params . "\n" );
+    $logger->debug($text);
 
-    #say STDERR "[".$self->username."] $line";
-    #say STDERR "$line";
 } ## ---------- end sub debug
 
 sub _safedelay_set {
@@ -453,8 +422,6 @@ sub load_plugin {
 
         next unless $plugin =~ /^$plugin_name$/i;
 
-        # next unless $plugin eq $plugin_name;
-
         my $m             = undef;
         my $command_regex = undef;
 
@@ -497,8 +464,6 @@ sub unload_plugin {
 
     foreach my $plugin ( keys %{ $self->loaded_plugins } ) {
 
-        # next unless ($plugin eq $plugin_name); # EXACT MATCH ONLY!
-
         next unless $plugin =~ /^$plugin_name$/i;
 
         $ret = $self->unload_class( 'Hadouken::Plugin::' . $plugin );
@@ -520,8 +485,6 @@ sub unload_class {
     my ( $self, $class ) = @_;
 
     no strict 'refs';
-
-    # return unless Class::Inspector->loaded( $class );
 
     # Flush inheritance caches
     @{ $class . '::ISA' } = ();
@@ -548,8 +511,6 @@ sub load {
 
     # it's safe to die here, mostly this call is eval'd.
     die "Cannot load module without a name" unless $module;
-
-    #die("Module $module already loaded") if $self->_plugin($module);
 
     my $filename = $module;
     $filename =~ s{::}{/}g;
@@ -596,8 +557,6 @@ sub load {
 
     die "->new didn't return an object" unless ( $m and ref($m) );
     die( ref($m) . " isn't a $module" ) unless ref($m) =~ /\Q$module/;
-
-    #$self->add_handler( $m, $module );
 
     return $m;
 } ## ---------- end sub load
@@ -865,7 +824,6 @@ before 'send_server_long_safe' => sub {
     if ( $self->{burst_lines} >= 4 ) {
         sleep( $self->safe_delay );
 
-        #Time::HiRes::sleep($self->safe_delay);
         $self->{burst_lines} = 0;
     }
 };
@@ -2395,8 +2353,6 @@ sub _buildup {
 
             splice( @{ $self->{quotesdb} }, ( int($arg) - 1 ), 1 );
 
-            #my $si = String::IRC->new($arg)->bold;
-
             $self->send_server_unsafe(
                 PRIVMSG => $channel,
                 'Quote #' . $arg . ' has been deleted.'
@@ -2767,8 +2723,6 @@ sub _buildup {
 
             return unless defined $cmd && length $cmd;
 
-            #return unless defined $arg && defined $cmd && length $cmd && length $arg;
-
             $cmd = lc($cmd);
 
             if ( $cmd eq 'add' ) {
@@ -2802,7 +2756,6 @@ sub _buildup {
                 warn "* WHITELIST LIST $owner";
                 warn "* WHITELIST LIST $who";
 
-                #if($self->matches_mask($owner,$who)) {
                 for my $wl_row ( @{ $self->{whitelistdb} } ) {
                     my $entry = $wl_row->[0];
                     $entry .= " " . $wl_row->[1];
@@ -2815,10 +2768,7 @@ sub _buildup {
                     my $msg = $self->_chat_encrypt( $who, $out_msg );
 
                     $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
-                    #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
                 }
-
-                #}
             }
 
             return 1;
@@ -2835,8 +2785,6 @@ sub _buildup {
             my ( undef, $cmd, $arg ) = split( / /, $message, 3 );
 
             return unless defined $cmd && length $cmd;
-
-            #return unless defined $arg && defined $cmd && length $cmd && length $arg;
 
             $cmd = lc($cmd);
 
@@ -2866,8 +2814,6 @@ sub _buildup {
                 }
             }
             elsif ( $cmd eq 'list' || $cmd eq 'ls' ) {
-
-                #my $owner = '*!*dek@butche.red';
                 my $owner = $self->normalize_mask( $self->{admin} );
 
                 #warn "* BLACKLIST LIST $owner";
@@ -2883,8 +2829,10 @@ sub _buildup {
                         my $out_msg = "[blacklist] $entry";
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
-                        #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                 }
             }
@@ -2923,7 +2871,10 @@ sub _buildup {
                         my $out_msg =
                             "[channel] mode for $chan_name set to $current_mode - > by $nickname";
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                         return 1;
                     }
 
@@ -2957,7 +2908,10 @@ sub _buildup {
                         }
 
                         $msg = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
 
                     }
                     else {                      # Trying to get singular mode value perhaps?
@@ -2972,7 +2926,10 @@ sub _buildup {
 
                         my $out_msg = "[channel] $chan_name: $current_mode";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
 
                     return 1;
@@ -3018,20 +2975,6 @@ sub _buildup {
                     my $msg          = $self->_chat_encrypt( $who, $out_msg );
                     $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
-
-                #                    for my $admin_row (@{$self->{adminsdb}}) {
-                #                        my $entry = $admin_row->[0];
-                #                        $entry .= " ".$admin_row->[1];
-                #                        $entry .= " created ";
-                #                        $entry .= scalar(gmtime($admin_row->[3]));
-                #                        $entry .= " added by ".$admin_row->[4] if defined $admin_row->[4];
-                #                        my $out_msg = "[admin] $entry";
-                #
-                #                        my $msg = $self->_chat_encrypt( $who, $out_msg );
-                #                        $self->send_server_unsafe (PRIVMSG => $nickname, $msg);
-                #                        #$self->send_server_unsafe (PRIVMSG => $nickname, $entry);
-                #                    }
-                #}
             }
 
             return 1;
@@ -3046,8 +2989,6 @@ sub _buildup {
             my ( $mode_map, $nickname, $ident ) = $self->{con}->split_nick_mode($who);
 
             my ( $cmd, $name, $arg ) = split( / /, $message, 3 );
-
-            # return unless defined $arg && defined $name && length $arg && length $name;
 
             # They probably meant this.
             if ( defined $name && lc($name) eq 'ls' ) {
@@ -3101,7 +3042,10 @@ sub _buildup {
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
 
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                 }
             }
@@ -3121,7 +3065,10 @@ sub _buildup {
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
 
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                 }
                 else {
@@ -3143,15 +3090,15 @@ sub _buildup {
 
                         my $msg = $self->_chat_encrypt( $who, $out_msg );
 
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                 }
             }
             elsif ( $arg eq 'status' ) {
                 if ( $name eq '*' || $name eq 'all' ) {
-
-                    #my $si1 = String::IRC->new('All Available Plugins:')->bold;
-                    #$self->send_server_unsafe (NOTICE => $nickname, $si1);
 
                     # We do this because of central installed and locally installed modules.
                     my @avail = $self->available_modules();
@@ -3219,7 +3166,10 @@ sub _buildup {
                         $status_msg .= " (autoload off)";
                     }
 
-                    $self->send_server_unsafe( $self->{message_transport} => $nickname, $status_msg );
+                    $self->send_server_unsafe(
+                        $self->{message_transport} => $nickname,
+                        $status_msg
+                    );
                 }
 
             }
@@ -3244,7 +3194,10 @@ sub _buildup {
 
                         my $out_msg = "[plugin] $p reloaded - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                 }
                 else {
@@ -3270,7 +3223,10 @@ sub _buildup {
                         my $out_msg = "[plugin] $plugin_name reloaded - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
 
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                 }
             }
@@ -3287,7 +3243,10 @@ sub _buildup {
                         $conf->{plugins}{$p}{autoload} = 1;
                         my $out_msg = "[plugin] $p set autoload on - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                     $self->save_config();
 
@@ -3309,7 +3268,10 @@ sub _buildup {
 
                         my $out_msg = "[plugin] $plugin_name set autoload on - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                 }
             }
@@ -3326,7 +3288,10 @@ sub _buildup {
                         $conf->{plugins}{$p}{autoload} = 0;
                         my $out_msg = "[plugin] $p set autoload off - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                     $self->save_config();
 
@@ -3348,7 +3313,10 @@ sub _buildup {
 
                         my $out_msg = "[plugin] $plugin_name set autoload off - > by $nickname";
                         my $msg     = $self->_chat_encrypt( $who, $out_msg );
-                        $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
+                        $self->send_server_unsafe(
+                            $self->{message_transport} => $nickname,
+                            $msg
+                        );
                     }
                 }
             }
@@ -3427,7 +3395,6 @@ sub _buildup {
         acl => $admin_access,
     );
 
-
     $self->{con}->reg_cb(
         connect => sub {
             my ( $con, $err ) = @_;
@@ -3458,6 +3425,7 @@ sub _buildup {
                 warn "* Reconnecting in " . $self->{reconnect_delay} . "\n";
                 Time::HiRes::sleep $self->{reconnect_delay};
                 warn "* Trying to reconnect\n";
+                $self->{reconnecting} = 1;
                 $self->_start;
 
             }
@@ -5676,7 +5644,6 @@ sub usage_blacklist {
 
     return $h;
 } ## ---------- end sub usage_blacklist
-
 
 1;
 

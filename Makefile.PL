@@ -86,6 +86,7 @@ WriteMakefile(
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
         'lib/AsyncSocket.pm' => '$(INST_LIB)/AsyncSocket.pm',
         'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm',
+        #'lib/Hadouken/ZooKeeper.pm' => '$(INST_LIB)/Hadouken/ZooKeeper.pm',
         'bin/plugins/StockMarket.pm' => '$(INST_LIB)/Hadouken/Plugin/StockMarket.pm',
         'bin/plugins/ExamplePlugin.pm' => '$(INST_LIB)/Hadouken/Plugin/ExamplePlugin.pm',
         'bin/plugins/IMDB.pm' => '$(INST_LIB)/Hadouken/Plugin/IMDB.pm',
