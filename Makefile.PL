@@ -1,17 +1,21 @@
-use inc::Module::Install;
+#use ExtUtils::Depends;
+use ExtUtils::MakeMaker;
 
-license 'gpl';
+
+#license 'gpl';
 
 WriteMakefile(
     NAME                => 'Hadouken',
     AUTHOR              => q{dek <dek@ha.douken.co>},
     VERSION_FROM        => 'lib/Hadouken.pm',
+    XSMULTI => 1,
     ABSTRACT            => 'Hadouken',
     CONFIGURE_REQUIRES  => {
-        'ExtUtils::MakeMaker'   => 0,
+        'ExtUtils::MakeMaker'   => '7.14', # XSMULTI
+        'ExtUtils::Depends'     => '0.402',
         'YAML',                 => 0,
         'Test::More'            => 0,
-        'File::Copy'            => 0
+        'File::Copy'            => 0,
     },
     PREREQ_PM           => {
         'Scalar::Util'          => 0,
@@ -85,10 +89,12 @@ WriteMakefile(
         'Net::SSLeay'           => 0,
         'ZooKeeper'             => 0,
         'ZooKeeper::XS'         => 0,
+        'XSLoader'              => 0,
     },
     PM => { # We don't want to install ALL plugins by default.
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
         'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm',
+        'lib/Hadouken/Base64.pm' => '$(INST_LIB)/Hadouken/Base64.pm',
         'lib/Hadouken/AsyncSocket.pm' => '$(INST_LIB)/Hadouken/AsyncSocket.pm',
         'lib/Hadouken/ZooKeeper.pm' => '$(INST_LIB)/Hadouken/ZooKeeper.pm',
         'bin/plugins/StockMarket.pm' => '$(INST_LIB)/Hadouken/Plugin/StockMarket.pm',
@@ -111,7 +117,13 @@ WriteMakefile(
         'bin/deflategeoip.pl' => 'hi',
     },
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
+    LIBS              => ['-lm' ], # e.g., '-lm'
+    DEFINE            => '',
 );
 
-auto_install();
 
+#auto_install();
+
+package MY;
+ 
+use ExtUtils::MakeMaker::BigHelper qw(:MY);

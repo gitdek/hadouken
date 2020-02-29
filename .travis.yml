@@ -1,7 +1,13 @@
 # explore the config here: https://config.travis-ci.com/explore
 
+os: linux
 language: perl
+
 perl:
+  - 'blead'
+  - 'blead-thr'
+  - 'dev'
+  - 'dev-thr'
   - '5.30'
   - '5.28'
   - '5.26'
@@ -13,23 +19,27 @@ perl:
   - '5.14'
 env:
   global:
-  - TEST_PARTITIONS=4
-  - RELEASE_TESTING=1
-  - secure: jTmfy4vAQ3e/hP8aEauDsPyARBqgd7hP3EfvWAWtFJhMukc4ImEFSYe5WNvVs8oQypJCq0uzP6o8ZeVLwGwPQEd29C2YJZH2Dyjky7Jxwc+V2hMv8ILK4R9ADyg3FNOOA+NSRNn5kXzb2vQEviHdB5Xugj+JjQt5pXxu2nw6HyM=
-matrix:
-  include:
-  - perl: '5.20'
-    env: COVERAGE=1 TEST_PARTITION=1
-  - perl: '5.20'
-    env: COVERAGE=1 TEST_PARTITION=2
-  - perl: '5.20'
-    env: COVERAGE=1 TEST_PARTITION=3
-  - perl: '5.20'
-    env: COVERAGE=1 TEST_PARTITION=4
+    - TEST_PARTITIONS=4
+    - RELEASE_TESTING=1
+    - LAZY_DH1080=1
+    - secure: jTmfy4vAQ3e/hP8aEauDsPyARBqgd7hP3EfvWAWtFJhMukc4ImEFSYe5WNvVs8oQypJCq0uzP6o8ZeVLwGwPQEd29C2YJZH2Dyjky7Jxwc+V2hMv8ILK4R9ADyg3FNOOA+NSRNn5kXzb2vQEviHdB5Xugj+JjQt5pXxu2nw6HyM=
+jobs:
   allow_failures:
-  - perl: blead
-  - perl: blead-thr
-  fast_finish: false
+    - perl: blead
+    - perl: blead-thr
+  fast_finish: true
+  include:
+    - perl: "5.20"
+      env: COVERAGE=1 TEST_PARTITION=1
+    - perl: "5.20"
+      env: COVERAGE=1 TEST_PARTITION=2
+    - perl: "5.20"
+      env: COVERAGE=1 TEST_PARTITION=3
+    - perl: "5.20"
+      env: COVERAGE=1 TEST_PARTITION=4
+cache:
+  directories:
+    - $HOME/perl5
 before_install:
   - sudo apt-get -y install libssl-dev libzookeeper-mt-dev
   - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
@@ -55,12 +65,12 @@ after_success:
 notifications:
   irc:
     template:
-    - "%{repository_name}#%{build_number} (%{branch} - %{commit} : %{author}): %{message}
+      - "%{repository_name}#%{build_number} (%{branch} - %{commit} : %{author}): %{message}
       -  Change view : %{compare_url} - Build details : %{build_url}"
     channels:
-    - irc.efnet.org#hadouken
-  on_success: always
-  on_failure: always
-  use_notice: true
-  skip_join: true
+      - irc.efnet.org#hadouken
+    on_success: always
+    on_failure: always
+    use_notice: true
+    skip_join: true
 

@@ -72,3 +72,4 @@ CHANGELOG.html
 MANIFEST
 
 /dev/
+lib/Hadouken/Base64.c
