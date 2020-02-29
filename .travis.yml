@@ -5,9 +5,7 @@ language: perl
 
 perl:
   - 'blead'
-  - 'blead-thr'
   - 'dev'
-  - 'dev-thr'
   - '5.30'
   - '5.28'
   - '5.26'
@@ -26,9 +24,7 @@ env:
 jobs:
   allow_failures:
     - perl: blead
-    - perl: blead-thr
     - perl: dev
-    - perl: dev-thr
   fast_finish: true
   include:
     - perl: "5.20"
