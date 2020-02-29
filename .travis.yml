@@ -27,6 +27,8 @@ jobs:
   allow_failures:
     - perl: blead
     - perl: blead-thr
+    - perl: dev
+    - perl: dev-thr
   fast_finish: true
   include:
     - perl: "5.20"
@@ -51,7 +53,8 @@ before_install:
 install:
   - cpan-install inc::Module::Install
   - cpan-install experimental
-  - cpan-install ExtUtils::MakeMaker~6.68 --deps
+  - cpan-install ExtUtils::MakeMaker~7.14 --deps
+  - cpan-install ExtUtils::MakeMaker::BigHelper
   - cpan-install --deps
   - cpan-install --coverage
 before_script:

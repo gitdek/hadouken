@@ -13,6 +13,7 @@ WriteMakefile(
     CONFIGURE_REQUIRES  => {
         'ExtUtils::MakeMaker'   => '7.14', # XSMULTI
         'ExtUtils::Depends'     => '0.402',
+        'ExtUtils::MakeMaker::BigHelper' => 0,
         'YAML',                 => 0,
         'Test::More'            => 0,
         'File::Copy'            => 0,
