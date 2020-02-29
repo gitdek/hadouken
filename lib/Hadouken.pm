@@ -41,7 +41,7 @@ our $AUTHOR  = "dek";
 use Data::Printer alias => 'Dumper', colored => 1;
 
 use Hadouken::DH1080;
-use AsyncSocket;
+use Hadouken::AsyncSocket;
 
 use Scalar::Util    ();
 use Cwd             ();
@@ -5331,7 +5331,7 @@ sub _asyncsock {
 
     unless ( defined $self->{asyncsock} ) {
 
-        $self->{asyncsock} = AsyncSocket->new();
+        $self->{asyncsock} = Hadouken::AsyncSocket->new();
 
         require HTTP::Cookies;
         $self->{asyncsock}->cookie_jar( HTTP::Cookies->new );

@@ -2,7 +2,8 @@
 
 use strict;
 use warnings;
-BEGIN { eval "use blib" }
+
+#BEGIN { eval "use blib" }
 use v5.14;
 
 use Test::More;
@@ -11,7 +12,7 @@ use ExtUtils::MakeMaker qw/prompt/;
 use vars qw/$REMOTE_TESTS/;
 
 BEGIN {
-    use_ok('Hadouken::AsyncSocket;');
+    use_ok('Hadouken::AsyncSocket');
     use_ok('AnyEvent');
 
     require_ok('HTTP::Cookies');
