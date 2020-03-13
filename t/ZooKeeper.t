@@ -15,6 +15,6 @@ diag("Testing Hadouken::ZooKeeper $Hadouken::ZooKeeper::VERSION, Perl $], $^X");
 
 my $zk = new_ok( 'Hadouken::ZooKeeper' => [ zk_servers => 'localhost:2181' ] );
 
-$zk->connect();
+#$zk->connect();
 
 done_testing();
