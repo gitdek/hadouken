@@ -9,7 +9,7 @@ use Data::Dumper;
 use HTML::TokeParser;
 use URI;
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 our $AUTHOR  = 'dek';
 
 # Description of this command.
@@ -72,21 +72,19 @@ sub command_run {
 sub calc {
     my ( $self, $expression ) = @_;
 
-    my $url = URI->new('http://www.google.com/search');
-    $url->query_form( q => $expression );
+    my $url = URI->new('https://www.google.com/search');
+
+    $url->query_form( q => "$expression=" );
 
     my $ret = undef;
 
     my $result = $self->{Owner}->_webclient->get($url);
 
-    $ret = $self->parse_calc_result( $result->content );
-    $ret =~ s/[^[:ascii:]]+//g;                 # if $ret;
+    warn length($result->decoded_content);
 
-    #$self->asyncsock->get($url, sub {
-    #        my ($body, $header) = @_;
-    #        $ret = $self->parse_calc_result($body);
-    #        $ret =~ s/[^[:ascii:]]+//g if $ret;
-    #    });
+    $ret = $self->parse_calc_result( $result->decoded_content );
+
+    $ret =~ s/[^[:ascii:]]+//g;
 
     return $ret;
 } ## ---------- end sub calc
@@ -99,14 +97,13 @@ sub parse_calc_result {
 
     my $res;
     my $p = HTML::TokeParser->new( \$html );
-    while ( my $token = $p->get_token ) {
+    while ( my $token = $p->get_token() ) {
         next
             unless ( $token->[0] || '' ) eq 'S'
-            && ( $token->[1] || '' ) eq 'img'
-            && ( $token->[2]->{src} || '' ) eq '/images/icons/onebox/calculator-40.gif';
+            && ( $token->[1] || '' ) eq 'span'
+            && ( $token->[2]->{class} || '' ) eq 'fYyStc';
 
-        $p->get_tag('h2');
-        $res = $p->get_trimmed_text('/h2');
+        $res = $p->get_trimmed_text();
         return $res;
     }
 
@@ -131,7 +128,7 @@ Calculator plugin which uses Google's API.
 
 =head1 AUTHOR
 
-dek - L<http://dek.codes/>
+dek <dek@whilefalsedo.com>
 
 =cut
 

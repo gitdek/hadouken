@@ -25,20 +25,25 @@ use Moose;
 use Moose::Util::TypeConstraints;
 use namespace::autoclean;
 
-our $VERSION = '0.02';
+use Data::UUID;
+
+no strict "subs";
+no strict "refs";
+use feature qw( switch say );
+use experimental qw(lexical_subs smartmatch);
+
+our $VERSION = '0.03';
 
 subtype 'Hadouken::AsyncSocket::Cookies' => as class_type('HTTP::Cookies');
 coerce 'Hadouken::AsyncSocket::Cookies'  => from 'HashRef' =>
     via { HTTP::Cookies->new( %{$_} ) };
-
-# This will handle asynchronous DNS, HTTP and other sockets.
 
 has timeout => ( is => 'rw', isa => 'Int', default => sub { 30 } );
 has agent   => (
     is      => 'rw',
     isa     => 'Str',
     default => sub { 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1)' }
-);                                              #join "/", __PACKAGE__, $VERSION });
+);
 
 has cookies => (
     is      => 'rw',
@@ -46,11 +51,17 @@ has cookies => (
     coerce  => 1,
     default => sub { HTTP::Cookies->new }
 );
+
 has proxypac  => ( is => 'rw', isa => 'Str', required => 0 );
 has proxyhost => ( is => 'rw', isa => 'Str', required => 0 );
 has proxyport => ( is => 'rw', isa => subtype( 'Int' => where { $_ > 0 } ), required => 0 );
 has proxytype => ( is => 'rw', isa => enum( [qw(none https socks pac)] ), default => 'none' );
-has useragent => ( is => 'rw', isa => 'Str', required => 0 );
+has useragent => (
+    is       => 'rw',
+    isa      => 'Str',
+    required => 0,
+    default  => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:73.0) Gecko/20100101 Firefox/73.0'
+);
 
 sub BUILD {
     my $self = shift;
@@ -66,17 +77,13 @@ sub BUILD {
     # Global handlers to be propagated to all sub-classes.
     $self->{handlers} => {};
 
-    $self->{cv}       = AnyEvent->condvar( cb => sub { warn "done WTF"; } );
+    $self->{cv}       = AnyEvent->condvar( cb => sub { warn "done"; } );
     $self->{cbresult} = undef;
 
-    $self->{socket} = LWP::UserAgent->new(
-        keep_alive => 1,
-        agent =>
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:73.0) Gecko/20100101 Firefox/73.0',
-        timeout               => 60,
-        ssl_opts              => { verify_hostname => 0 },
-        requests_redirectable => [ 'GET', 'HEAD', 'POST' ]
-    );
+    my $uuid = Data::UUID->new;
+    $self->{id} = $uuid->create_str();
+    undef $uuid;
+    $self->debug( "Hadouken::AsyncSocket initialized. UUID: " . $self->{id} );
 
 } ## ---------- end sub BUILD
 
@@ -98,16 +105,30 @@ sub _request {
 sub request {
     my ( $self, $request, $cb ) = @_;
 
+    $self->debug("SENDING REQUEST");
+    $self->debug( "A" x 50 );
+
     $request->headers->user_agent( $self->agent );
     $self->cookies->add_cookie_header($request);
 
     my %options = (
-        timeout => $self->timeout,
-        headers => $request->headers,
-        body    => $request->content,
+        timeout   => $self->timeout,
+        headers   => $request->headers,
+        body      => $request->content,
+        keepalive => 1,
+        ssl_opts  => { verify_hostname => 0 },
+        session   => $self->{id},               #re-use connection for this exact instance.
     );
 
     AnyEvent::HTTP::http_request $request->method, $request->uri, %options, sub {
+
+        #my $a_res = AnyEvent::HTTP::Response->new(@_);
+        #$self->hexdump(" Response", $a_res->header);
+
+        #my $http_res = $a_res->to_http_message;
+
+        #$self->debug("Status", $http_res->status_line);
+
         my ( $body, $header ) = @_;
 
         if ( defined $header->{'set-cookie'} ) {
@@ -133,9 +154,148 @@ sub request {
     };
 } ## ---------- end sub request
 
+# $request is an HTTP::Request
+sub request2 {
+    my ( $self, $request, $cb ) = @_;
+
+    $self->debug("SENDING REQUEST");
+    $self->debug( "A" x 50 );
+
+    my %params;                                 # = {};
+
+    $params{session} = $self->{id};
+
+    $request->header( 'user-agent' => $self->useragent );
+
+    my $req = AnyEvent::HTTP::Request->new(
+        $request,
+        {
+            cb     => sub { my ( $body, $header ) = @_; $cb->( $body, $header ); },
+            params => \%params,
+        }
+    );
+
+    $req->send();
+} ## ---------- end sub request2
+
+sub processPacket {
+    my ( $self, $resp ) = @_;
+
+    my $body = $resp->content;
+
+    #use Data::Dumper;
+    #print Dumper $resp;
+
+    $self->debug( "SUCCESS " . $resp->is_success );
+    $self->debug( "BODY IS " . length( ${ $resp->content_ref } ) . "BYTES!" );
+    $self->debug( ${ $resp->content_ref } );
+
+    #$self->{cv}->end();
+    return 0;
+} ## ---------- end sub processPacket
+
+sub addHandler {
+    my ( $self, %handlers ) = @_;
+
+    foreach my $key ( keys %handlers ) {
+        if ( ref( $handlers{$key} ) ne "CODE" ) {
+            warn "Handlers must be CODE references.";
+        }
+
+        $self->{handlers}->{ lc($key) } = $handlers{$key};
+        $self->debug("Global handler '$key' registered.");
+    }
+} ## ---------- end sub addHandler
+
+sub addHandlers {
+    return shift->addHandler(@_);
+}
+
+sub event {
+    my ( $self, $name, @args ) = @_;
+
+    $name = lc($name);
+
+    if ( exists $self->{handlers}->{$name} ) {
+        return $self->{handlers}->{$name}->( $self, @args );
+    }
+    elsif ( defined $self->{slave} ) {
+        return $self->{slave}->event( $name, $self, @args );
+    }
+
+    return;
+} ## ---------- end sub event
+
+sub hexdump {
+    my $self = shift;
+    return unless $self->{hexdump};
+
+    my ( $label, $data );
+    if ( scalar(@_) == 2 ) {
+        $label = shift;
+    }
+    $data = shift;
+
+    say "$label:" if ($label);
+
+    # Show 16 columns in a row.
+    my @bytes  = split( //, $data );
+    my $col    = 0;
+    my $buffer = '';
+    for ( my $i = 0; $i < scalar(@bytes); $i++ ) {
+        my $char    = sprintf( "%02x", unpack( "C", $bytes[$i] ) );
+        my $escaped = unpack( "C", $bytes[$i] );
+        if ( $escaped < 20 || $escaped > 126 ) {
+            $escaped = ".";
+        }
+        else {
+            $escaped = chr($escaped);
+        }
+
+        $buffer .= $escaped;
+        print "$char ";
+        $col++;
+
+        if ( $col == 8 ) {
+            print "  ";
+        }
+        if ( $col == 16 ) {
+            $buffer .= " " until length $buffer == 16;
+            print "  |$buffer|\n";
+            $buffer = "";
+            $col    = 0;
+        }
+    }
+    while ( $col < 16 ) {
+        print "   ";
+        $col++;
+        if ( $col == 8 ) {
+            print "  ";
+        }
+        if ( $col == 16 ) {
+            $buffer .= " " until length $buffer == 16;
+            print "  |$buffer|\n";
+            $buffer = "";
+        }
+    }
+    if ( length $buffer ) {
+        print "|$buffer|\n";
+    }
+} ## ---------- end sub hexdump
+
+sub debug {
+    my ( $self, $line ) = @_;
+
+    if ( !$self->{debug} ) {
+        return;
+    }
+
+    #say STDERR "[".$self->username."] $line";
+    say STDERR "$line";
+} ## ---------- end sub debug
+
 no Moose;
 __PACKAGE__->meta->make_immutable;
 
 1;
-
 

@@ -5,7 +5,7 @@ use warnings;
 
 use Hadouken ':acl_modes';
 
-use Yahoo::Weather;
+#use Yahoo::Weather;
 use TryCatch;
 
 # use Data::Dumper;
@@ -75,14 +75,33 @@ sub command_run {
         $arg =~ s/--?c//;
     }
 
-    my $summary = $self->_weather( $arg, $do_celsius );
+    my $summary = $self->_weather2( $arg, $do_celsius );
 
     if ( defined $summary && $summary ne '' ) {
-        $self->send_server( PRIVMSG => $channel, $summary );
+        for my $line ( split /\n/, $summary ) {
+            warn $line;
+            $self->send_server( PRIVMSG => $channel, $line );
+        }
     }
 
     return 1;
 } ## ---------- end sub command_run
+
+
+sub _weather2 {
+    my ( $self, $location, $do_celsius ) = @_;
+
+    my $url = URI->new("https://wttr.in/$location?0ATq");
+
+    my $ret = undef;
+
+    my $result = $self->{Owner}->_webclient->get($url);
+
+    warn length($result->decoded_content);
+
+    return $result->decoded_content;
+
+}
 
 sub _weather {
     my ( $self, $location, $do_celsius ) = @_;
@@ -278,7 +297,7 @@ Weather forecast plugin for Hadouken.
 
 =head1 AUTHOR
 
-dek - L<http://dek.codes/>
+dek <dek@whilefalsedo.com>
 
 =cut
 

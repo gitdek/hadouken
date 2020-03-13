@@ -154,7 +154,7 @@ Perform functions on IP addresses.
 
 =head1 AUTHOR
 
-dek - L<http://dek.codes/>
+dek <dek@whilefalsedo.com>
 
 =cut
 

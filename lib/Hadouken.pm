@@ -623,7 +623,7 @@ sub reload_config {
 sub randstring {
     my $length = shift || 8;
     return join "", map { ( "a" .. "z", 0 .. 9 )[ rand 36 ] } 1 .. $length;
-}
+} ## ---------- end sub randstring
 
 sub keyx_handler {
     my ( $self, $message, $user ) = @_;
@@ -5332,9 +5332,6 @@ sub _asyncsock {
     unless ( defined $self->{asyncsock} ) {
 
         $self->{asyncsock} = Hadouken::AsyncSocket->new();
-
-        require HTTP::Cookies;
-        $self->{asyncsock}->cookie_jar( HTTP::Cookies->new );
     }
 
     return $self->{asyncsock};

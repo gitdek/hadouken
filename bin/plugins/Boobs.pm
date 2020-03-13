@@ -108,7 +108,7 @@ fun. Specifically ones meaning boobs.
 
 =head1 AUTHOR
 
-dek - L<http://dek.codes/>
+dek <dek@whilefalsedo.com>
 
 =cut
 

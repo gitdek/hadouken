@@ -147,7 +147,7 @@ Google search plugin for Hadouken.
 
 =head1 AUTHOR
 
-dek - L<http://dek.codes/>
+dek <dek@whilefalsedo.com>
 
 =cut
 

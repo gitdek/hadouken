@@ -3,6 +3,8 @@ package Hadouken::ZooKeeper;
 use strict;
 use warnings;
 
+use Data::Printer alias => 'Dumper', colored => 1;
+
 use ZooKeeper;
 use ZooKeeper::XS;
 use ZooKeeper::Constants;
@@ -73,47 +75,54 @@ sub BUILD {
     my ( $self, $args ) = @_;
 
     $self->{zk_watch} = undef;
+    $self->{zk}       = undef;
     $self->{c}        = AnyEvent->condvar;
+
 } ## ---------- end sub BUILD
 
 sub gen_seq_name   { hostname . ".PID.$$-" }
 sub split_seq_name { shift =~ /^(.+-)(\d+)$/; $1, $2 }
 
-sub _start {
-    warn "START CALLED\n";
 
+sub connect {
     my ( $self, $args ) = @_;
+    
     $self->{zk} = ZooKeeper->new( hosts => $self->zk_servers );
 
     warn "CREATED NEW ZOOKEEPER";
 
     $self->{zk}->create( $self->root_path ) unless $self->{zk}->exists( $self->root_path );
 
-    my $lockname = gen_seq_name();
-    my $path;
-    $path .= $self->root_path;
-    $path .= "/";
-    $path .= $lockname;
+    my @children = $self->{zk}->get_children($self->root_path); #, watcher => sub { my $event = shift; $cv->send($event) });
 
-    warn "Path:$path";
+    warn Dumper(@children);
 
-    my $lock = $self->{zk}->create(
-        $path,
-        ephemeral  => 1,
-        sequential => 1,
-        acl        => ZOO_OPEN_ACL_UNSAFE,
-    );
 
-    my ( $basename, $n ) = split_seq_name $lock;
+    # my $lockname = gen_seq_name();
+    # my $path;
+    # $path .= $self->root_path;
+    # $path .= "/";
+    # $path .= $lockname;
+
+    # warn "Path:$path";
+
+    # my $lock = $self->{zk}->create(
+    #     $path,
+    #     ephemeral  => 1,
+    #     sequential => 1,
+    #     acl        => ZOO_OPEN_ACL_UNSAFE,
+    # );
+
+    # my ( $basename, $n ) = split_seq_name $lock;
 
 } ## ---------- end sub _start
 
 sub DEMOLISH {
-    warn "DEMOLISH ENTER";
+    warn "DEMOLISH enter.";
 }
 
 sub DESTROY {
-
+    warn "DESTROY() enter.";
 }
 
 no Moose;

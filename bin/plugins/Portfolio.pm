@@ -25,11 +25,12 @@ sub command_comment {
     my $ret = '';
     $ret .= "Financial Portfolio commands:\n";
     $ret .=
-        "  portfolio add [symbol] [shares] [optional:price] - If price is left empty, uses current. Shares can be negative for short position.\n";
+        "  portfolio add [symbol] [shares] [optional:price] - If price is left empty, uses current. ";
+        $ret .= "Shares can be negative for short position.\n";
     $ret .= "  portfolio remove [symbol]\n";
     $ret .= "  portfolio summary - Summary of your portfolio - alias to .portfolio\n";
 
-    #$ret .= "  portfolio link - Get a link to a pretty chart of your portfolio.\n";
+    # $ret .= "  portfolio link - Get a link to a pretty chart of your portfolio.\n";
 
     return $ret;
 } ## ---------- end sub command_comment
@@ -137,14 +138,10 @@ sub _portfolio_add {
 
         my $open_price = $self->quote($symbol);
 
-        #warn "Returned price: $open_price";
-
         return unless defined $open_price;      # && $open_price != 0;
 
         $price = $open_price;
     }
-
-    #if ( !exists $self->{_portfolio}{$nick}{$symbol} ) {
 
     my $key = "$symbol-" . time();
 
@@ -160,15 +157,12 @@ sub _portfolio_add {
         "$header Added $shares shares of $symbol at $price."
     );
 
-    # my %portfolio = %{ $self->{_portfolio} };
-
-    #warn Dumper(%portfolio);
-
     $self->_update_portfolio($nick);
 
     return 1;
 
 } ## ---------- end sub _portfolio_add
+
 
 sub _update_portfolio {
 
@@ -269,11 +263,12 @@ sub _portfolio_summary {
 
         my $header = sprintf "[%s] %s-%s", String::IRC->new($nick)->purple,
             String::IRC->new( uc $actual_symbol )->fuchsia, $symbol_epoch;
+
         my $line = sprintf "%s Shares: %s Price: %s Holdings: %s Buy Cost: %s P\/L: %s %s",
-            $header, $self->format_units($shares), $price, $self->format_units($holdings),
+            $header, $self->format_units($shares), $price,
+            $self->format_units($holdings),
             $self->format_units($buy_cost), $ppl, $pct;
 
-        #warn $line;
         $self->send_server( PRIVMSG => $channel, $line );
 
     }
@@ -282,7 +277,6 @@ sub _portfolio_summary {
     my $tbc = $self->{_portfolio}{$nick}{summary}{total_buy_cost};
     my $tpl = $self->{_portfolio}{$nick}{summary}{total_pl};
     my $tcp = sprintf '%.2f', $self->{_portfolio}{$nick}{summary}{change_percent};
-
     my $pct = '';
 
     if ( $tpl > 0 ) {
@@ -295,13 +289,13 @@ sub _portfolio_summary {
         $pct = String::IRC->new( $tcp . '%' )->grey;
     }
 
-    my $total_summary = sprintf "[%s] Total holdings: %s Total buy cost %s P\/L: %s %s",
-        String::IRC->new($nick)->purple, $self->format_units($th), $self->format_units($tbc),
+    my $total_summary
+        = sprintf "[%s] Total holdings: %s Total buy cost %s P\/L: %s %s",
+        String::IRC->new($nick)->purple, $self->format_units($th),
+        $self->format_units($tbc),
         $self->format_color($tpl), $pct;
 
     $self->send_server( PRIVMSG => $channel, $total_summary );
-
-    #warn $total_summary;
 
     return 1;
 } ## ---------- end sub _portfolio_summary
@@ -331,7 +325,8 @@ sub _load_portfolio {
 
     if ( -e $self->{Owner}->{ownerdir} . '/../data/portfolio.json' ) {
         warn "* Loading portfolio...";
-        open( my $fh, $self->{Owner}->{ownerdir} . '/../data/portfolio.json' ) or die $!;
+        open( my $fh, $self->{Owner}->{ownerdir} . '/../data/portfolio.json' )
+            or die $!;
         my $json_data;
         read( $fh, $json_data, -s $fh );        # Suck in the whole file
         close $fh;
@@ -371,11 +366,13 @@ sub price_lookup {
     warn "price_lookup for $symbol\n";
 
     my $url =
-        "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=0&skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
+        "http://quote.cnbc.com/quote-html-webservice/quote.htm?callback=webQuoteRequest&symbols=%s";
+        $url .= "&symbolType=symbol&requestMethod=quick&exthrs=1&extMode=&fund=1&entitlement=0&";
+        $url .= "skipcache=&extendedMask=1&partnerId=2&output=jsonp&noform=1";
 
     $url = sprintf "$url", "$symbol";
 
-    my $open_price;                             # = undef;
+    my $open_price;
 
     try {
         my $body = $self->{Owner}->_webclient->get($url)->decoded_content;
@@ -393,9 +390,10 @@ sub price_lookup {
 
         my $json = $self->_jsonify($json_object);
 
-        return unless defined $json && exists $json->{QuickQuoteResult}->{QuickQuote};
+        return
+            unless defined $json
+            && exists $json->{QuickQuoteResult}->{QuickQuote};
 
-        # my $summary;
         my @r;
 
         if ( ref( $json->{QuickQuoteResult}->{QuickQuote} ) eq 'ARRAY' ) {
@@ -416,10 +414,6 @@ sub price_lookup {
                 && exists $c->{last}
                 && exists $c->{change}
                 && exists $c->{change_pct};
-
-            #warn Dumper($c);
-
-            #warn "Last price: " . $c->{last};
 
             $open_price = $c->{last};
 
@@ -461,7 +455,9 @@ sub currency_convert {
 
                 my $parser = HTML::TokeParser->new( \$body );
                 while ( my $token = $parser->get_tag('tr') ) {
-                    next unless ( defined $token->[1] && exists $token->[1]{'class'} );
+                    next
+                        unless ( defined $token->[1]
+                        && exists $token->[1]{'class'} );
 
                     my $c = $token->[1]{'class'};
 
@@ -558,7 +554,7 @@ sub format_units {
 
 sub format_color {
     my $self  = shift;
-    my $value = shift;                          # || 0;
+    my $value = shift;
 
     my $ret = String::IRC->new($value);
 
@@ -596,7 +592,7 @@ Financial Portfolio plugin for Hadouken.
 
 =head1 AUTHOR
 
-dek - L<http://dek.codes/>
+dek <dek@whilefalsedo.com>
 
 =cut
 

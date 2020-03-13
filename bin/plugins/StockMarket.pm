@@ -13,8 +13,6 @@ use HTML::TokeParser;
 use Text::Unidecode;
 use Data::Printer alias => 'Dumper', colored => 1;
 
-# use CHI;
-
 our $VERSION = '0.6';
 our $AUTHOR  = 'dek';
 
@@ -143,23 +141,20 @@ sub command_run {
         my @z       = split( / /, uc($arg) );
         my $symbols = join( ',', @z );
 
-        #my $ret = $self->quoteminimal($channel,$nick,$arg);
         my $ret = $self->news_search( $channel, $nick, $symbols );
 
         return 1;
     }
 
     if ( $cmd eq 'nfo' || $cmd eq 'info' ) {
+
         return unless defined $arg && length $arg;
 
         my @z = split( / /, uc($arg) );
 
         foreach my $nfo (@z) {
-
             next unless length $nfo;
-
             my $ret = $self->finances( $channel, $nick, uc($nfo), $cmd eq 'info' );
-
         }
 
         return 1;
@@ -207,7 +202,6 @@ sub command_run {
 
         return 1;
 
-        #return $ret;
     }
 
     if ( $cmd eq 'movers' ) {
@@ -674,7 +668,7 @@ sub finances {
         );
     }
     catch ($e) {
-        warn("An error occured while finances() was executing: $e");
+        warn("An error occurred while finances() was executing: $e");
     };
 } ## ---------- end sub finances
 
@@ -741,7 +735,7 @@ sub stock_book {
         );
     }
     catch ($e) {
-        warn("An error occured while currency_convert was executing: $e");
+        warn("An error occurred while currency_convert was executing: $e");
     };
 
 } ## ---------- end sub stock_book
@@ -824,7 +818,7 @@ sub currency_convert {
         );
     }
     catch ($e) {
-        warn("An error occured while currency_convert was executing: $e");
+        warn("An error occurred while currency_convert was executing: $e");
     };
 } ## ---------- end sub currency_convert
 
@@ -894,36 +888,32 @@ sub news_search {
 
     warn "* News search for $symbol\n";
 
-    $symbol = "AAPL";
-
     my $url =
         sprintf
         'https://apidojo-yahoo-finance-v1.p.rapidapi.com/stock/get-news?region=US&category=%s',
         uri_escape($symbol);
 
-    warn $url;
+    my $req = HTTP::Request->new( GET => $url );
 
-    #headers => { "x-rapidapi-key" => "4f98308d8dmshb2bc4d493bc9df9p1cd5b4jsn896a8e19d288" },
     try {
-        $self->asyncsock->get(
-            [
-                $url,
-                headers => {
-                    "x-rapidapi-key" => "4f98308d8dmshb2bc4d493bc9df9p1cd5b4jsn896a8e19d288"
-                }
-            ],
+
+        # bad way of doing this, but for now its fine.
+        my $rapidapi_host = $ENV{'RAPIDAPI_HOST'};
+        my $rapidapi_key  = $ENV{'RAPIDAPI_KEY'};
+
+        $req->header( 'x-rapidapi-host' => $rapidapi_host );
+        $req->header( 'x-rapidapi-key'  => $rapidapi_key );
+
+        $self->asyncsock->request2(
+            $req,
             sub {
                 my ( $body, $header ) = @_;
 
-                warn Dumper($body);
-                warn Dumper($header);
                 return unless defined $body && defined $header;
 
                 my $json_object = $body;
                 my $j           = $self->_jsonify($json_object);
-                my $results     = $j->{items}{result};
-
-                warn Dumper($results);
+                my $results     = $j->{items}->{result};
 
                 return unless defined $results;
 
@@ -937,15 +927,15 @@ sub news_search {
 
                     my $title_pretty = "[" . String::IRC->new("$symbol")->purple . "]";
                     my ( $short, $fetch_title ) = $self->{Owner}->_shorten( $link, 0 );
+
+                    warn "PARSED: $title \t $link";
                     $self->send_server(
                         $SEND_CMD => $channel,
                         "$title_pretty $title - $short"
-                    );                          # - $fetch_title" );
+                    );
                     $idx--;
 
                     last if $idx <= 0;
-
-                    #warn Dumper($x);
                 }
 
                 return 1;
@@ -954,7 +944,7 @@ sub news_search {
         );
     }
     catch ($e) {
-        warn("An error occured while news_search was executing: $e");
+        warn("An error occurred while news_search was executing: $e");
     };
 } ## ---------- end sub news_search
 
@@ -1010,7 +1000,7 @@ sub quoteminimal {
         );
     }
     catch ($e) {
-        warn("An error occured while quoteminimal was executing: $e");
+        warn("An error occurred while quoteminimal was executing: $e");
     };
 } ## ---------- end sub quoteminimal
 
@@ -1071,7 +1061,7 @@ Stock market plugin for Hadouken.
 
 =head1 AUTHOR
 
-dek - L<http://dek.codes/>
+dek <dek@whilefalsedo.com>
 
 =cut
 

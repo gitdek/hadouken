@@ -107,7 +107,7 @@ Wasteful plugin which amuses with many synonyms of coitus.
 
 =head1 AUTHOR
 
-dek - L<http://dek.codes/>
+dek <dek@whilefalsedo.com>
 
 =cut
 
