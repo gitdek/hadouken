@@ -8,7 +8,10 @@ use File::Basename;
 
 print "Decompressing GeoIP databases...\n";
 
-#print "argv0 is $ARGV[0]\n";
+
+my $force_overwrite = $ARGV[0] || 0;
+
+# print "$ARGV[0]\n";
 
 my $script_abs = abs_path($0);
 my $script_dir = dirname($script_abs);
@@ -22,10 +25,14 @@ chdir "../data/geoip/" or die("Failed to change to directory: $!");
 
 $cwd = getcwd();
 # print "current dir is $cwd\n";
-system("gzip -dfqk *.gz");
+
+if(defined $force_overwrite && $force_overwrite) {
+	system("gzip -dqfk *.gz");
+} else {
+	system("echo no | gzip -dqk *.gz");
+}
 
 print "Finished decompressing.\n";
-#my $geoip_gzip = "$path../data../geoip/";
 
 exit 0;
 

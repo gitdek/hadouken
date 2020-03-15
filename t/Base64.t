@@ -2,6 +2,7 @@
 
 use strict;
 
+BEGIN { eval "use blib" }
 #use warnings;
 
 use v5.14;

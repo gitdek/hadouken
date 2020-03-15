@@ -288,7 +288,7 @@ sub new {
 
     Log::Log4perl->easy_init(
         {
-            level  => $DEBUG,
+            level  => $INFO,
             file   => "STDOUT",
             layout => '%d %Z %m{indent=2,chomp}%n'
         }
@@ -400,7 +400,11 @@ sub _build_loaded_plugins {
         }
         catch ($e) {
             $m = undef;
-            warn "Plugin $plugin failed to load: $e";
+            
+            get_logger( ref $self )
+                ->error(
+                "Plugin $plugin failed to load: $e"
+                );
         }
 
         next unless defined $m;
@@ -409,7 +413,10 @@ sub _build_loaded_plugins {
 
         my $ver = $m->VERSION || '0.0';
 
-        warn "Plugin $plugin $ver added successfully.\n";
+        get_logger( ref $self )
+            ->info(
+            "Plugin $plugin $ver added successfully."
+            );
     }
 
     return \%loaded_plugins;
@@ -439,7 +446,10 @@ sub load_plugin {
         }
         catch ($e) {
             $m = undef;
-            warn "Plugin $plugin failed to load: $e";
+            get_logger( ref $self )
+                ->error(
+                "Plugin $plugin failed to load: $e"
+                );
         }
 
         next unless defined $m;
@@ -450,7 +460,10 @@ sub load_plugin {
 
         push @{ $self->{plugin_regexes} }, { name => "$plugin", regex => "$command_regex" };
 
-        warn "Plugin $plugin $ver added successfully.\n";
+        get_logger( ref $self )
+            ->info(
+            "Plugin $plugin $ver added successfully."
+            );
     }
 
     return 1;
@@ -468,7 +481,10 @@ sub unload_plugin {
 
         $ret = $self->unload_class( 'Hadouken::Plugin::' . $plugin );
 
-        warn "* UNLOADING PLUGIN $plugin - " . ( $ret ? 'Success' : 'Fail' );    # r is $r";
+        get_logger( ref $self )
+            ->info(
+            "Unloading plugin $plugin - " . ( $ret ? 'Success' : 'Fail' )
+            );
 
         my $x = List::MoreUtils::first_index { $_->{name} =~ /^$plugin_name$/i }
         @{ $self->{plugin_regexes} };
@@ -519,7 +535,10 @@ sub load {
     $file = "./$filename.pm"         if ( -e "./$filename.pm" );
     $file = "./plugins/$filename.pm" if ( -e "./plugins/$filename.pm" );
 
-    warn "Loading module $module from file $file\n";
+    get_logger( ref $self )
+        ->info(
+        "Loading module $module from file $file"
+        );
 
     # force a reload of the file (in the event that we've already loaded it).
     no warnings 'redefine';
@@ -599,7 +618,10 @@ sub reload_config {
 
     my $ret = 0;
 
-    warn "* Reloading Configuration";
+    get_logger( ref $self )
+        ->info(
+        "Reloading Configuration"
+        );
 
     try {
         my $conf = Config::General->new(
@@ -614,7 +636,11 @@ sub reload_config {
     }
     catch ($e) {
         $ret = 1;
-        warn "Error reloading config $e\n";
+
+        get_logger( ref $self )
+            ->error(
+            "Error reloading configuration $e"
+            );
     }
 
     return $ret;
@@ -672,19 +698,32 @@ sub keyx_handler {
                 $keyx_header, $public
             );
 
-            # $server->command("\^notice $user $keyx_header $public");
-            warn "Received key from $user -- sent back our pubkey.";
+            get_logger( ref $self )
+                ->debug(
+                "Received key from $user -- sent back our pubkey"
+                );
         }
         else {
-            warn "Negotiated key with $user";
+            get_logger( ref $self )
+                ->debug(
+                "Negotiated key with $user"
+                );
         }
         if ( $self->keyx_cbc == 1 ) {
-            warn "CBC IS ENABLED.";
+            get_logger( ref $self )
+                ->debug(
+                "CBC is enabled"
+                );
             $secret = "cbc:$secret";
         }
 
         my $ident = $self->{con}->nick_ident($user);
-        warn "Debug: key = $secret";
+
+        get_logger( ref $self )
+            ->debug(
+            "Debug: key = $secret"
+            );
+
         $self->_set_key( $ident, $secret );
 
         # $channels{$user} = 'keyx:'.$secret;
@@ -759,7 +798,10 @@ sub start {
         if ( exists $conf->{plugins}{$plugin}{autoload}
             && $conf->{plugins}{$plugin}{autoload} eq 1 )
         {
-            warn "* Plugin $plugin is set for autoload.";
+            get_logger( ref $self )
+                ->warn(
+                "Plugin $plugin is set for autoload"
+                );
         }
         else {
             $self->unload_plugin($plugin);
@@ -890,7 +932,10 @@ sub op_user {
     my ( $self, $channel, $nick, $ident ) = @_;
 
     if ( $self->is_probation($ident) ) {
-        warn "* op_user canceled due to user being on probation";
+        get_logger( ref $self )
+            ->warn(
+            "op_user canceled due to user being on probation - User: $ident"
+            );
         return 0;
     }
 
@@ -1419,7 +1464,10 @@ sub is_admin {
     my ( $self, $who ) = @_;
 
     if ( ( substr( $who, 0, 1 ) eq "\?" ) ) {
-        warn "* Partyline user $who granted admin access.";
+        get_logger( ref $self )
+            ->warn(
+            "Partyline user $who granted admin access"
+            );
         return 1;
     }
 
@@ -1535,8 +1583,10 @@ sub whitelist_add {
     push( @{ $self->{whitelistdb} }, @whitelist_row );
 
     if ( $self->is_probation($who) ) {
-        warn "* Removing user $who from probation because user was whitelisted.";
-
+        get_logger( ref $self )
+            ->info(
+            "Removing user $who from probation because user was whitelisted"
+            );
         delete $self->{probation}{$who};
     }
 
@@ -1637,8 +1687,11 @@ sub add_temp_probation {
     $self->{probation}{$who}{duration}   = $duration;
 
     # warn Dumper($self->{probation}{$who});
+    get_logger( ref $self )
+        ->info(
+        "User $who added to probation for $duration seconds"
+        );
 
-    warn "* User $who added to probation for $duration seconds";
     return 1;
 } ## ---------- end sub add_temp_probation
 
@@ -1657,7 +1710,10 @@ sub is_probation {
 
         if ( ( $start_time + $duration ) < $now ) {
 
-            warn "* User $who probation expired, removing";
+            get_logger( ref $self )
+                ->info(
+                "User $who probation expired, removing"
+                );
 
             delete $self->{probation}{$who};
 
@@ -1809,7 +1865,10 @@ sub fetch_json {
         $json = $self->jsonify( $response->content );
     }
     catch ($e) {
-        warn "Error in fetch_json $e\n";
+        get_logger( ref $self )
+            ->error(
+            "Error in fetch_json $e"
+            );
     }
 
     return $json;
@@ -2179,8 +2238,17 @@ sub _buildup {
             return unless ( $#send_params >= 0 );
             my $send_command = shift(@send_params);
 
-            warn "Send command $send_command\n";
-            warn "Params: " . join( "\t", @send_params ) . "\n";
+
+            get_logger( ref $self )
+                ->info(
+                "Command raw - Send command $send_command"
+                );
+
+            get_logger( ref $self )
+                ->info(
+                "Command raw - Params: " . join( "\t", @send_params )
+                );
+
 
             $self->send_server_unsafe( $send_command, @send_params );
 
@@ -2601,7 +2669,10 @@ sub _buildup {
                 }
             }
             catch ($e) {
-                warn "Error in command \'plugins\' $e\n";
+                get_logger( ref $self )
+                    ->error(
+                    "Error in command \'plugins\' $e"
+                    );
             }
 
             return 1;
@@ -2648,12 +2719,8 @@ sub _buildup {
             }
             elsif ( $cmd eq 'list' || $cmd eq 'ls' ) {
 
-                #my $owner = '*!*dek@butche.red';
                 my $owner = $self->normalize_mask( $self->{admin} );
-                warn "* ADMIN LIST $owner";
-                warn "* ADMIN LIST $who";
 
-                #if($self->matches_mask($owner,$who)) {
                 for my $admin_row ( @{ $self->{adminsdb} } ) {
                     my $entry = $admin_row->[0];
                     $entry .= " " . $admin_row->[1];
@@ -2663,11 +2730,10 @@ sub _buildup {
                         if defined $admin_row->[4];
                     my $out_msg = "[admin] $entry";
 
-                    my $msg = $self->_chat_encrypt( $who, $out_msg );   #, $self->{keys}->[0] );
+                    my $msg = $self->_chat_encrypt( $who, $out_msg );
                     $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
 
-                #}
             }
             elsif ( $cmd eq 'grep' ) {
 
@@ -2675,20 +2741,15 @@ sub _buildup {
 
                 my $owner = $self->normalize_mask( $self->{admin} );
 
-                # warn "* ADMIN LIST $owner";
-                # warn "* ADMIN LIST $who";
-
                 my @matches = grep { /$arg/ }
                     map { $_->[0] . '@' . $_->[1] } @{ $self->{adminsdb} };
 
-                #warn Dumper(@matches);
                 for my $admin_row (@matches) {
                     my $out_msg = "[admin] $admin_row";
-                    my $msg = $self->_chat_encrypt( $who, $out_msg );   #, $self->{keys}->[0] );
+                    my $msg = $self->_chat_encrypt( $who, $out_msg );
                     $self->send_server_unsafe( $self->{message_transport} => $nickname, $msg );
                 }
 
-                #}
             }
             elsif ( $cmd eq 'key' ) {
                 return unless defined $arg;
@@ -2700,7 +2761,6 @@ sub _buildup {
 
                 $self->_set_key( $who, $arg );
 
-                #$self->{conf_update}->($content);
             }
             elsif ( $cmd eq 'reload' ) {
                 my $out_msg = "[admin] reloading!";
@@ -2753,8 +2813,6 @@ sub _buildup {
             elsif ( $cmd eq 'list' || $cmd eq 'ls' ) {
 
                 my $owner = $self->normalize_mask( $self->{admin} );
-                warn "* WHITELIST LIST $owner";
-                warn "* WHITELIST LIST $who";
 
                 for my $wl_row ( @{ $self->{whitelistdb} } ) {
                     my $entry = $wl_row->[0];
@@ -2816,8 +2874,6 @@ sub _buildup {
             elsif ( $cmd eq 'list' || $cmd eq 'ls' ) {
                 my $owner = $self->normalize_mask( $self->{admin} );
 
-                #warn "* BLACKLIST LIST $owner";
-                #warn "* BLACKLIST LIST $who";
                 if ( $self->matches_mask( $owner, $who ) ) {
                     for my $wl_row ( @{ $self->{blacklistdb} } ) {
                         my $entry = $wl_row->[0];
@@ -3401,9 +3457,19 @@ sub _buildup {
             if ( defined $err ) {
                 warn "* Couldn't connect to server: $err\n";
                 if ( $self->{reconnect} ) {
-                    warn "* Reconnecting in " . $self->{reconnect_delay} . "\n";
+
+                    get_logger( ref $self )
+                        ->warn(
+                        "Reconnecting in " . $self->{reconnect_delay}
+                        );
+
                     Time::HiRes::sleep $self->{reconnect_delay};
-                    warn "* Trying to reconnecting...\n";
+
+                    get_logger( ref $self )
+                        ->warn(
+                        "Trying to reconnect..."
+                        );
+
                     $self->{reconnecting} = 1;
                     $self->_start;
                 }
@@ -3420,11 +3486,26 @@ sub _buildup {
         },
         disconnect => sub {
             $self->{connected} = 0;
-            warn "* Disconnected\n";
+
+            get_logger( ref $self )
+                ->warn(
+                "Disconnected"
+                );
+
             if ( $self->{reconnect} ) {
-                warn "* Reconnecting in " . $self->{reconnect_delay} . "\n";
+
+                get_logger( ref $self )
+                    ->warn(
+                    "Reconnecting in " . $self->{reconnect_delay}
+                    );
+
                 Time::HiRes::sleep $self->{reconnect_delay};
-                warn "* Trying to reconnect\n";
+
+                get_logger( ref $self )
+                    ->warn(
+                    "Trying to reconnect..."
+                    );
+
                 $self->{reconnecting} = 1;
                 $self->_start;
 
@@ -3525,15 +3606,24 @@ sub _buildup {
 
             my $kicked_ident = $con->nick_ident($kicked_nick);
 
-            warn sprintf
-                "* KICK CALLED -> $kicked_nick by $kicker_nick from $channel with message $msg -> is myself: %s",
-                $is_myself ? "YES!" : "no";
+            get_logger( ref $self )
+                ->info(
+                    sprintf
+                    "* KICK CALLED -> $kicked_nick by $kicker_nick from $channel with message $msg -> is myself: %s",
+                    $is_myself ? "YES!" : "no"
+                );
+
 
             if (   $self->{con}->nick() eq $kicked_nick
                 || $self->{con}->is_my_nick($kicked_nick) )
             {
                 if ( $self->{rejoin_on_kick} ) {
-                    warn "* Rejoining $channel automatically\n";
+
+                    get_logger( ref $self )
+                        ->warn(
+                        "Rejoining $channel automatically"
+                        );
+
                     $self->send_server_unsafe( JOIN => $channel );
                 }
 
@@ -3554,7 +3644,11 @@ sub _buildup {
                 {
 
                     my $d = $self->is_admin($kicked_ident) ? "admin" : "bot";
-                    warn "* KICK of $kicked_nick($d) in $channel";
+
+                    get_logger( ref $self )
+                        ->warn(
+                        "* KICK of $kicked_nick($d) in $channel"
+                        );
 
                     if (
                         $self->channel_mode_isset(
@@ -3574,7 +3668,10 @@ sub _buildup {
 
                             if ( $self->matches_mask( $banmask, $ident ) ) {
 
-                                warn "* Banning $ident from $channel (AGGRESSIVE MODE)";
+                                get_logger( ref $self )
+                                    ->warn(
+                                    "* Banning $ident from $channel (AGGRESSIVE MODE)"
+                                    );
 
                                 $self->send_server_unsafe(
                                     MODE => $channel,
@@ -3583,8 +3680,10 @@ sub _buildup {
 
                             }
                             else {
-
-                                warn "* Ban mask didn't match when trying to ban!";
+                                get_logger( ref $self )
+                                    ->warn(
+                                    "* Ban mask didn't match when trying to ban!"
+                                    );
                             }
                         }
 
@@ -3666,8 +3765,10 @@ sub _buildup {
         dcc_request => sub {
             my ( $con, $id, $src, $type, $arg, $addr, $port ) = @_;
 
-            warn "* DCC Request from $addr\n";
-
+            get_logger( ref $self )
+                ->info(
+                "DCC Request from $addr"
+                );
             #$self->{con}->dcc_accept($id);
 
             #warn "* DCC Accepting\n";
@@ -3675,7 +3776,10 @@ sub _buildup {
         dcc_chat_msg => sub {
             my ( $con, $id, $msg ) = @_;
 
-            warn "* DCC CHAT MSG $msg\n";
+            get_logger( ref $self )
+                ->info(
+                "DCC CHAT MSG $msg"
+                );
 
             if ( $msg =~ s/^\+OK // ) {
 
@@ -3711,7 +3815,10 @@ sub _buildup {
                             $self->_chat_decrypt( $who, $message );    #, $self->{keys}->[0] );
                         $message =~ s/\0//g;
 
-                        warn "* Decrypted $message\n";
+                        get_logger( ref $self )
+                            ->debug(
+                            "Decrypted $message"
+                            );
 
                         ## We change the channel to who because that's who we are privmsg'ing results to.
                         $channel = $who;
@@ -3723,7 +3830,11 @@ sub _buildup {
                 }
                 catch ($e) {
                     $message = $ircmsg->{params}[1];
-                    warn "Error decrypting $e\n";
+
+                    get_logger( ref $self )
+                        ->error(
+                        "Error decrypting $e"
+                        );
                 };
             }
 
@@ -3749,7 +3860,11 @@ sub _buildup {
                 #    return unless ((defined $channel) && ($self->{con}->is_channel_name($channel)));
                 #}
 
-                warn "* Command $cmd->{'name'} was matched\n";
+
+                get_logger( ref $self )
+                    ->info(
+                    "Command $cmd->{'name'} was matched"
+                    );
 
                 $message =~ s/$command_prefix//g;
 
@@ -3757,14 +3872,21 @@ sub _buildup {
                     my $ret = $cmd->{acl}
                         ->( $who, $message, $channel || undef, $channel_list || undef );
 
-                    warn "* Command $cmd->{'name'} -> ACL returned $ret\n";
+                    get_logger( ref $self )
+                        ->info(
+                        "Command $cmd->{'name'} -> ACL returned $ret"
+                        );
 
                     if ($ret) {
                         if ( defined $cmd->{delegate} ) {
 
                             $channel_list = $self->{con}->channel_list($channel);
 
-                            warn "* Command $cmd->{'name'} -> Calling delegate\n";
+                            get_logger( ref $self )
+                                ->info(
+                                "Command $cmd->{'name'} -> Calling delegate"
+                                );
+
                             $cmd->{delegate}->(
                                 $who,     AnyEvent::IRC::Util::filter_colors($message),
                                 $channel, $channel_list
@@ -3773,7 +3895,10 @@ sub _buildup {
                     }
                 }
                 else {
-                    warn "* Delegate not defined for $cmd->{'name'}\n";
+                    get_logger( ref $self )
+                        ->warn(
+                        "Delegate not defined for $cmd->{'name'}"
+                        );
                 }
             }
             else {
@@ -3794,7 +3919,11 @@ sub _buildup {
                     if ( ( ($uri) = $message =~ /$RE{URI}{HTTP}{-scheme=>'https?'}{-keep}/ )
                         && !$self->{con}->is_my_nick($nick) )
                     {                           #m{($RE{URI})}gos ) {
-                        warn "* Matched a URL $uri\n";
+
+                        get_logger( ref $self )
+                            ->info(
+                            "Matched a URL $uri\n"
+                            );
 
                         if ( length $uri ge 21 ) {
 
@@ -3860,9 +3989,18 @@ sub _buildup {
                                 )
                             );
 
-                            warn "* Plugin $plugin -> ACL returned $plugin_acl_ret\n";
+                            get_logger( ref $self )
+                                ->info(
+                                "Plugin $plugin -> ACL returned $plugin_acl_ret"
+                                );
+
                             if ($plugin_acl_ret) {
-                                warn "* Plugin $plugin -> Calling delegate\n";
+
+                                get_logger( ref $self )
+                                    ->info(
+                                    "Plugin $plugin -> Calling delegate"
+                                    );
+
                                 my $cmd_ret =
                                     $m->command_run( $nickname, $ident,
                                     $clean_msg, $plugin_channel, $user_admin,
@@ -4116,7 +4254,11 @@ sub _buildup {
                 }
 
                 if ( $cmd eq 'NOTICE' ) {
-                    warn "* NOTICE " . $params . "\n";
+
+                    get_logger( ref $self )
+                        ->info(
+                        "NOTICE " . $params
+                        );
 
                     my ( $notice_dest, $notice_msg ) = @{ $msg->{params} };
 
@@ -4128,7 +4270,10 @@ sub _buildup {
 
                             $self->keyx_handler( $notice_msg, $nick );
 
-                            warn "* Key Exchange Initialized\n";
+                            get_logger( ref $self )
+                                ->info(
+                                "Key Exchange Initialized"
+                                );
 
                         }
                     }
@@ -4175,8 +4320,11 @@ sub _buildup {
                                         && !( $self->is_bot($ident) ) )
                                     {
 
-                                        warn
-                                            "* Set deop to user $nick who opped probation user";
+                                        get_logger( ref $self )
+                                            ->info(
+                                            "Set deop to user $nick who opped probation user"
+                                            );
+
                                         $self->send_server_unsafe(
                                             MODE => $chan,
                                             '-o', $nick
@@ -4184,8 +4332,10 @@ sub _buildup {
 
                                         # Here we only de-op the users on probation.
                                         #
-
-                                        warn "* Begin deop of probation users";
+                                        get_logger( ref $self )
+                                            ->info(
+                                            "Begin deop of probation users"
+                                            );
 
                                         my $it = List::MoreUtils::natatime 4, @probations;
 
@@ -4199,9 +4349,11 @@ sub _buildup {
                                             #my $cookie = $self->makecookie($nick,$self->{nick},$chan);
                                             #my $test = $self->checkcookie($nick,$self->{nick},$chan,$cookie);
                                             #push(@vals,$cookie);
-                                            warn
-                                                "* Protect triggered in $chan, setting MODE $mode "
-                                                . join( '  ', @vals ) . "\n";
+                                            get_logger( ref $self )
+                                                ->warn(
+                                                "* Protect triggered in $chan, setting MODE $mode " . join( '  ', @vals )
+                                                );
+
                                             unshift( @vals, $mode );
 
                                             $self->send_server_unsafe(
@@ -4274,10 +4426,16 @@ sub _buildup {
                                         $self->channel_mode_isset( $cur_channel_clean,
                                         Hadouken::CMODE_PROTECT_WHITELIST );
 
-                                    warn
-                                        "* Aggressive mode disabling whitelist protection and whitelist autoop in $chan because a bot was attacked";
-                                    warn
-                                        "* Channel modes will return to old values in 30 seconds for $chan";
+
+                                    get_logger( ref $self )
+                                        ->info(
+                                        "Aggressive mode disabling whitelist protection and whitelist autoop in $chan because a bot was attacked"
+                                        );
+
+                                    get_logger( ref $self )
+                                        ->info(
+                                        "Channel modes will return to old values in 30 seconds for $chan"
+                                        );
 
                                     $self->channel_mode_human( $cur_channel_clean, '-V-W' );
 
@@ -4300,8 +4458,11 @@ sub _buildup {
                                         $self->{timer_channel_mode} = AnyEvent->timer(
                                             after => 30,
                                             cb    => sub {
-                                                warn
-                                                    "* Changing channel mode back in $chan after aggression triggered";
+
+                                                get_logger( ref $self )
+                                                    ->info(
+                                                     "Changing channel mode back in $chan after aggression triggered"
+                                                    );
 
                                                 if ($orig_protect_whitelist) {
                                                     $self->channel_mode_human(
@@ -4757,7 +4918,10 @@ sub _buildup {
                     }
                 }
 
-                warn "< " . $cmd_cpy . "\t" . $params . "\n";
+                get_logger( ref $self )
+                    ->debug(
+                     "< " . $cmd_cpy . "\t" . $params
+                    );
             }
         }
     );
@@ -4786,28 +4950,21 @@ sub _start_trivia {
     $self->{triviarunning}  = 1;
     $self->{trivia_channel} = $channel;
 
-    #$self->_trivia_func;
-
     if ( -e $self->{ownerdir} . '/../data/scores.json' ) {
         open( my $fh, $self->{ownerdir} . '/../data/scores.json' ) or die $!;
         my $json_data;
-        read( $fh, $json_data, -s $fh );        # Suck in the whole file
+        read( $fh, $json_data, -s $fh );
         close $fh;
 
         my $temp_scores = JSON->new->allow_nonref->decode($json_data);
-
         %{ $self->{_scores} } = %{$temp_scores};
-
         $self->_calc_trivia_rankings;
     }
 
-    #undef $self->{triv_timer};
     $self->{triv_timer} = AnyEvent->timer(
         interval => 15,
         cb       => sub {
             $self->_trivia_func();
-
-            # undef $self->{triv_timer};
         }
     );
 
@@ -4826,7 +4983,6 @@ sub _stop_trivia {
     $self->{_clue_number}   = 0;
     $self->{triviarunning}  = 0;
     $self->{trivia_channel} = '';
-
     $self->{triv_timer} = undef;
 
     delete $self->{triv_timer};
@@ -4872,8 +5028,6 @@ sub _trivia_ranking {
     return 0 unless defined $username;
 
     if ( exists $self->{_scores}{$username} ) {
-
-        #$self->_calc_trivia_rankings unless exists $self->{_scores}{$username}{rank};
         my $rank = $self->{_scores}{$username}{rank};
         return $rank;
     }
@@ -5027,7 +5181,7 @@ sub _trivia_func {
         $self->{points_scale}    = \@points;
         $self->{_current_points} = $points[ $self->{_clue_number} ];
 
-        warn "Answer is: " . $self->{_answer} . "\n";
+        #warn "Answer is: " . $self->{_answer} . "\n";
 
         my $msg = String::IRC->new('  * QUESTION *  ')->white('black');
         $msg .= String::IRC->new("Worth ")->yellow('black');
@@ -5135,7 +5289,12 @@ sub _start {
         #foreach my $chan ( @{$server_hashref->{$server_name}{channel}} ) {
         $chan = "#" . $chan
             unless ( $chan =~ m/^\#/ );         # Append # if doesn't begin with.
-        warn "* Joining $chan\n";
+
+        get_logger( ref $self )
+            ->info(
+             "Joining $chan"
+            );
+
         $self->send_server_unsafe( JOIN => $chan );
     }
 
@@ -5172,7 +5331,10 @@ sub _start {
     if ( $hostname =~ m/^\+/ ) {
         substr( $hostname, 0, 1 ) = "";         # Remove + character.
 
-        warn "* SSL enabled.";
+        get_logger( ref $self )
+            ->info(
+             "SSL enabled"
+            );
 
         $self->{con}->enable_ssl();
     }
@@ -5380,7 +5542,11 @@ sub _shorten {
     catch ($e) {
         $shortenurl = '';
         $title      = '';
-        warn "Error occured at shorten with url $url - $e";
+
+        get_logger( ref $self )
+            ->error(
+             "Error occured at shorten with url $url - $e"
+            );
     }
 
     return ( $shortenurl, $title );

@@ -342,7 +342,7 @@ sub command_run {
                         && exists $c->{change}
                         && exists $c->{change_pct};
 
-                    warn Dumper($c);
+                    #warn Dumper($c);
 
                     my $name = $cmd eq 'tech' ? $c->{name} : $c->{shortName};
 
@@ -928,7 +928,7 @@ sub news_search {
                     my $title_pretty = "[" . String::IRC->new("$symbol")->purple . "]";
                     my ( $short, $fetch_title ) = $self->{Owner}->_shorten( $link, 0 );
 
-                    warn "PARSED: $title \t $link";
+                    #warn "PARSED: $title \t $link";
                     $self->send_server(
                         $SEND_CMD => $channel,
                         "$title_pretty $title - $short"

@@ -1,7 +1,7 @@
 package Hadouken::AsyncSocket;
 
 use strict;
-use warnings;
+#use warnings;
 use utf8;
 
 use Errno;
@@ -30,7 +30,12 @@ use Data::UUID;
 no strict "subs";
 no strict "refs";
 use feature qw( switch say );
-use experimental qw(lexical_subs smartmatch);
+
+if($] gt '5.016') {
+    use experimental qw(lexical_subs smartmatch);
+} else {
+    warn "lexical_subs and smartwatch disabled";
+}
 
 our $VERSION = '0.03';
 
@@ -75,7 +80,7 @@ sub BUILD {
     $self->{socket} = undef;
 
     # Global handlers to be propagated to all sub-classes.
-    $self->{handlers} => {};
+    #$self->{handlers} => {};
 
     $self->{cv}       = AnyEvent->condvar( cb => sub { warn "done"; } );
     $self->{cbresult} = undef;
@@ -161,7 +166,7 @@ sub request2 {
     $self->debug("SENDING REQUEST");
     $self->debug( "A" x 50 );
 
-    my %params;                                 # = {};
+    my %params;
 
     $params{session} = $self->{id};
 
@@ -290,12 +295,20 @@ sub debug {
         return;
     }
 
-    #say STDERR "[".$self->username."] $line";
     say STDERR "$line";
 } ## ---------- end sub debug
 
+
+sub DESTROY {
+    my $self = shift;
+    $self->debug("DESTROY() enter.");
+    $self->{handlers} = undef;
+    $self->{id} = undef;
+    $self->{cv} = undef;
+}
+
 no Moose;
-__PACKAGE__->meta->make_immutable;
+#__PACKAGE__->meta->make_immutable;
 
 1;
 

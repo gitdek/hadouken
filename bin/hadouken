@@ -29,8 +29,8 @@ my $filedirname = File::Basename::dirname( Cwd::abs_path(__FILE__) );
 chdir $filedirname;
 
 my $arg_password  = undef;
-my $password_flag = "--password"
-    ;                                           # Got tired of entering it manually so allow to pass as an argument.
+ # Got tired of entering it manually so allow to pass as an argument.
+my $password_flag = "--password";
 my $config_flag     = "--config=";
 my $setup_flag      = "--setup";
 my $showconfig_flag = "--showconfig";
@@ -201,14 +201,14 @@ sub on_config_update {
 
 sub on_reload_update {
 
-    $daemon->pretty_print( "Reloading", "red" )
-        ;                                       # if(defined $cb->start_time && $cb->start_time ne '');
+    $daemon->pretty_print( "Reloading", "red" );                                       
+    # if(defined $cb->start_time && $cb->start_time ne '');
     $cb->stop();
 
     # TODO: Reload Hadouken.pm from disk.
     $cb->start();
-    $daemon->pretty_print( "Reloaded", "green" )
-        ;                                       # if(defined $cb->start_time && $cb->start_time ne '');
+    $daemon->pretty_print( "Reloaded", "green" );
+    # if(defined $cb->start_time && $cb->start_time ne '');
 } ## ---------- end sub on_reload_update
 
 #sub reload_daemon {

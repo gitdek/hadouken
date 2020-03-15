@@ -1,8 +1,4 @@
-#use ExtUtils::Depends;
 use ExtUtils::MakeMaker;
-
-
-#license 'gpl';
 
 WriteMakefile(
     NAME                => 'Hadouken',
@@ -92,12 +88,18 @@ WriteMakefile(
         'ZooKeeper::XS'         => 0,
         'XSLoader'              => 0,
     },
-    PM => { # We don't want to install ALL plugins by default.
+    PM => {
         'lib/Hadouken.pm' => '$(INST_LIB)/Hadouken.pm',
         'lib/Hadouken/DH1080.pm' => '$(INST_LIB)/Hadouken/DH1080.pm',
         'lib/Hadouken/Base64.pm' => '$(INST_LIB)/Hadouken/Base64.pm',
         'lib/Hadouken/AsyncSocket.pm' => '$(INST_LIB)/Hadouken/AsyncSocket.pm',
         'lib/Hadouken/ZooKeeper.pm' => '$(INST_LIB)/Hadouken/ZooKeeper.pm',
+
+        'lib/AnyEvent/IRC.pm' => '$(INST_LIB)/AnyEvent/IRC.pm',
+        'lib/AnyEvent/IRC/Client.pm' => '$(INST_LIB)/AnyEvent/IRC/Client.pm',
+        'lib/AnyEvent/IRC/Connection.pm' => '$(INST_LIB)/AnyEvent/IRC/Connection.pm',
+        'lib/AnyEvent/IRC/Util.pm' => '$(INST_LIB)/AnyEvent/IRC/Util.pm',
+
         'bin/plugins/StockMarket.pm' => '$(INST_LIB)/Hadouken/Plugin/StockMarket.pm',
         'bin/plugins/ExamplePlugin.pm' => '$(INST_LIB)/Hadouken/Plugin/ExamplePlugin.pm',
         'bin/plugins/IMDB.pm' => '$(INST_LIB)/Hadouken/Plugin/IMDB.pm',
@@ -112,19 +114,16 @@ WriteMakefile(
         'bin/plugins/IPCalc.pm' => '$(INST_LIB)/Hadouken/Plugin/IPCalc.pm',
         'bin/plugins/GeoIP.pm' => '$(INST_LIB)/Hadouken/Plugin/GeoIP.pm',
     },
-    EXE_FILES => ['bin/hadouken'],
+    #EXE_FILES => ['bin/hadouken'],
     PL_FILES => {
-        #'bin/createconfig.pl' => '/etc/hadouken.conf',
-        'bin/deflategeoip.pl' => 'hi',
+        'bin/createconfig.pl' => '/etc/hadouken.conf',
+        'bin/deflategeoip.pl' => '0', # Change to 1 to force over-write.
     },
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
-    LIBS              => ['-lm' ], # e.g., '-lm'
+    LIBS              => ['-lm' ],
     DEFINE            => '',
 );
 
-
-#auto_install();
-
 package MY;
- 
+
 use ExtUtils::MakeMaker::BigHelper qw(:MY);
