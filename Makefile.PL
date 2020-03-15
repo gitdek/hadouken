@@ -116,7 +116,7 @@ WriteMakefile(
     },
     #EXE_FILES => ['bin/hadouken'],
     PL_FILES => {
-        'bin/createconfig.pl' => '/etc/hadouken.conf',
+        #'bin/createconfig.pl' => '/etc/hadouken.conf',
         'bin/deflategeoip.pl' => '0', # Change to 1 to force over-write.
     },
     dist => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
