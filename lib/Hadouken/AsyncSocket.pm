@@ -31,7 +31,7 @@ no strict "subs";
 no strict "refs";
 use feature qw( switch say );
 
-if($] gt '5.016') {
+if($] ge '5.018') {
     use experimental qw(lexical_subs smartmatch);
 } else {
     warn "lexical_subs and smartwatch disabled";
