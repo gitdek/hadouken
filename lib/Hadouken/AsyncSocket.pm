@@ -1,7 +1,7 @@
 package Hadouken::AsyncSocket;
 
 use strict;
-#use warnings;
+use warnings;
 use utf8;
 
 use Errno;
@@ -31,11 +31,11 @@ no strict "subs";
 no strict "refs";
 use feature qw( switch say );
 
-if($] ge '5.018') {
-    use experimental qw(lexical_subs smartmatch);
-} else {
-    warn "lexical_subs and smartwatch disabled";
-}
+#if($] ge '5.018') {
+#    use experimental qw(lexical_subs smartmatch);
+#} else {
+#    warn "lexical_subs and smartwatch disabled";
+#}
 
 our $VERSION = '0.03';
 
